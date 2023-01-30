@@ -118,8 +118,10 @@ function run() {
 
     # 1 sync task
     if [[ "" == ${contract} ]]; then
+        sleep 1
         gsc cli transfer -x "${SERV}" -b -D -f "${target_file}0" >/dev/null || log "ERROR $0 Line $LINENO"
     else
+        sleep 1
         gsc cli transfer -x "${SERV}" -b -D -f "${target_file}0" -C $contract >/dev/null || log "ERROR $0 Line $LINENO"
     fi
 }
@@ -141,7 +143,7 @@ if [[ "" == ${is_dbench} ]]; then
     block_itv=$(fn dev | jq '.meta.block_interval_in_seconds')
 
     fn dev init || exit 1
-    for i in {0..6}; do
+    for i in {0..8}; do
         sleep $block_itv
     done
 
@@ -180,7 +182,7 @@ else
 
     serv=""
     # 3 nodes will be created at least
-    for i in {1..3}; do
+    for i in {0..2}; do
         addr=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".host.\"addr\"" | sed 's/"//g')
         port=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".ports.web3_http_service" | sed 's/"//g')
         serv="http://${addr}:${port},${serv}"

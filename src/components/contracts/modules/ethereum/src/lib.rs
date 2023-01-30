@@ -4,7 +4,6 @@
 mod basic;
 mod impls;
 
-use abci::{RequestEndBlock, ResponseEndBlock};
 use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
@@ -25,6 +24,7 @@ use fp_traits::{
 use fp_types::{actions::ethereum::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
+use tendermint_proto::abci::{RequestEndBlock, ResponseEndBlock};
 
 pub const MODULE_NAME: &str = "ethereum";
 

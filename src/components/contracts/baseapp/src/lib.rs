@@ -11,7 +11,6 @@ mod modules;
 mod notify;
 
 use crate::modules::ModuleManager;
-use abci::Header;
 use ethereum::BlockV0 as Block;
 use evm_precompile::{self, FindoraPrecompiles};
 use fin_db::{FinDB, RocksDB};
@@ -37,6 +36,7 @@ use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::{ChainState, ChainStateOpts};
+use tendermint_proto::types::Header;
 use tracing::info;
 
 lazy_static! {

@@ -30,7 +30,6 @@ use fp_utils::tx::EvmRawTxWrapper;
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
-use tracing::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
@@ -41,6 +40,7 @@ use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use tokio::task::spawn_blocking;
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref RT: Runtime =
@@ -352,9 +352,11 @@ impl EthApi for EthApiImpl {
                 .create_context_at(block.header.number.as_u64())
                 .ok_or_else(|| internal_err("failed to create context"))?;
 
-            ctx.header
-                .mut_time()
-                .set_seconds(block.header.timestamp as i64);
+            ctx.header.time = Some(
+                tendermint::Time::from_unix_timestamp(block.header.timestamp as i64, 0)
+                    .unwrap()
+                    .into(),
+            );
             ctx.header.height = block.header.number.as_u64() as i64;
             ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
 
@@ -727,7 +729,7 @@ impl EthApi for EthApiImpl {
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
 
         Box::pin(async move {
-            let resp = client.broadcast_tx_sync(txn_with_tag.into()).await;
+            let resp = client.broadcast_tx_sync(txn_with_tag).await;
 
             match resp {
                 Ok(resp) => {

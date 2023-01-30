@@ -11,7 +11,6 @@ mod test;
 
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
-    abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
     config::abci::global_cfg::CFG,
     lazy_static::lazy_static,
@@ -32,6 +31,11 @@ use {
         collections::{BTreeMap, BTreeSet},
         ops::{Deref, DerefMut},
         sync::atomic::Ordering,
+    },
+    tendermint::PublicKey as TmPubKey,
+    tendermint_proto::{
+        abci::{Evidence, LastCommitInfo, ValidatorUpdate},
+        types::Header,
     },
 };
 
@@ -85,7 +89,7 @@ pub fn get_validators(
         lci.votes
             .as_slice()
             .iter()
-            .flat_map(|v| v.validator.as_ref().map(|v| (&v.address, v.power)))
+            .flat_map(|v| v.validator.as_ref().map(|v| (&v.address[..], v.power)))
             .collect::<BTreeMap<_, _>>()
     } else {
         BTreeMap::new()
@@ -101,7 +105,7 @@ pub fn get_validators(
         .body
         .values()
         .filter(|v| {
-            if let Some(power) = cur_entries.get(&v.td_addr) {
+            if let Some(power) = cur_entries.get(&v.td_addr.as_slice()) {
                 // - new power > 0: change existing entries
                 // - new power = 0: remove existing entries
                 // - the power returned by `LastCommitInfo` is impossible
@@ -135,20 +139,15 @@ pub fn get_validators(
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
     vs.iter_mut().skip(validator_limit).for_each(|(k, power)| {
-        alt!(cur_entries.contains_key(k), *power = 0, *power = -1);
+        alt!(cur_entries.contains_key(&k[..]), *power = 0, *power = -1);
     });
 
     Ok(Some(
         vs.iter()
             .filter(|(_, power)| -1 < *power)
-            .map(|(pubkey, power)| {
-                let mut vu = ValidatorUpdate::new();
-                let mut pk = PubKey::new();
-                pk.set_field_type("ed25519".to_owned());
-                pk.set_data(pubkey.to_vec());
-                vu.set_power(*power);
-                vu.set_pub_key(pk);
-                vu
+            .map(|(pk, power)| ValidatorUpdate {
+                pub_key: TmPubKey::from_raw_ed25519(pk).map(|pk| pk.into()),
+                power: *power,
             })
             .collect(),
     ))
@@ -181,7 +180,7 @@ pub fn system_ops(
             let v = ev.validator.as_ref().unwrap();
             let bz = ByzantineInfo {
                 addr: &td_addr_to_string(&v.address),
-                kind: ev.field_type.as_str(),
+                kind: ev.r#type().as_str_name(),
             };
 
             ruc::info_omit!(system_governance(la.get_staking_mut().deref_mut(), &bz));
@@ -193,13 +192,13 @@ pub fn system_ops(
             .votes
             .iter()
             .filter(|v| v.signed_last_block)
-            .flat_map(|info| info.validator.as_ref().map(|v| &v.address))
+            .flat_map(|info| info.validator.as_ref().map(|v| &v.address[..]))
             .collect::<BTreeSet<_>>();
 
         // mark if a validator is online at last block
         if let Ok(vd) = ruc::info!(la.get_staking_mut().validator_get_current_mut()) {
             vd.body.values_mut().for_each(|v| {
-                if online_list.contains(&v.td_addr) {
+                if online_list.contains(&v.td_addr[..]) {
                     v.signed_last_block = true;
                     v.signed_cnt += 1;
                 } else {
@@ -360,7 +359,7 @@ pub fn system_mint_pay(
 /// filtering online lists from staking's validators
 fn gen_offline_punish_list(
     staking: &Staking,
-    online_list: &BTreeSet<&Vec<u8>>,
+    online_list: &BTreeSet<&[u8]>,
 ) -> Result<Vec<Vec<u8>>> {
     let last_height = TENDERMINT_BLOCK_HEIGHT
         .load(Ordering::Relaxed)
@@ -389,7 +388,7 @@ fn gen_offline_punish_list(
 
     Ok(vs
         .into_iter()
-        .filter(|v| 0 < v.1 && !online_list.contains(&v.0))
+        .filter(|v| 0 < v.1 && !online_list.contains(&v.0[..]))
         .map(|(id, _)| id.clone())
         .collect())
 }

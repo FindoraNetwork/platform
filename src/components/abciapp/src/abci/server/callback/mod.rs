@@ -12,12 +12,6 @@ use {
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
         },
     },
-    abci::{
-        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
-        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
-        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
-    },
     config::abci::global_cfg::CFG,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
@@ -30,7 +24,6 @@ use {
         },
     },
     parking_lot::{Mutex, RwLock},
-    protobuf::RepeatedField,
     ruc::*,
     std::{
         fs,
@@ -40,7 +33,13 @@ use {
             Arc,
         },
     },
-    tracing::info
+    tendermint_proto::abci::{
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
+        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
+    },
+    tracing::info,
 };
 
 #[cfg(feature = "web3_service")]
@@ -53,7 +52,7 @@ pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 lazy_static! {
     // save the request parameters from the begin_block for use in the end_block
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
-        Arc::new(Mutex::new(RequestBeginBlock::new()));
+        Arc::new(Mutex::new(RequestBeginBlock::default()));
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
         Arc::new(RwLock::new(new_mapx!("tx_history")));
@@ -71,8 +70,8 @@ lazy_static! {
 // #[cfg(not(feature = "debug_env"))]
 // pub const ENABLE_FRC20_HEIGHT: i64 = 150_1000;
 
-pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
-    let mut resp = ResponseInfo::new();
+pub fn info(s: &ABCISubmissionServer, req: RequestInfo) -> ResponseInfo {
+    let mut resp = ResponseInfo::default();
 
     let mut la = s.la.write();
     let state = la.get_committed_state().write();
@@ -82,15 +81,16 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
-    resp.set_last_block_height(h);
+    resp.last_block_height = h;
     if 0 < h {
         if CFG.checkpoint.disable_evm_block_height < h
             && h < CFG.checkpoint.enable_frc20_height
         {
-            resp.set_last_block_app_hash(la_hash);
+            resp.last_block_app_hash = la_hash.into();
         } else {
-            let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+            let cs_hash = s.account_base_app.write().info(&req).last_block_app_hash;
+            resp.last_block_app_hash =
+                app_hash("info", h, la_hash, cs_hash.into()).into();
         }
     }
 
@@ -105,29 +105,26 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     resp
 }
 
-pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery {
-    s.account_base_app.write().query(req)
+pub fn query(s: &ABCISubmissionServer, req: RequestQuery) -> ResponseQuery {
+    s.account_base_app.write().query(&req)
 }
 
-pub fn init_chain(
-    s: &mut ABCISubmissionServer,
-    req: &RequestInitChain,
-) -> ResponseInitChain {
-    s.account_base_app.write().init_chain(req)
+pub fn init_chain(s: &ABCISubmissionServer, req: RequestInitChain) -> ResponseInitChain {
+    s.account_base_app.write().init_chain(&req)
 }
 
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
-pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
-    let mut resp = ResponseCheckTx::new();
+pub fn check_tx(s: &ABCISubmissionServer, req: RequestCheckTx) -> ResponseCheckTx {
+    let mut resp = ResponseCheckTx::default();
 
-    let tx_catalog = try_tx_catalog(req.get_tx(), false);
+    let tx_catalog = try_tx_catalog(&req.tx, false);
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if matches!(req.field_type, CheckTxType::New) {
-                if let Ok(tx) = convert_tx(req.get_tx()) {
+            if matches!(req.r#type(), CheckTxType::New) {
+                if let Ok(tx) = convert_tx(&req.tx) {
                     if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
@@ -149,7 +146,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                 resp.log = "EVM is disabled".to_owned();
                 resp
             } else {
-                s.account_base_app.read().check_tx(req)
+                s.account_base_app.read().check_tx(&req)
             }
         }
         TxCatalog::Unknown => {
@@ -161,8 +158,8 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
 }
 
 pub fn begin_block(
-    s: &mut ABCISubmissionServer,
-    req: &RequestBeginBlock,
+    s: &ABCISubmissionServer,
+    req: RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
         //beacuse ResponseBeginBlock doesn't define the code,
@@ -218,23 +215,20 @@ pub fn begin_block(
     {
         ResponseBeginBlock::default()
     } else {
-        s.account_base_app.write().begin_block(req)
+        s.account_base_app.write().begin_block(&req)
     }
 }
 
-pub fn deliver_tx(
-    s: &mut ABCISubmissionServer,
-    req: &RequestDeliverTx,
-) -> ResponseDeliverTx {
-    let mut resp = ResponseDeliverTx::new();
+pub fn deliver_tx(s: &ABCISubmissionServer, req: RequestDeliverTx) -> ResponseDeliverTx {
+    let mut resp = ResponseDeliverTx::default();
 
-    let tx_catalog = try_tx_catalog(req.get_tx(), true);
+    let tx_catalog = try_tx_catalog(&req.tx, true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if let Ok(tx) = convert_tx(req.get_tx()) {
+            if let Ok(tx) = convert_tx(&req.tx) {
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
@@ -253,7 +247,7 @@ pub fn deliver_tx(
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);
                         if !attr.is_empty() {
-                            resp.set_events(attr);
+                            resp.events = attr;
                         }
                     }
 
@@ -357,7 +351,7 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                return s.account_base_app.write().deliver_tx(req);
+                return s.account_base_app.write().deliver_tx(&req);
             }
         }
         TxCatalog::Unknown => {
@@ -369,11 +363,8 @@ pub fn deliver_tx(
 }
 
 /// putting block in the ledgerState
-pub fn end_block(
-    s: &mut ABCISubmissionServer,
-    req: &RequestEndBlock,
-) -> ResponseEndBlock {
-    let mut resp = ResponseEndBlock::new();
+pub fn end_block(s: &ABCISubmissionServer, req: RequestEndBlock) -> ResponseEndBlock {
+    let mut resp = ResponseEndBlock::default();
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
@@ -402,7 +393,7 @@ pub fn end_block(
         la.get_committed_state().read().get_staking().deref(),
         begin_block_req.last_commit_info.as_ref()
     )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+        resp.validator_updates = vs;
     }
 
     staking::system_ops(
@@ -415,13 +406,13 @@ pub fn end_block(
     if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let _ = s.account_base_app.write().end_block(req);
+        let _ = s.account_base_app.write().end_block(&req);
     }
 
     resp
 }
 
-pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseCommit {
+pub fn commit(s: &ABCISubmissionServer) -> ResponseCommit {
     let la = s.la.write();
     let mut state = la.get_committed_state().write();
 
@@ -438,16 +429,16 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .c(d!())
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
-    let mut r = ResponseCommit::new();
+    let mut r = ResponseCommit::default();
     let la_hash = state.get_state_commitment().0.as_ref().to_vec();
-    let cs_hash = s.account_base_app.write().commit(req).data;
+    let cs_hash = s.account_base_app.write().commit().data;
 
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
     {
-        r.set_data(la_hash);
+        r.data = la_hash.into();
     } else {
-        r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+        r.data = app_hash("commit", td_height, la_hash, cs_hash.into()).into();
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);

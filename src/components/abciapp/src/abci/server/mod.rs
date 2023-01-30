@@ -7,12 +7,6 @@ use {
         abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
         api::submission_server::SubmissionServer,
     },
-    abci::{
-        RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
-        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
-        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
-    },
     baseapp::BaseApp as AccountBaseAPP,
     config::abci::global_cfg::CFG,
     ledger::store::LedgerState,
@@ -23,6 +17,12 @@ use {
     std::{
         path::Path,
         sync::{atomic::Ordering, Arc},
+    },
+    tendermint_proto::abci::{
+        RequestBeginBlock, RequestCheckTx, RequestDeliverTx, RequestEndBlock,
+        RequestInfo, RequestInitChain, RequestQuery, ResponseBeginBlock,
+        ResponseCheckTx, ResponseCommit, ResponseDeliverTx, ResponseEndBlock,
+        ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     tx_sender::TendermintForward,
 };
@@ -88,42 +88,42 @@ impl ABCISubmissionServer {
 
 impl abci::Application for ABCISubmissionServer {
     #[inline(always)]
-    fn info(&mut self, req: &RequestInfo) -> ResponseInfo {
+    fn info(&self, req: RequestInfo) -> ResponseInfo {
         callback::info(self, req)
     }
 
     #[inline(always)]
-    fn query(&mut self, req: &RequestQuery) -> ResponseQuery {
+    fn query(&self, req: RequestQuery) -> ResponseQuery {
         callback::query(self, req)
     }
 
     #[inline(always)]
-    fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
+    fn check_tx(&self, req: RequestCheckTx) -> ResponseCheckTx {
         callback::check_tx(self, req)
     }
 
     #[inline(always)]
-    fn init_chain(&mut self, req: &RequestInitChain) -> ResponseInitChain {
+    fn init_chain(&self, req: RequestInitChain) -> ResponseInitChain {
         callback::init_chain(self, req)
     }
 
     #[inline(always)]
-    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
+    fn begin_block(&self, req: RequestBeginBlock) -> ResponseBeginBlock {
         callback::begin_block(self, req)
     }
 
     #[inline(always)]
-    fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
+    fn deliver_tx(&self, req: RequestDeliverTx) -> ResponseDeliverTx {
         callback::deliver_tx(self, req)
     }
 
     #[inline(always)]
-    fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
+    fn end_block(&self, req: RequestEndBlock) -> ResponseEndBlock {
         callback::end_block(self, req)
     }
 
     #[inline(always)]
-    fn commit(&mut self, req: &RequestCommit) -> ResponseCommit {
-        callback::commit(self, req)
+    fn commit(&self) -> ResponseCommit {
+        callback::commit(self)
     }
 }

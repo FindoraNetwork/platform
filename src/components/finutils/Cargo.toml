@@ -34,12 +34,13 @@ fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a-fk" }
+tendermint = "0.28"
+tendermint-proto = "0.28"
+tendermint-rpc = { version = "0.28", features = ["http-client", "websocket-client"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
-chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "tm33v7" }
+chaindev = "0.2.2"
 
 [dev-dependencies]
 

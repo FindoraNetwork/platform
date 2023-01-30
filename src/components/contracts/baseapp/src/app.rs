@@ -1,12 +1,12 @@
 use crate::extensions::SignedExtra;
-use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use tracing::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
+use tendermint_proto::{abci::*, types::Header};
+use tracing::{debug, error, info};
 
 impl crate::BaseApp {
     /// info implements the ABCI interface.
@@ -21,7 +21,7 @@ impl crate::BaseApp {
         let height = self.chain_state.read().height().unwrap();
         let hash = self.chain_state.read().root_hash();
         info.last_block_height = height as i64;
-        info.last_block_app_hash = hash;
+        info.last_block_app_hash = hash.into();
 
         info
     }
@@ -62,9 +62,9 @@ impl crate::BaseApp {
 
     /// check_tx implements the ABCI interface and executes a tx in Check/ReCheck mode.
     pub fn check_tx(&self, req: &RequestCheckTx) -> ResponseCheckTx {
-        let mut resp = ResponseCheckTx::new();
+        let mut resp = ResponseCheckTx::default();
 
-        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(&req.tx) {
             tx
         } else {
             info!(target: "baseapp", "Transaction evm tag check failed");
@@ -155,7 +155,7 @@ impl crate::BaseApp {
                     }
                 }
             };
-            match req.get_field_type() {
+            match req.r#type() {
                 CheckTxType::New => check_fn(RunTxMode::Check),
                 CheckTxType::Recheck => check_fn(RunTxMode::ReCheck),
             }
@@ -188,7 +188,7 @@ impl crate::BaseApp {
         Self::update_state(
             &mut self.deliver_state,
             req.header.clone().unwrap_or_default(),
-            req.hash.clone(),
+            req.hash[..].to_vec(),
         );
 
         self.update_deliver_state_cache();
@@ -199,9 +199,9 @@ impl crate::BaseApp {
     }
 
     pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
-        let mut resp = ResponseDeliverTx::new();
+        let mut resp = ResponseDeliverTx::default();
 
-        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(&req.tx) {
             tx
         } else {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
@@ -286,11 +286,11 @@ impl crate::BaseApp {
                         debug!(target: "baseapp", "deliver tx succeed with result: {:?}", ar);
                     }
                     resp.code = ar.code;
-                    resp.data = ar.data;
+                    resp.data = ar.data.into();
                     resp.log = ar.log;
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
-                    resp.events = protobuf::RepeatedField::from_vec(ar.events);
+                    resp.events = ar.events;
                     resp
                 }
                 Err(e) => {
@@ -317,7 +317,7 @@ impl crate::BaseApp {
         self.modules.end_block(&mut self.deliver_state, req)
     }
 
-    pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
+    pub fn commit(&mut self) -> ResponseCommit {
         // Reset the Check state to the latest committed.
         // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
@@ -353,7 +353,7 @@ impl crate::BaseApp {
 
         // Set root hash
         let mut res: ResponseCommit = Default::default();
-        res.data = root_hash;
+        res.data = root_hash.into();
         res
     }
 }

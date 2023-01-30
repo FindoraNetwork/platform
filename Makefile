@@ -96,6 +96,7 @@ build_bench_release: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm -f $(shell which tendermint)
+	@- apt install -y libleveldb-dev
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
@@ -163,7 +164,7 @@ checkpoint_cleanup:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --no-default-features
-	cargo clippy --workspace --tests
+	cargo check --workspace --tests
 
 update:
 	git submodule update --recursive --init

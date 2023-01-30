@@ -9,7 +9,9 @@ description = "Findora module supporting execute ethereum transaction"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { package = "tendermint-abci", version = "0.28" }
+tendermint-proto = "0.28"
+
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.13.1", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }

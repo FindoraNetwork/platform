@@ -1,10 +1,10 @@
 use crate::context::{Context, RunTxMode};
-use abci::Event;
 use config::abci::global_cfg::CFG;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
 use std::fmt::Debug;
+use tendermint_proto::abci::Event;
 
 /// A action (module function and argument values) that can be executed.
 pub trait Executable {

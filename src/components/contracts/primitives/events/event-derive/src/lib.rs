@@ -45,29 +45,33 @@ pub fn derive_event(input_struct: TokenStream) -> TokenStream {
             fn emit_event(field_type: String, mut input_struct: #name) -> AbciEvent {
                 let mut attributes = Vec::new();
                 #(
-                    let mut pair = AbciPair::new();
-                    pair.set_key(#keys.to_string().as_bytes().into());
-                    pair.set_value(format!("{:?}", input_struct.#idents).as_bytes().into());
-                    attributes.push(pair);
+                    let ea = AbciEventAttr {
+                        key: #keys.to_string().into_bytes().into(),
+                        value: format!("{:?}", input_struct.#idents).into_bytes().into(),
+                        index: true
+                    };
+                    attributes.push(ea);
                 )*
-                let mut event = AbciEvent::new();
-                event.set_field_type(format!("{}_{}", field_type, stringify!(#name)));
-                event.set_attributes(RepeatedField::from_vec(attributes));
-                event
+                AbciEvent {
+                    r#type: format!("{}_{}", field_type, stringify!(#name)),
+                    attributes: attributes.into(),
+                }
             }
 
             fn emit_serde_event(field_type: String, mut input_struct: #name) -> AbciEvent {
                 let mut attributes = Vec::new();
                 #(
-                    let mut pair = AbciPair::new();
-                    pair.set_key(#keys.to_string().as_bytes().into());
-                    pair.set_value(to_vec(&input_struct.#idents).unwrap_or(vec![]));
-                    attributes.push(pair);
+                    let ea = AbciEventAttr {
+                        key: #keys.to_string().into_bytes().into(),
+                        value: to_vec(&input_struct.#idents).unwrap_or(vec![]).into(),
+                        index: true
+                    };
+                    attributes.push(ea);
                 )*
-                let mut event = AbciEvent::new();
-                event.set_field_type(format!("{}_{}", field_type, stringify!(#name)));
-                event.set_attributes(RepeatedField::from_vec(attributes));
-                event
+                AbciEvent {
+                    r#type: format!("{}_{}", field_type, stringify!(#name)),
+                    attributes: attributes.into(),
+                }
             }
         }
     };
