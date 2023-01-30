@@ -54,7 +54,7 @@ use system_contracts::{SystemContracts, SYSTEM_ADDR};
 
 pub use runtime::*;
 
-use crate::utils::parse_evm_staking_mint_event;
+use crate::utils::{parse_evm_staking_mint_claim_event, parse_evm_staking_mint_event};
 
 // use crate::utils::build_undelegation_mints;
 
@@ -371,16 +371,25 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    pub fn claim(&self, ctx: &Context, from: H160, amount: U256) -> Result<()> {
+    pub fn claim(
+        &self,
+        ctx: &Context,
+        from: H160,
+        delegator: H160,
+        delegator_pk: &XfrPublicKey,
+        amount: U256,
+    ) -> Result<()> {
         let function = self.contracts.staking.function("claim").c(d!())?;
-
+        let delegator_address = Token::Address(delegator);
         let amount = Token::Uint(amount);
-        let input = function.encode_input(&[amount]).c(d!())?;
+        let input = function
+            .encode_input(&[delegator_address, amount])
+            .c(d!())?;
 
         let gas_limit = 99999999999;
         let value = U256::zero();
 
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -388,6 +397,27 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             value,
         )?;
+
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((_delegator, am)) => {
+                    if delegator != _delegator {
+                        return Err(eg!("Invalid delegator."));
+                    }
+                    if am != 0 {
+                        mints.push((*delegator_pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
+            }
+        }
+
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
 
         Ok(())
     }

@@ -152,16 +152,17 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
 
-    fn claim(&self, from: &XfrPublicKey, amount: u64) -> Result<()> {
-        let from = mapping_address(from);
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
+    fn claim(&self, delegator_pk: &XfrPublicKey, amount: u64) -> Result<()> {
+        let delegator = mapping_address(delegator_pk);
+        let amount = U256::from(amount);
 
-        if let Err(e) = self
-            .modules
-            .evm_module
-            .claim(&self.deliver_state, from, amount)
-        {
+        if let Err(e) = self.modules.evm_module.claim(
+            &self.deliver_state,
+            H160::zero(),
+            delegator,
+            delegator_pk,
+            amount,
+        ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
             return Err(e);

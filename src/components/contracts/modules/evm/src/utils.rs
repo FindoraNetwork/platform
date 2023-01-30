@@ -281,6 +281,25 @@ pub fn evm_staking_min_event() -> Event {
     }
 }
 
+pub fn evm_staking_mint_claim_event() -> Event {
+    Event {
+        name: "MintClaim".to_owned(),
+        inputs: vec![
+            EventParam {
+                name: "delegator".to_owned(),
+                kind: ParamType::Address,
+                indexed: false,
+            },
+            EventParam {
+                name: "amount".to_owned(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+        ],
+        anonymous: false,
+    }
+}
+
 pub fn parse_evm_staking_mint_event(data: Vec<u8>) -> Result<(XfrPublicKey, u64)> {
     let event = evm_staking_min_event();
     let log = RawLog {
@@ -306,6 +325,27 @@ pub fn parse_evm_staking_mint_event(data: Vec<u8>) -> Result<(XfrPublicKey, u64)
         .as_u64();
 
     Ok((public_key, amount))
+}
+
+pub fn parse_evm_staking_mint_claim_event(data: Vec<u8>) -> Result<(H160, u64)> {
+    let event = evm_staking_mint_claim_event();
+    let log = RawLog {
+        topics: vec![event.signature()],
+        data,
+    };
+
+    let result = event.parse_log(log).c(d!())?;
+
+    let address = result.params[0].value.clone().into_address().c(d!())?;
+
+    let amount = result.params[1]
+        .value
+        .clone()
+        .into_uint()
+        .unwrap_or_default()
+        .as_u64();
+
+    Ok((address, amount))
 }
 
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
