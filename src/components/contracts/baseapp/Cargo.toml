@@ -25,9 +25,11 @@ serde_json = "1.0.40"
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 base64 = "0.13"
 once_cell = "1.10.0"
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 sha3 = "0.8"
+hex = "*"
 
 config = { path = "../../config"}
 
@@ -57,3 +59,4 @@ evm-precompile = {path = "../modules/evm/precompile"}
 [features]
 abci_mock = []
 web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]
+debug_env = []

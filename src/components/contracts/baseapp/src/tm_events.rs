@@ -50,7 +50,7 @@ fn get_pending_hash() -> Result<Vec<H256>, attohttpc::Error> {
         })
         .map(|json_resp| {
             for tx in json_resp.result.txs {
-                base64::decode(&tx)
+                base64::decode(tx)
                     .map(|bytes| {
                         let hasher = sha2_256(&bytes);
                         pending_hash.push(H256::from_slice(&hasher))

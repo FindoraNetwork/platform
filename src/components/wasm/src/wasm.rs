@@ -1514,11 +1514,93 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 }
 
 #[wasm_bindgen]
+///
+pub fn get_priv_key_hex_str_by_mnemonic(
+    phrase: &str,
+    num: u32,
+) -> Result<String, JsValue> {
+    let key_pair = wallet::restore_keypair_from_mnemonic_cus(phrase, 0, 0, num)
+        .map_err(error_to_jsvalue)?;
+    let data = key_pair.get_sk_ref().to_bytes();
+    Ok(format!("0x{}", hex::encode(&data[1..])))
+}
+
+#[wasm_bindgen]
+///
+pub fn get_keypair_by_pri_key(hex_priv_key: &str) -> Result<XfrKeyPair, JsValue> {
+    let data = if hex_priv_key.starts_with("0x") {
+        hex::decode(&hex_priv_key[2..]).map_err(error_to_jsvalue)?
+    } else {
+        hex::decode(hex_priv_key).map_err(error_to_jsvalue)?
+    };
+    XfrKeyPair::generate_secp256k1_from_bytes(&data).map_err(error_to_jsvalue)
+}
+#[wasm_bindgen]
+///
+pub fn get_pub_key_hex_str_by_priv_key(hex_priv_key: &str) -> Result<String, JsValue> {
+    let key_pair = get_keypair_by_pri_key(hex_priv_key)?;
+    let data = key_pair.get_pk_ref().to_bytes();
+    Ok(format!("0x{}", hex::encode(&data[1..])))
+}
+
+#[wasm_bindgen]
+///
+pub fn get_address_by_public_key(hex_pub_key: &str) -> Result<String, JsValue> {
+    let byte = if hex_pub_key.starts_with("0x") {
+        hex::decode(&hex_pub_key[2..]).map_err(error_to_jsvalue)?
+    } else {
+        hex::decode(hex_pub_key).map_err(error_to_jsvalue)?
+    };
+    let mut data = vec![KeyType::Secp256k1 as u8];
+    data.extend_from_slice(&byte);
+    let pub_key = XfrPublicKey::from_bytes(&data).map_err(error_to_jsvalue)?;
+    if let XfrPublicKeyInner::Secp256k1(pub_key) = pub_key.inner() {
+        Ok(format!(
+            "{:?}",
+            H160::from(convert_libsecp256k1_public_key_to_address(&pub_key))
+        ))
+    } else {
+        Ok(String::new())
+    }
+}
+
+#[wasm_bindgen]
+/// Extracts the public key as a string from a transfer key pair.
+pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
+    if let XfrPublicKeyInner::Ed25519(pk) = key_pair.get_pk().inner() {
+        format!(
+            "\"{}\"",
+            base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
+        )
+    } else {
+        String::from("key type error")
+    }
+}
+
+#[wasm_bindgen]
+/// Extracts the private key as a string from a transfer key pair.
+pub fn get_priv_key_str_old(key_pair: &XfrKeyPair) -> String {
+    if let XfrSecretKey::Ed25519(sk) = key_pair.get_sk_ref() {
+        format!(
+            "\"{}\"",
+            base64::encode_config(&sk.to_bytes(), base64::URL_SAFE)
+        )
+    } else {
+        String::from("key type error")
+    }
+}
+
+#[wasm_bindgen]
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
     gen_random_keypair()
 }
 
+#[wasm_bindgen]
+/// Creates a new transfer key pair.
+pub fn new_keypair_old() -> XfrKeyPair {
+    XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy())
+}
 #[wasm_bindgen]
 /// Generates a new keypair deterministically from a seed string and an optional name.
 pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPair {
@@ -1817,10 +1899,14 @@ use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, KeyInit};
 use aes_gcm::Aes256Gcm;
 use base64::URL_SAFE;
+use fp_types::H160;
 use getrandom::getrandom;
 use js_sys::JsString;
 use ledger::data_model::{ABARData, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
 use ledger::staking::Amount;
+use noah::xfr::sig::{
+    convert_libsecp256k1_public_key_to_address, KeyType, XfrPublicKeyInner,
+};
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
@@ -1845,6 +1931,21 @@ pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
 pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
     let pub_key = public_key_from_bech32(pk)?;
     Ok(public_key_to_base64(&pub_key))
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn bech32_to_base64_old(pk: &str) -> Result<String, JsValue> {
+    let pub_key = public_key_from_bech32(pk)?;
+    let ret = if let XfrPublicKeyInner::Ed25519(pk) = pub_key.inner() {
+        format!(
+            "\"{}\"",
+            base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
+        )
+    } else {
+        String::from("key type error")
+    };
+    Ok(ret)
 }
 
 #[wasm_bindgen]

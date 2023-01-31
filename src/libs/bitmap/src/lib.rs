@@ -566,7 +566,7 @@ fn count_byte(mask: usize) -> u8 {
     let mut result = 0;
 
     for i in 0..8 {
-        result += if mask & (1 << i) == 0 { 0 } else { 1 };
+        result += (mask & (1 << i) != 0) as u8;
     }
 
     result
@@ -1097,7 +1097,7 @@ impl BitMap {
     // Append a list of the set bits to the serialization
     // results.
     fn append_set(&self, index: usize, result: &mut Vec<u8>) {
-        let set_bits = self.set_bits[index] as u32;
+        let set_bits = self.set_bits[index];
 
         // Append the header to the serialization.
         self.append_header(index, BIT_DESC_SET, set_bits, result);

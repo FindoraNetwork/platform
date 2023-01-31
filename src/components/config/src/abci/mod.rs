@@ -12,6 +12,8 @@ use {
     toml,
 };
 
+pub mod bridge;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
@@ -61,7 +63,6 @@ pub struct CheckPointConfig {
     pub unbond_block_cnt: u64,
     pub prismxx_inital_height: i64,
     pub enable_triple_masking_height: i64,
-    pub fix_prism_mint_pay: i64,
     pub fix_exec_code: i64,
 
     // https://github.com/FindoraNetwork/platform/pull/307
@@ -121,13 +122,14 @@ impl CheckPointConfig {
                                 enable_triple_masking_height: 0,
                                 fix_unpaid_delegation_height: 0,
                                 fix_undelegation_missing_reward_height: 0,
-                                fix_prism_mint_pay: 0,
                                 fix_exec_code: 0,
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 utxo_asset_prefix_height: 0,
                                 nonce_bug_fix_height: 0,
-                                prism_bridge_address: String::new(),
+                                prism_bridge_address:
+                                    "0xfcfe4ff1006a7721cee870b56ee2b5c250aec13b"
+                                        .to_owned(),
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
@@ -151,7 +153,6 @@ impl CheckPointConfig {
                                 prismxx_inital_height: 30000000,
                                 enable_triple_masking_height: 30000000,
                                 fix_unpaid_delegation_height: 2261885,
-                                fix_prism_mint_pay: 30000000,
                                 fix_exec_code: 30000000,
                                 evm_checktx_nonce: 30000000,
                                 utxo_checktx_height: 30000000,

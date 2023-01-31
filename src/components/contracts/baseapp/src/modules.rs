@@ -22,6 +22,9 @@ use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
 
+#[cfg(feature = "debug_env")]
+use std::str::FromStr;
+
 #[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
@@ -72,6 +75,20 @@ impl ModuleManager {
         self.evm_module.begin_block(ctx, req);
         self.xhub_module.begin_block(ctx, req);
         self.template_module.begin_block(ctx, req);
+
+        #[cfg(feature = "debug_env")]
+        if ctx.header.height == 1 {
+            //private key: 4d05b965f821ea900ddd995dfa1b6caa834eaaa1ebe100a9760baf9331aae567
+            let test_address =
+                H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").unwrap();
+
+            // mint 1000 FRA
+            pnk!(module_account::App::<BaseApp>::mint(
+                ctx,
+                &Address::from(test_address),
+                U256::from(1_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())
+            ));
+        }
     }
 
     pub fn end_block(
@@ -88,10 +105,6 @@ impl ModuleManager {
             resp.validator_updates = mresp.validator_updates;
         }
 
-        if let Err(e) = self.mint_evm_staking(ctx) {
-            tracing::error!("Error on mint amount from staking: {}", e);
-        }
-
         self.xhub_module.end_block(ctx, req);
         self.template_module.end_block(ctx, req);
         // if !resp_template.validator_updates.is_empty() {
@@ -100,8 +113,8 @@ impl ModuleManager {
         resp
     }
 
-    pub fn mint_evm_staking(&mut self, ctx: &Context) -> Result<()> {
-        let ops = self.evm_module.get_claim_ops(ctx)?;
+    pub fn mint_evm_staking_claims_to_account(&mut self, ctx: &Context) -> Result<()> {
+        let ops = self.evm_module.mint_claims(ctx)?;
 
         for (addr, amount) in ops {
             let amount = EthereumDecimalsMapping::from_native_token(amount)

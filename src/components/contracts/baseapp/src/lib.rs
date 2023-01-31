@@ -9,6 +9,7 @@ mod app;
 pub mod extensions;
 mod modules;
 mod notify;
+mod staking;
 pub mod tm_events;
 
 use crate::modules::ModuleManager;
@@ -27,11 +28,11 @@ use fp_evm::BlockId;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     base::BaseProvider,
-    evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
+    evm::{EthereumAddressMapping, EthereumDecimalsMapping},
 };
-use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
+use fp_types::{actions::Action, crypto::Address};
 use lazy_static::lazy_static;
-use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
+use ledger::data_model::Transaction as FindoraTransaction;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
@@ -349,36 +350,6 @@ impl BaseApp {
     ) -> Result<()> {
         self.modules
             .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
-    }
-
-    pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
-        let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
-
-        for output in &outputs {
-            if output.asset == ASSET_TYPE_FRA {
-                let address =
-                    Address::from(self.modules.evm_module.contracts.bridge_address);
-                if let Some(amount) =
-                    EthereumDecimalsMapping::from_native_token(U256::from(output.amount))
-                {
-                    if let Err(e) = module_account::App::<Self>::burn(
-                        &self.deliver_state,
-                        &address,
-                        amount,
-                    ) {
-                        tracing::error!("Error when burn account: {:?}", e);
-                    }
-                }
-            }
-        }
-
-        let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
-
-        if let Some(mut e) = outputs2 {
-            outputs.append(&mut e);
-        }
-
-        Some(outputs)
     }
 }
 

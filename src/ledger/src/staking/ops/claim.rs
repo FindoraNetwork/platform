@@ -4,6 +4,10 @@
 //! Take back some partial rewards of a valid delegation.
 //!
 
+use config::abci::global_cfg::CFG;
+
+use crate::staking::evm::EVM_STAKING;
+
 use {
     crate::{data_model::NoReplayToken, staking::Staking},
     noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
@@ -28,9 +32,17 @@ impl ClaimOps {
 
     /// Apply new claim to the target `Staking` instance.
     pub fn apply(&self, staking: &mut Staking) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        let cur_height = staking.cur_height() as i64;
+        if cur_height < CFG.checkpoint.evm_staking {
+            self.verify()
+                .c(d!())
+                .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        } else {
+            self.verify()?;
+            let am = self.body.amount.c(d!(eg!("Missing amount.")))?;
+            EVM_STAKING.get().c(d!())?.write().claim(&self.pubkey, am)?;
+            Ok(())
+        }
     }
 
     /// Verify signature.

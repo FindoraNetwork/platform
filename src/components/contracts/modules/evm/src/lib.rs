@@ -37,9 +37,11 @@ use ethereum::{
 };
 
 use fp_types::{
-    actions::{evm::Action, xhub::NonConfidentialOutput},
+    actions::evm::Action,
     crypto::{Address, HA160},
 };
+use ledger::staking::evm::EVM_STAKING_MINTS;
+// use ledger::staking::evm::EVM_STAKING_MINTS;
 use noah::xfr::sig::XfrPublicKey;
 use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
@@ -47,9 +49,14 @@ use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
 use std::marker::PhantomData;
-use system_contracts::SystemContracts;
+use std::str::FromStr;
+use system_contracts::{SystemContracts, SYSTEM_ADDR};
 
 pub use runtime::*;
+
+use crate::utils::{parse_evm_staking_mint_claim_event, parse_evm_staking_mint_event};
+
+// use crate::utils::build_undelegation_mints;
 
 pub const MODULE_NAME: &str = "evm";
 
@@ -132,7 +139,7 @@ impl<C: Config> App<C> {
             .encode_input(&[asset, from, to, value, lowlevel])
             .c(d!())?;
 
-        let from = H160::zero();
+        let from = H160::from_str(SYSTEM_ADDR).unwrap();
         let gas_limit = 9999999;
         let value = U256::zero();
 
@@ -166,7 +173,7 @@ impl<C: Config> App<C> {
     pub fn withdraw_fra(
         &self,
         ctx: &Context,
-        from: &XfrPublicKey,
+        _from: &XfrPublicKey,
         to: &H160,
         _value: U256,
         _lowlevel: Vec<u8>,
@@ -175,23 +182,16 @@ impl<C: Config> App<C> {
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        let from = Token::Bytes(from.noah_to_bytes());
-
-        // let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let to = Token::Address(*to);
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
-        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
-
-        let input = function
-            .encode_input(&[from, to, value, lowlevel])
-            .c(d!())?;
+        let input = function.encode_input(&[to, value, lowlevel]).c(d!())?;
 
         let gas_limit = 9999999;
         let value = U256::zero();
         let gas_price = U256::one();
-        let from = H160::zero();
+        let from = H160::from_str(SYSTEM_ADDR).unwrap();
 
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -227,6 +227,221 @@ impl<C: Config> App<C> {
         let input = utils::build_evm_staking_input(&self.contracts, req)?;
 
         let gas_limit = 9999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let mut mints = vec![];
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_event(log.data) {
+                Ok((pk, am)) => {
+                    if am != 0 {
+                        mints.push((pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse evm staking mint error: {}", e);
+                }
+            }
+        }
+
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
+
+        Ok(())
+    }
+
+    pub fn stake(
+        &self,
+        ctx: &Context,
+        from: H160,
+        value: U256,
+        validator: H160,
+        td_pubkey: Vec<u8>,
+        staker: H160,
+        staker_pk: Vec<u8>,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        println!(
+            "Stake: from {:x} to {:x}, amount: {}",
+            &staker, &validator, &value
+        );
+
+        let function = self.contracts.staking.function("stake").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let td_pubkey = Token::Bytes(td_pubkey);
+        let staker = Token::Address(staker);
+        let staker_pk = Token::Bytes(staker_pk);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = function
+            .encode_input(&[validator, td_pubkey, staker, staker_pk, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn delegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        delegator_pk: Vec<u8>,
+        amount: U256,
+    ) -> Result<()> {
+        println!(
+            "Delegate from {:X} to {:X}, amount:{}",
+            &delegator, &validator, &amount
+        );
+
+        let function = self.contracts.staking.function("delegate").c(d!())?;
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let delegator_pk = Token::Bytes(delegator_pk);
+        let input = function
+            .encode_input(&[validator, delegator, delegator_pk])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            amount,
+        )?;
+        Ok(())
+    }
+
+    pub fn undelegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("undelegate").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let input = function
+            .encode_input(&[validator, delegator, amount])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn claim(
+        &self,
+        ctx: &Context,
+        from: H160,
+        delegator: H160,
+        delegator_pk: &XfrPublicKey,
+        amount: U256,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("claim").c(d!())?;
+        let delegator_address = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let input = function
+            .encode_input(&[delegator_address, amount])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((_delegator, am)) => {
+                    if delegator != _delegator {
+                        return Err(eg!("Invalid delegator."));
+                    }
+                    if am != 0 {
+                        mints.push((*delegator_pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
+            }
+        }
+
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
+
+        Ok(())
+    }
+
+    pub fn update_validator(
+        &self,
+        ctx: &Context,
+        staker: H160,
+        validator: H160,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        let func = self.contracts.staking.function("updateValidator").c(d!())?;
+
+        let staker = Token::Address(staker);
+        let validator = Token::Address(validator);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = func
+            .encode_input(&[staker, validator, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
         let value = U256::zero();
         let from = H160::zero();
 
@@ -266,15 +481,15 @@ impl<C: Config> App<C> {
         utils::build_validator_updates(&self.contracts, &data)
     }
 
-    pub fn get_claim_ops(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
-        let func = self.contracts.staking.function("getClaimOps").c(d!())?;
+    pub fn mint_claims(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
+        let func = self.contracts.staking.function("mintClaims").c(d!())?;
         let input = func.encode_input(&[]).c(d!())?;
 
         let gas_limit = 99999999999;
         let value = U256::zero();
         let from = H160::zero();
 
-        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -283,23 +498,19 @@ impl<C: Config> App<C> {
             value,
         )?;
 
-        utils::build_claim_ops(&self.contracts, &data)
-    }
-
-    pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
-        let height = CFG.checkpoint.prismxx_inital_height;
-
-        let mut pending_outputs = Vec::new();
-
-        if height < ctx.header.height {
-            if let Err(e) =
-                utils::fetch_mint::<C>(ctx, &self.contracts, &mut pending_outputs)
-            {
-                tracing::error!("Collect mint ops error: {:?}", e);
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((delegator, amount)) => {
+                    mints.push((delegator, U256::from(amount)));
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
             }
         }
 
-        pending_outputs
+        Ok(mints)
     }
 
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
@@ -389,30 +600,6 @@ impl<C: Config> AppModule for App<C> {
     }
 
     fn begin_block(&mut self, ctx: &mut Context, req: &abci::RequestBeginBlock) {
-        let height = CFG.checkpoint.prismxx_inital_height;
-
-        if ctx.header.height == height {
-            let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
-
-            if let Err(e) =
-                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
-            {
-                pd!(e);
-                return;
-            }
-            tracing::info!(
-                "Bridge contract address: {:?}",
-                self.contracts.bridge_address
-            );
-
-            if !ctx.state.write().cache_mut().good2_commit() {
-                ctx.state.write().discard_session();
-                pd!(eg!("ctx state commit no good"));
-            } else {
-                ctx.state.write().commit_session();
-            }
-        }
-
         if ctx.header.height == CFG.checkpoint.evm_staking {
             let bytecode_str =
                 include_str!("../contracts/EVMStakingSystemProxy.bytecode");
@@ -450,6 +637,7 @@ impl<C: Config> AppModule for App<C> {
 
         if ctx.header.height > CFG.checkpoint.evm_staking {
             if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
+                println!("Error on evm staking trigger: {}", &e);
                 tracing::error!("Error on evm staking trigger: {}", e);
             }
 
