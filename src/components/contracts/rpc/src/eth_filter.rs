@@ -154,8 +154,7 @@ impl EthFilterApiImpl {
             // Check for restrictions
             if ret.len() as u32 > max_past_logs {
                 return Err(internal_err(format!(
-                    "query returned more than {} results",
-                    max_past_logs
+                    "query returned more than {max_past_logs} results",
                 )));
             }
             if begin_request.elapsed() > max_duration {
@@ -302,7 +301,7 @@ impl EthFilterApi for EthFilterApiImpl {
                     _ => Err(internal_err("Method not available.")),
                 }
             } else {
-                Err(internal_err(format!("Filter id {:?} does not exist.", key)))
+                Err(internal_err(format!("Filter id {key:?} does not exist.",)))
             }
         } else {
             Err(internal_err("Filter pool is not available."))
@@ -346,12 +345,11 @@ impl EthFilterApi for EthFilterApiImpl {
                         Ok(ret)
                     }
                     _ => Err(internal_err(format!(
-                        "Filter id {:?} is not a Log filter.",
-                        key
+                        "Filter id {key:?} is not a Log filter.",
                     ))),
                 }
             } else {
-                Err(internal_err(format!("Filter id {:?} does not exist.", key)))
+                Err(internal_err(format!("Filter id {key:?} does not exist.",)))
             }
         } else {
             Err(internal_err("Filter pool is not available."))
@@ -367,7 +365,7 @@ impl EthFilterApi for EthFilterApiImpl {
             if locked.remove(&key).is_some() {
                 Ok(true)
             } else {
-                Err(internal_err(format!("Filter id {:?} does not exist.", key)))
+                Err(internal_err(format!("Filter id {key:?} does not exist.",)))
             }
         } else {
             Err(internal_err("Filter pool is not available."))

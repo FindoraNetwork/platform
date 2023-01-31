@@ -268,7 +268,7 @@ impl<C: Config> App<C> {
             return Ok(ActionResult {
                 code: 1,
                 data: vec![],
-                log: format!("{}", e),
+                log: format!("{e}",),
                 gas_wanted: gas_limit.low_u64(),
                 gas_used: 0,
                 events,
@@ -343,7 +343,7 @@ impl<C: Config> App<C> {
                     let message_len = data[36..68].iter().sum::<u8>();
                     let body: &[u8] = &data[68..68 + message_len as usize];
                     if let Ok(reason) = std::str::from_utf8(body) {
-                        message = format!("{} {}", message, reason);
+                        message = format!("{message} {reason}");
                     }
                 }
                 (3, message)

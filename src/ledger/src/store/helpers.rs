@@ -103,7 +103,7 @@ pub fn apply_transaction(
         }
         Err(e) => {
             fn unwrap_failed(msg: &str, error: impl Debug) -> ! {
-                panic!("{}: {:?}", msg, error)
+                panic!("{msg}: {error:?}",)
             }
             unwrap_failed("apply_transaction: error in compute_effect", e)
         }

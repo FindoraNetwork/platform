@@ -103,8 +103,7 @@ impl EthApiImpl {
                 Some(block) => Some(block.header.number.as_u64()),
                 None => {
                     return Err(internal_err(format!(
-                        "block number not found, hash: {:?}",
-                        hash
+                        "block number not found, hash: {hash:?}",
                     )))
                 }
             },
@@ -113,8 +112,7 @@ impl EthApiImpl {
                     Some(num)
                 } else {
                     return Err(internal_err(format!(
-                        "block number: {} exceeds version range: {:?}",
-                        num, range
+                        "block number: {num} exceeds version range: {range:?}",
                     )));
                 }
             }
@@ -245,8 +243,7 @@ impl EthApi for EthApiImpl {
         {
             if CFG.checkpoint.enable_eip1559_height > curr_height {
                 return Box::pin(future::err(internal_err(format!(
-                    "eip1559 not enabled at height: {:?}",
-                    curr_height
+                    "eip1559 not enabled at height: {curr_height:?}",
                 ))));
             }
 
@@ -387,8 +384,7 @@ impl EthApi for EthApiImpl {
         {
             if CFG.checkpoint.enable_eip1559_height > curr_height {
                 return Box::pin(future::err(internal_err(format!(
-                    "eip1559 not enabled at height: {:?}",
-                    curr_height
+                    "eip1559 not enabled at height: {curr_height:?}",
                 ))));
             }
 
@@ -437,7 +433,7 @@ impl EthApi for EthApiImpl {
                 .read()
                 .create_query_context(None, false)
                 .map_err(|err| {
-                    internal_err(format!("create query context error: {:?}", err))
+                    internal_err(format!("create query context error: {err:?}",))
                 })?;
             if let Some(block) = block {
                 ctx.header
@@ -464,9 +460,9 @@ impl EthApi for EthApiImpl {
                         &ctx, call, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner call error: {:?}", err))
+                        internal_err(format!("evm runner call error: {err:?}",))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner call result: {info:?}", );
 
                     error_on_execution_failure(&info.exit_reason, &info.value)?;
 
@@ -486,9 +482,9 @@ impl EthApi for EthApiImpl {
                         &ctx, create, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner create error: {:?}", err))
+                        internal_err(format!("evm runner create error: {err:?}",))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner create result: {info:?}", );
 
                     error_on_execution_failure(&info.exit_reason, &[])?;
 
@@ -803,8 +799,7 @@ impl EthApi for EthApiImpl {
         } else {
             if CFG.checkpoint.enable_eip1559_height > curr_height {
                 return Box::pin(future::err(internal_err(format!(
-                    "eip1559 not enabled at height: {:?}",
-                    curr_height
+                    "eip1559 not enabled at height: {curr_height:?}",
                 ))));
             }
             // Typed Transaction.
@@ -922,8 +917,7 @@ impl EthApi for EthApiImpl {
         {
             if CFG.checkpoint.enable_eip1559_height > curr_height {
                 return Box::pin(future::err(internal_err(format!(
-                    "eip1559 not enabled at height: {:?}",
-                    curr_height
+                    "eip1559 not enabled at height: {curr_height:?}",
                 ))));
             }
 
@@ -946,8 +940,7 @@ impl EthApi for EthApiImpl {
                         (Some(BlockId::Number(U256::from(num))), false)
                     } else {
                         return Err(internal_err(format!(
-                            "block number: {} exceeds version range: {:?}",
-                            num, range
+                            "block number: {num} exceeds version range: {range:?}",
                         )));
                     }
                 }
@@ -1026,7 +1019,7 @@ impl EthApi for EthApiImpl {
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
                     .map_err(|err| {
-                        internal_err(format!("create query context error: {:?}", err))
+                        internal_err(format!("create query context error: {err:?}",))
                     })?;
 
                 let CallRequest {
@@ -1065,9 +1058,9 @@ impl EthApi for EthApiImpl {
                             &ctx, call, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner call error: {:?}", err))
+                            internal_err(format!("evm runner call error: {err:?}",))
                         })?;
-                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                        debug!(target: "eth_rpc", "evm runner call result: {info:?}", );
 
                         Ok(ExecuteResult {
                             data: info.value,
@@ -1089,9 +1082,9 @@ impl EthApi for EthApiImpl {
                             &ctx, create, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner create error: {:?}", err))
+                            internal_err(format!("evm runner create error: {err:?}",))
                         })?;
-                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                        debug!(target: "eth_rpc", "evm runner create result: {info:?}", );
 
                         Ok(ExecuteResult {
                             data: vec![],
@@ -1160,7 +1153,7 @@ impl EthApi for EthApiImpl {
                 id = Some(BlockId::Number(number));
                 index = idx as usize
             }
-            println!("{:?}, {:?}", id, index);
+            println!("{id:?}, {index:?}");
 
             let block = account_base_app.read().current_block(id.clone());
             let statuses = account_base_app

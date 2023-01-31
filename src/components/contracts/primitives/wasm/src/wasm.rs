@@ -2,16 +2,14 @@
 
 use core::fmt::Display;
 use ethereum::{
-    LegacyTransactionMessage,TransactionSignature,
-    TransactionV0 as LegacyTransaction, TransactionV2,
+    LegacyTransactionMessage, TransactionSignature, TransactionV0 as LegacyTransaction,
+    TransactionV2,
 };
 use ethereum_types::{H160, H256};
 
 use fp_types::{
-    actions::{
-        ethereum::Action2 as EthAction2, Action2,
-    },
-    assemble::{UncheckedTransaction2},
+    actions::{ethereum::Action2 as EthAction2, Action2},
+    assemble::UncheckedTransaction2,
     crypto::secp256k1_ecdsa_recover,
 };
 use fp_utils::tx::EvmRawTxWrapper;
@@ -60,7 +58,7 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
             None => return Err(error_to_jsvalue("invalid raw tx")),
         };
         let signer = recover_signer(&tx).c(d!()).map_err(error_to_jsvalue)?;
-        Ok(format!("{:?}", signer))
+        Ok(format!("{signer:?}",))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -84,7 +82,7 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
             None => return Err(error_to_jsvalue("invalid raw tx")),
         };
         let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
-        Ok(format!("{:?}", hash))
+        Ok(format!("{hash:?}",))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -133,7 +131,7 @@ mod test {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let unchecked_tx: UncheckedTransaction2<()> =
-        serde_json::from_slice(tx_bytes.as_slice()).unwrap();
+            serde_json::from_slice(tx_bytes.as_slice()).unwrap();
         if let Action2::Ethereum(EthAction2::Transact(tx)) = unchecked_tx.function {
             let tx: LegacyTransaction = new_tx2legcay_tx(tx).unwrap();
             let signer = recover_signer(&tx).unwrap();
