@@ -304,7 +304,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::approve(state, &caller, &spender_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -349,7 +349,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &caller, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -405,7 +405,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &from_id, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         C::AccountAsset::approve(
             state,
@@ -413,7 +413,7 @@ impl<C: Config> FRC20<C> {
             &caller,
             allowance.saturating_sub(amount),
         )
-        .map_err(|e| error(format!("{:?}", e)))?;
+        .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,

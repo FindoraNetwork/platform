@@ -12,7 +12,7 @@ fn setup_temp_db() -> Arc<RwLock<State<TempFinDB>>> {
         .unwrap()
         .as_nanos();
     let mut path = temp_dir();
-    path.push(format!("temp-findora-db–{}", time));
+    path.push(format!("temp-findora-db–{time}",));
     let fdb = TempFinDB::open(path).unwrap();
     let chain_state = Arc::new(RwLock::new(ChainState::new(
         fdb,
