@@ -563,6 +563,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: if the eth address version of wallet is used
+            long: eth-address
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -587,6 +590,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: if the eth address version of wallet is used
+            long: eth-address
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
@@ -605,6 +611,9 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
+        - eth-address:
+            help: if the eth address version of wallet is used
+            long: eth-address
   - owned-utxos:
       about: List owned UTXOs for a public key
       args:
@@ -681,6 +690,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - eth-address:
+            help: if the eth address version of wallet is used
+            long: eth-address
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:
@@ -783,6 +795,9 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
+        - eth-address:
+            help: if the eth address version of wallet is used
+            long: eth-address
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:

@@ -17,6 +17,8 @@ source $TRIPLE_MASKING_SCRIPTS_PATH/gen_keys_test-bars.sh
 echo -e "${YEL}Run test cases and verifying results${NC}"
 
 echo "\n ***** Verifying balances ***** "
+echo $BAR_SEC_KEY
+echo "===================================="
 python3 "$REGRESSION_PATH"/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
 if [ $? != 0 ];
 then
