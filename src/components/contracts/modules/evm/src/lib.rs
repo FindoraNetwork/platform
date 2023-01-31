@@ -182,9 +182,12 @@ impl<C: Config> App<C> {
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
+        // let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let to = Token::Address(*to);
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
+
+        //println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
         let input = function.encode_input(&[to, value, lowlevel]).c(d!())?;
 

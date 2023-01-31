@@ -1462,7 +1462,7 @@ impl Staking {
                 vd.addr_td_to_app
                     .get(addr)
                     .copied()
-                    .c(d!(format!("Failed to get pk {}", addr)))
+                    .c(d!(format!("Failed to get pk {addr}",)))
             })
     }
 
@@ -2453,8 +2453,7 @@ pub fn check_delegation_amount(am: Amount, is_append: bool) -> Result<()> {
         Ok(())
     } else {
         let msg = format!(
-            "Invalid delegation amount: {} (min: {}, max: {})",
-            am, lowb, MAX_DELEGATION_AMOUNT
+            "Invalid delegation amount: {am} (min: {lowb}, max: {MAX_DELEGATION_AMOUNT})", 
         );
         Err(eg!(msg))
     }

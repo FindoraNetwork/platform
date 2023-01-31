@@ -155,8 +155,7 @@ pub fn stake(
         || diff!(network_height, local_height) > 3
     {
         println!(
-            "The difference in block height of your node and the remote network is too big: \n remote / local: {} / {}",
-            network_height, local_height
+            "The difference in block height of your node and the remote network is too big: \n remote / local: {network_height} / {local_height}",
         );
         if !force {
             println!("Append option --force to ignore this warning.");
@@ -329,7 +328,7 @@ pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
     let kp = get_keypair(is_address_fra).c(d!())?;
 
     let serv_addr = ruc::info!(get_serv_addr()).map(|i| {
-        println!("\x1b[31;01mServer URL:\x1b[00m\n{}\n", i);
+        println!("\x1b[31;01mServer URL:\x1b[00m\n{i}\n",);
     });
 
     let xfr_account = ruc::info!(get_keypair(is_address_fra)).map(|i| {
@@ -348,7 +347,7 @@ pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
     });
 
     let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
-        println!("\x1b[31;01mNode Balance:\x1b[00m\n{} FRA units\n", i);
+        println!("\x1b[31;01mNode Balance:\x1b[00m\n{i} FRA units\n",);
     });
 
     if basic {
@@ -357,7 +356,7 @@ pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
 
     let td_info = ruc::info!(get_td_pubkey()).map(|i| {
         let addr = td_pubkey_to_td_addr(&i);
-        println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{}\n", addr);
+        println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{addr}\n",);
         (i, addr)
     });
 
@@ -371,7 +370,7 @@ pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
         serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
     });
     let delegation_info = ruc::info!(delegation_info).map(|i| {
-        println!("\x1b[31;01mYour Delegation:\x1b[00m\n{}\n", i);
+        println!("\x1b[31;01mYour Delegation:\x1b[00m\n{i}\n",);
     });
 
     if let Ok((tpk, addr)) = td_info.as_ref() {
@@ -385,7 +384,7 @@ pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
                         .c(d!("server returned invalid data"))
                 })
                 .map(|i| {
-                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{}\n", i);
+                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{i}\n",);
                 });
             ruc::info_omit!(res);
         }
@@ -639,8 +638,7 @@ pub fn gen_key(is_fra_address: bool) -> (String, String, String, XfrKeyPair) {
 pub fn gen_key_and_print(is_fra_address: bool) {
     let (wallet_addr, mnemonic, key, _) = gen_key(is_fra_address);
     println!(
-        "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        wallet_addr, mnemonic, key
+        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n",
     );
 }
 
@@ -649,7 +647,7 @@ fn restore_keypair_from_str_with_default(
     is_fra_address: bool,
 ) -> Result<XfrKeyPair> {
     if let Some(sk) = sk_str {
-        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk))
+        serde_json::from_str::<XfrSecretKey>(&format!("\"{sk}\"",))
             .map(|sk| sk.into_keypair())
             .c(d!("Invalid secret key"))
     } else {
@@ -905,7 +903,7 @@ pub fn show_asset(addr: &str) -> Result<()> {
     for asset in assets {
         let base64 = asset.body.asset.code.to_base64();
         let h = hex::encode(asset.body.asset.code.val.0);
-        println!("Base64: {}, Hex: {}", base64, h);
+        println!("Base64: {base64}, Hex: {h}",);
     }
 
     Ok(())
@@ -924,12 +922,11 @@ pub fn convert_bar2abar(
 ) -> Result<Commitment> {
     // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
     let from = match owner_sk {
-        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
-            "\"{}\"",
-            str
-        )))
-        .c(d!())?
-        .into_keypair(),
+        Some(str) => {
+            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"",)))
+                .c(d!())?
+                .into_keypair()
+        }
         None => get_keypair(is_address_fra).c(d!())?,
     };
     // parse receiver AxfrPubKey
@@ -1397,7 +1394,7 @@ pub fn get_owned_abars(
     axfr_secret_key: AXfrKeyPair,
     commitments_list: &str,
 ) -> Result<()> {
-    println!("Abar data for commitments: {}", commitments_list);
+    println!("Abar data for commitments: {commitments_list}",);
     println!();
     println!(
         "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45}",
