@@ -482,7 +482,7 @@ struct TmStatus {
 // retrieve tendermint status and node info
 #[inline(always)]
 fn get_network_status(addr: &str) -> Result<TmStatus> {
-    let url = format!("{}:26657/status", addr);
+    let url = format!("{addr}:26657/status",);
 
     attohttpc::get(url)
         .send()

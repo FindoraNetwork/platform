@@ -207,7 +207,7 @@ impl fmt::Display for CoSigErr {
             CoSigErr::WeightInsufficient => "total weight is lower than the threshold",
             CoSigErr::SigInvalid => "invalid signature",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}",)
     }
 }
 
