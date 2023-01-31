@@ -75,7 +75,7 @@ pub fn test_precompile_test_vectors<P: Precompile>(
                     "test '{}' failed (different output)",
                     test.Name
                 );
-                if let Some(expected_gas) = test.Gas {
+                if let Some(_expected_gas) = test.Gas {
                     assert_eq!(
                         handle.gas_used,
                         0, //expected_gas,
