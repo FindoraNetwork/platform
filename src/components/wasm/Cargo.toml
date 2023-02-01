@@ -17,7 +17,7 @@ lightweight = ["noah/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
 wasm-opt = false
 
 [dependencies]
-base64 = "0.13"
+base64 = "0.21"
 hex = "0.4.2"
 js-sys = "0.3.27"
 rand_chacha = "0.3"
