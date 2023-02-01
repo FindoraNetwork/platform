@@ -960,10 +960,10 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
 pub fn get_anon_balance(
     abar: AnonAssetRecord,
     memo: AxfrOwnerMemo,
-    keypair: XfrKeyPair,
+    keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<u64, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
         .c(d!())
         .map_err(error_to_jsvalue)?
         .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
@@ -984,10 +984,10 @@ pub fn get_anon_balance(
 pub fn get_open_abar(
     abar: AnonAssetRecord,
     memo: AxfrOwnerMemo,
-    keypair: XfrKeyPair,
+    keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<JsValue, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
         .c(d!())
         .map_err(error_to_jsvalue)?
         .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
@@ -1011,10 +1011,10 @@ pub fn get_open_abar(
 pub fn gen_nullifier_hash(
     abar: AnonAssetRecord,
     memo: AxfrOwnerMemo,
-    keypair: XfrKeyPair,
+    keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
         .c(d!())
         .map_err(error_to_jsvalue)?
         .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
@@ -1023,7 +1023,7 @@ pub fn gen_nullifier_hash(
         .map_err(error_to_jsvalue)?;
 
     let n = nullify(
-        &keypair,
+        &keypair.clone(),
         oabar.get_amount(),
         oabar.get_asset_type().as_scalar(),
         mt_leaf_info.get_noah_mt_leaf_info().uid,
