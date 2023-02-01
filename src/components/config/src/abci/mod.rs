@@ -87,6 +87,10 @@ pub struct CheckPointConfig {
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/707
+    // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
+    pub fix_deliver_tx_revert_nonce_height: i64,
 }
 
 impl CheckPointConfig {
@@ -122,11 +126,12 @@ impl CheckPointConfig {
                                 utxo_asset_prefix_height: 0,
                                 nonce_bug_fix_height: 0,
                                 prism_bridge_address:
-                                    "0xfcfe4ff1006a7721cee870b56ee2b5c250aec13b"
+                                    "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
                                         .to_owned(),
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
+                                fix_deliver_tx_revert_nonce_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -155,17 +160,18 @@ impl CheckPointConfig {
                                 fix_undelegation_missing_reward_height: 3000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
+                                fix_deliver_tx_revert_nonce_height: 40000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
                             return Some(config);
                         }
                         Err(error) => {
-                            panic!("failed to create file: {:?}", error)
+                            panic!("failed to create file: {error:?}",)
                         }
                     };
                 } else {
-                    panic!("failed to open file: {:?}", error)
+                    panic!("failed to open file: {error:?}",)
                 }
             }
         };
@@ -488,7 +494,7 @@ pub mod global_cfg {
             .value_of("checkpoint-file")
             .map(|v| v.to_owned())
             .unwrap_or_else(|| String::from("./checkpoint.toml"));
-        println!("{}", checkpoint_path);
+        println!("{checkpoint_path}",);
 
         let res = Config {
             abci_host: ah,
@@ -597,7 +603,7 @@ pub mod global_cfg {
             .into_iter()
             .rev()
             .for_each(|h| {
-                println!("    {}", h);
+                println!("    {h}",);
             });
         exit(0);
     }
@@ -615,7 +621,7 @@ pub mod global_cfg {
             || m.is_present("snapshot-rollback-to")
             || m.is_present("snapshot-rollback-to-exact")
         {
-            println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
+            println!("\x1b[31;01m\n{HINTS}\x1b[00m",);
 
             let (h, strict) = m
                 .value_of("snapshot-rollback-to-exact")

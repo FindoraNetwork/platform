@@ -30,7 +30,7 @@ fn test_header() {
     assert!(header.bit_id == id * BLOCK_BITS as u64);
 
     if let Err(e) = header.validate(BIT_ARRAY, id) {
-        panic!("Validation failed:  {}", e);
+        panic!("Validation failed:  {e}",);
     }
 
     header.magic ^= 1;
@@ -138,7 +138,7 @@ fn test_basic_bitmap() {
     let mut bitmap = BitMap::create(file).unwrap();
 
     if let Err(e) = bitmap.write() {
-        panic!("Write failed:  {}", e);
+        panic!("Write failed:  {e}",);
     }
 
     // Check our definition of the checksum of an empty tree.
@@ -184,15 +184,15 @@ fn test_basic_bitmap() {
         // Try a flush now and then.
         if i % (BLOCK_BITS / 2) == 0 {
             if let Err(e) = bitmap.flush_old(0) {
-                panic!("flush_old failed:  {}", e);
+                panic!("flush_old failed:  {e}",);
             }
         }
     }
 
     let checksum1 = bitmap.compute_checksum();
     let checksum2 = bitmap.compute_checksum();
-    println!("Checksum 1: {:?}", checksum1);
-    println!("Checksum 2: {:?}", checksum2);
+    println!("Checksum 1: {checksum1:?}",);
+    println!("Checksum 2: {checksum2:?}",);
     assert!(checksum1 == checksum2);
 
     bitmap.clear_checksum_cache();
@@ -203,7 +203,7 @@ fn test_basic_bitmap() {
     let s1 = bitmap.serialize_partial(vec![0, BLOCK_BITS], 1);
 
     if let Err(x) = BitMap::deserialize(&s1) {
-        panic!("deserialize(&s1) failed:  {}", x);
+        panic!("deserialize(&s1) failed:  {x}",);
     }
 
     // Pick a random version number and serialize the entire
@@ -212,7 +212,7 @@ fn test_basic_bitmap() {
     let s2 = bitmap.serialize(sparse_version);
 
     if let Err(x) = BitMap::deserialize(&s2) {
-        panic!("deserialize(&s2) failed:  {}", x);
+        panic!("deserialize(&s2) failed:  {x}",);
     }
 
     // Create SparseMaps from the serialized forms.
@@ -237,7 +237,7 @@ fn test_basic_bitmap() {
 
         // Check that the sparse bitmap matches the source bitmap.
         if bitmap_result != sparse_result {
-            panic!("Sparse mismatch at {}", i);
+            panic!("Sparse mismatch at {i}",);
         }
 
         // Now check the partial bitmap.
@@ -284,11 +284,11 @@ fn test_basic_bitmap() {
     let bits_initialized = bitmap.size();
 
     if let Err(e) = bitmap.write() {
-        panic!("write failed:  {}", e);
+        panic!("write failed:  {e}",);
     }
 
     if let Err(e) = bitmap.flush_old(0) {
-        panic!("flush_old failed:  {}", e);
+        panic!("flush_old failed:  {e}",);
     }
 
     assert!(bitmap.validate(true));

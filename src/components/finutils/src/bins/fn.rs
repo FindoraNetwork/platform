@@ -209,7 +209,7 @@ fn run() -> Result<()> {
             .c(d!())?;
         } else {
             let help = "fn asset [--create | --issue | --show]";
-            println!("{}", help);
+            println!("{help}",);
         }
     } else if let Some(m) = matches.subcommand_matches("staker-update") {
         let vm = if let Some(memo) = m.value_of("validator-memo") {
@@ -431,7 +431,7 @@ fn run() -> Result<()> {
         }
         if address.is_some() {
             let (account, info) = contract_account_info(address, is_address_fra)?;
-            println!("AccountId: {}\n{:#?}\n", account, info);
+            println!("AccountId: {account}\n{info:#?}\n",);
         }
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
@@ -542,7 +542,7 @@ fn run() -> Result<()> {
 
         if let Some(path) = m.value_of("file-path") {
             serde_json::to_writer_pretty(&File::create(path).c(d!())?, &keys).c(d!())?;
-            println!("Keys saved to file: {}", path);
+            println!("Keys saved to file: {path}",);
         }
 
         // print keys to terminal
@@ -603,7 +603,7 @@ fn run() -> Result<()> {
         );
 
         // Print UTXO table
-        println!("Owned utxos for {:?}", pk);
+        println!("Owned utxos for {pk:?}",);
         println!("{:-^1$}", "", 100);
         println!(
             "{0: <8} | {1: <18} | {2: <45} ",
@@ -1132,7 +1132,7 @@ fn tip_fail(e: impl fmt::Display) {
     eprintln!(
         "\x1b[35;01mTips\x1b[01m:\n\tPlease send your error messages to us,\n\tif you can't understand their meanings ~^!^~\x1b[00m"
     );
-    eprintln!("\n{}", e);
+    eprintln!("\n{e}",);
 }
 
 fn tip_success() {
