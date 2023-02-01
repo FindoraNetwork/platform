@@ -30,7 +30,7 @@ bs58 = "0.4"
 ring = "0.16.19"
 aes-gcm = '^0.10.1'
 bech32 = "0.7.2"
-ruc = "1.0"
+ruc = "3.0"
 
 # Must enable the "js"-feature,
 # OR the compiling will fail.

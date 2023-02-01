@@ -32,7 +32,7 @@ config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 fp-utils = { path = "../components/contracts/primitives/utils" }
 itertools = "0.10"
-ruc = "1.0"
+ruc = "3.0"
 
 noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
