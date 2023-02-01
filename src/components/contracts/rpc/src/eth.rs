@@ -339,9 +339,9 @@ impl EthApi for EthApiImpl {
     fn call(
         &self,
         request: CallRequest,
-        _: Option<BlockNumber>,
+        block_number: Option<BlockNumber>,
     ) -> BoxFuture<Result<Bytes>> {
-        debug!(target: "eth_rpc", "call, request:{:?}", request);
+        debug!(target: "eth_rpc", "call, height {:?}, request:{:?}", block_number, request);
 
         let account_base_app = self.account_base_app.clone();
 
@@ -356,18 +356,14 @@ impl EthApi for EthApiImpl {
                 nonce,
             } = request;
 
-            let block = account_base_app.read().current_block(None);
+            let id = native_block_id(block_number);
+            let block = account_base_app
+                .read()
+                .current_block(id)
+                .ok_or_else(|| internal_err("failed to get block"))?;
+
             // use given gas limit or query current block's limit
-            let gas_limit = match gas {
-                Some(amount) => amount,
-                None => {
-                    if let Some(block) = block.clone() {
-                        block.header.gas_limit
-                    } else {
-                        <BaseApp as module_evm::Config>::BlockGasLimit::get()
-                    }
-                }
-            };
+            let gas_limit = gas.unwrap_or(block.header.gas_limit);
             let data = data.map(|d| d.0).unwrap_or_default();
 
             let mut config = <BaseApp as module_ethereum::Config>::config().clone();
@@ -375,18 +371,13 @@ impl EthApi for EthApiImpl {
 
             let mut ctx = account_base_app
                 .read()
-                .create_query_context(None, false)
-                .map_err(|err| {
-                    internal_err(format!("create query context error: {err:?}",))
-                })?;
-            if let Some(block) = block {
-                ctx.header
-                    .mut_time()
-                    .set_seconds(block.header.timestamp as i64);
-                ctx.header.height = block.header.number.as_u64() as i64;
-                ctx.header.proposer_address =
-                    Vec::from(block.header.beneficiary.as_bytes())
-            }
+                .create_context_at(block.header.number.as_u64())
+                .ok_or_else(|| internal_err("create query context error"))?;
+            ctx.header
+                .mut_time()
+                .set_seconds(block.header.timestamp as i64);
+            ctx.header.height = block.header.number.as_u64() as i64;
+            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
 
             match to {
                 Some(to) => {
@@ -825,14 +816,15 @@ impl EthApi for EthApiImpl {
                     }
                     let allowance = available / gas_price;
                     if highest < allowance {
-                        tracing::warn!(
-                        "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
-                        highest,
-                        balance,
-                        request.value.unwrap_or_default(),
-                        gas_price,
-                        allowance
-                    );
+                        warn!(
+                            target: "eth_rpc",
+                            "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
+                            highest,
+                            balance,
+                            request.value.unwrap_or_default(),
+                            gas_price,
+                            allowance
+                        );
                         highest = allowance;
                     }
                 }
