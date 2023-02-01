@@ -4,15 +4,14 @@ source tools/regression/triple_masking/scripts/env.sh
 export KEYPAIR=$($BIN/fn genkey )
 echo "Generating fra prefix address..."
 echo "$KEYPAIR"
-export FRA_ADDRESS=$(echo "$KEYPAIR" |awk 'NR == 2' |awk '{print $3}')
-export BAR_SEC_KEY=$(echo "$KEYPAIR" |awk 'NR == 5' |awk '{gsub(/"/,""); print $2}')
-echo $BAR_SEC_KEY
+export FRA_ADDRESS=$(echo "$KEYPAIR" | awk 'NR == 2' |awk '{print $3}')
+export BAR_SEC_KEY=$(echo "$KEYPAIR" | awk 'NR == 4' | awk '{print $2}' | cut -c 2-45 )
 
 export ED_KEYPAIR=$($BIN/fn genkey --eth-address )
 echo "Generating eth prefix address..."
 echo "$ED_KEYPAIR"
-export ED_ADDRESS=$(echo "$ED_KEYPAIR" |awk 'NR == 2' |awk '{print $3}')
-export ED_SEC_KEY=$(echo "$ED_KEYPAIR" |awk 'NR == 5' |awk '{gsub(/"/,""); print $2}')
+export ED_ADDRESS=$(echo "$ED_KEYPAIR" | awk 'NR == 2' |awk '{print $3}')
+export ED_SEC_KEY=$(echo "$ED_KEYPAIR" | awk 'NR == 4' | awk '{print $2}' | cut -c 2-45 )
 echo -n "${ED_SEC_KEY}" > "$FILE_FRA_KEY"
 $BIN/fn transfer --amount 20000 --asset FRA -T $ED_ADDRESS
 sleep $BLOCK_INTERVAL
