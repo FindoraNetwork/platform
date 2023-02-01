@@ -534,12 +534,11 @@ fn run() -> Result<()> {
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
         let from = match owner_sk {
-            Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
-                "\"{}\"",
-                str
-            )))
-            .c(d!())?
-            .into_keypair(),
+            Some(str) => {
+                ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+                    .c(d!())?
+                    .into_keypair()
+            }
             None => get_keypair(is_address_eth).c(d!())?,
         };
 
@@ -555,12 +554,11 @@ fn run() -> Result<()> {
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
         let from = match owner_sk {
-            Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
-                "\"{}\"",
-                str
-            )))
-            .c(d!(str))?
-            .into_keypair(),
+            Some(str) => {
+                ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+                    .c(d!(str))?
+                    .into_keypair()
+            }
             None => get_keypair(is_address_eth).c(d!())?,
         };
         let asset = m.value_of("asset");
@@ -576,12 +574,11 @@ fn run() -> Result<()> {
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
         let from = match owner_sk {
-            Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
-                "\"{}\"",
-                str
-            )))
-            .c(d!())?
-            .into_keypair(),
+            Some(str) => {
+                ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+                    .c(d!())?
+                    .into_keypair()
+            }
             None => get_keypair(is_address_eth).c(d!())?,
         };
         let commitment_str = m.value_of("commitment");
@@ -729,12 +726,11 @@ fn run() -> Result<()> {
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
         let from = match owner_sk {
-            Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
-                "\"{}\"",
-                str
-            )))
-            .c(d!())?
-            .into_keypair(),
+            Some(str) => {
+                ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+                    .c(d!())?
+                    .into_keypair()
+            }
             None => get_keypair(is_address_eth).c(d!())?,
         };
 

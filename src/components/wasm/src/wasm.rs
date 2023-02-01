@@ -963,13 +963,14 @@ pub fn get_anon_balance(
     keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<u64, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
-        .c(d!())
-        .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-        .build()
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     Ok(oabar.get_amount())
 }
@@ -987,13 +988,14 @@ pub fn get_open_abar(
     keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<JsValue, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
-        .c(d!())
-        .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-        .build()
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     let json = JsValue::from_serde(&oabar)
         .c(d!())
@@ -1014,13 +1016,14 @@ pub fn gen_nullifier_hash(
     keypair: &XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
-        .c(d!())
-        .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-        .build()
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     let n = nullify(
         &keypair.clone(),
