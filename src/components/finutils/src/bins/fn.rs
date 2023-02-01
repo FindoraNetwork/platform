@@ -496,7 +496,6 @@ fn run() -> Result<()> {
             .expect("commitment write failed");
         }
     } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
-
         let is_address_eth = m.is_present("eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -530,7 +529,6 @@ fn run() -> Result<()> {
             .c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
-
         let is_address_eth = m.is_present("eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -551,7 +549,6 @@ fn run() -> Result<()> {
 
         common::get_owned_abars(from, commitments_list)?;
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
-
         let is_address_eth = m.is_present("eth-address");
         // Generates a list of owned Abars (both spent and unspent)
         // sender Xfr secret key
@@ -574,7 +571,6 @@ fn run() -> Result<()> {
 
         common::anon_balance(from, commitments_list, asset)?;
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
-
         let is_address_eth = m.is_present("eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -728,7 +724,6 @@ fn run() -> Result<()> {
             println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
         }
     } else if let Some(m) = matches.subcommand_matches("check-abar-status") {
-
         let is_address_eth = m.is_present("eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;

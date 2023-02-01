@@ -923,9 +923,11 @@ pub fn convert_bar2abar(
 ) -> Result<Commitment> {
     // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
     let from = match owner_sk {
-        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
-        .c(d!())?
-        .into_keypair(),
+        Some(str) => {
+            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+                .c(d!())?
+                .into_keypair()
+        }
         None => get_keypair(is_address_eth).c(d!())?,
     };
     // parse receiver AxfrPubKey
