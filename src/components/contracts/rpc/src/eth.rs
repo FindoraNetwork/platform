@@ -372,9 +372,7 @@ impl EthApi for EthApiImpl {
             let mut ctx = account_base_app
                 .read()
                 .create_context_at(block.header.number.as_u64())
-                .map_err(|err| {
-                    internal_err(format!("create query context error: {err:?}",))
-                })?;
+                .ok_or_else(|| internal_err("create query context error"))?;
             ctx.header
                 .mut_time()
                 .set_seconds(block.header.timestamp as i64);
