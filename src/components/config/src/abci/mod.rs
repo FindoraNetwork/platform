@@ -87,6 +87,10 @@ pub struct CheckPointConfig {
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/707
+    // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
+    pub fix_deliver_tx_revert_nonce_height: i64,
 }
 
 impl CheckPointConfig {
@@ -127,6 +131,7 @@ impl CheckPointConfig {
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
+                                fix_deliver_tx_revert_nonce_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -155,6 +160,7 @@ impl CheckPointConfig {
                                 fix_undelegation_missing_reward_height: 3000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
+                                fix_deliver_tx_revert_nonce_height: 40000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
