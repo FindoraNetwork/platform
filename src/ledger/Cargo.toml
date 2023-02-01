@@ -37,7 +37,7 @@ ruc = "1.0"
 noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
-bulletproofs = { git = "https://github.com/FindoraNetwork/bulletproofs", tag = "v1.0.1-f" }
+bulletproofs = { git = "https://github.com/FindoraNetwork/bulletproofs", tag = "v4.0.0" }
 
 fbnc = { version = "0.2.9", default-features = false}
 
