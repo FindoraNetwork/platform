@@ -385,7 +385,7 @@ impl LedgerState {
     /// Initialize a new Ledger structure.
     pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
         let prefix = if let Some(p) = prefix {
-            format!("{}_", p)
+            format!("{p}_")
         } else {
             "".to_owned()
         };
@@ -1054,7 +1054,7 @@ impl LedgerStatus {
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
     pub fn new(basedir: &str, snapshot_file: &str) -> Result<LedgerStatus> {
-        let path = format!("{}/{}", basedir, snapshot_file);
+        let path = format!("{basedir}/{snapshot_file}");
         match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
             Err(e) => {
@@ -1136,8 +1136,7 @@ impl LedgerStatus {
             // Check to see that this nrpt has not been seen before
             if self.sliding_set.has_key_at(seq_id as usize, rand) {
                 return Err(eg!(format!(
-                    "No replay token ({:?}, {})seen before at  possible replay",
-                    rand, seq_id
+                    "No replay token ({rand:?}, {seq_id})seen before at  possible replay",
                 )));
             }
         }
@@ -1328,7 +1327,7 @@ impl LedgerStatus {
                 no_replay_token.get_seq_id() as usize,
             );
             if let Err(e) = self.sliding_set.insert(rand, seq_id) {
-                pd!(format!("Error inserting into window: {}", e));
+                pd!(format!("Error inserting into window: {e}"));
             }
         }
         block.no_replay_tokens.clear();

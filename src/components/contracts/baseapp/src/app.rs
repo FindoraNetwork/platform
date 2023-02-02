@@ -4,9 +4,9 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use tracing::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
+use tracing::{debug, error, info};
 
 impl crate::BaseApp {
     /// info implements the ABCI interface.
@@ -50,7 +50,7 @@ impl crate::BaseApp {
 
         let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
-            return err_resp(format!("Cannot create query context with err: {}!", e));
+            return err_resp(format!("Cannot create query context with err: {e}!"));
         }
 
         match path.remove(0) {
@@ -121,12 +121,12 @@ impl crate::BaseApp {
 
                                     setter
                                         .set_pending_tx(tx)
-                                        .map_err(|e| error!("{:?}", e))
+                                        .map_err(|e| error!("{e:?}"))
                                         .unwrap_or(());
                                     for (addr, code) in code_map.iter() {
                                         setter
                                             .set_pending_code(*addr, code.clone())
-                                            .map_err(|e| error!("{:?}", e))
+                                            .map_err(|e| error!("{e:?}"))
                                             .unwrap_or(());
                                     }
                                     for state in state_list.iter() {
@@ -136,7 +136,7 @@ impl crate::BaseApp {
                                                 state.index.clone(),
                                                 state.value.clone(),
                                             )
-                                            .map_err(|e| error!("{:?}", e))
+                                            .map_err(|e| error!("{e:?}"))
                                             .unwrap_or(());
                                     }
                                 }
@@ -144,14 +144,14 @@ impl crate::BaseApp {
                         }
                         resp.code = ar.code;
                         if ar.code != 0 {
-                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            info!(target: "baseapp", "Transaction check error, action result {ar:?}");
                             resp.log = ar.log;
                         }
                     }
                     Err(e) => {
-                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        info!(target: "baseapp", "Transaction check error: {e}");
                         resp.code = 1;
-                        resp.log = format!("Transaction check error: {}", e);
+                        resp.log = format!("Transaction check error: {e}");
                     }
                 }
             };
@@ -294,9 +294,9 @@ impl crate::BaseApp {
                     resp
                 }
                 Err(e) => {
-                    error!(target: "baseapp", "Ethereum transaction deliver error: {}", e);
+                    error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
                     resp.code = 1;
-                    resp.log = format!("Ethereum transaction deliver error: {}", e);
+                    resp.log = format!("Ethereum transaction deliver error: {e}");
                     resp
                 }
             }
@@ -329,7 +329,7 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
+                panic!("Failed to commit chain db at height: {block_height}")
             });
 
         // Write the DeliverTx state into branched storage and commit the Store.
@@ -341,7 +341,7 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|_| {
-                panic!("Failed to commit chain state at height: {}", block_height)
+                panic!("Failed to commit chain state at height: {block_height}")
             });
 
         // Reset the deliver state, but keep the ethereum cache

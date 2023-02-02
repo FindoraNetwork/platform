@@ -240,10 +240,7 @@ impl AssetTypeCode {
                     val: ZeiAssetType(buf),
                 })
             }
-            Err(e) => Err(eg!((format!(
-                "Failed to deserialize base64 '{}': {}",
-                b64, e
-            )))),
+            Err(e) => Err(eg!((format!("Failed to deserialize base64 '{b64}': {e}",)))),
         }
     }
 

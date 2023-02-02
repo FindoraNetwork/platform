@@ -57,7 +57,7 @@ impl ModuleManager {
             self.template_module.query_route(ctx, path, req)
         } else {
             resp.code = 1;
-            resp.log = format!("Invalid query module route: {}!", module_name);
+            resp.log = format!("Invalid query module route: {module_name}!");
             resp
         }
     }

@@ -304,7 +304,7 @@ impl NodeOptsGenerator<Node<Ports>, EnvMeta<CustomData, Node<Ports>>> for OptsGe
         );
 
         if let Some(cp) = m.custom_data.checkpoint_file.as_ref() {
-            write!(opts, " --checkpoint-file {}", cp).unwrap();
+            write!(opts, " --checkpoint-file {cp}").unwrap();
         }
         write!(opts, " {}", &m.app_extra_opts).unwrap();
 
