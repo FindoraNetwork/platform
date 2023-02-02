@@ -130,8 +130,8 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    abcid_child.wait().c(d!()).map(|s| println!("{}", s))?;
-    tendermint_child.wait().c(d!()).map(|s| println!("{}", s))?;
+    abcid_child.wait().c(d!()).map(|s| println!("{s}"))?;
+    tendermint_child.wait().c(d!()).map(|s| println!("{s}"))?;
 
     ctrlc::set_handler(move || {
         info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
@@ -166,7 +166,7 @@ fn init_command() -> Result<()> {
 fn pack() -> Result<()> {
     let bin_path_orig = get_bin_path().c(d!())?;
     let bin_name = bin_path_orig.file_name().c(d!())?.to_str().c(d!())?;
-    let bin_path = format!("/tmp/{}", bin_name);
+    let bin_path = format!("/tmp/{bin_name}");
     fs::copy(bin_path_orig, &bin_path).c(d!())?;
 
     let mut f = OpenOptions::new().append(true).open(bin_path).c(d!())?;

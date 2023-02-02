@@ -227,8 +227,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
         let total_payment = transaction.value.saturating_add(fee);
         if balance < total_payment {
             return Err(eg!(format!(
-                "InsufficientBalance, origin: {:?}, actual balance {}, but expected payment {}",
-                origin, balance, total_payment
+                "InsufficientBalance, origin: {origin:?}, actual balance {balance}, but expected payment {total_payment}",
             )));
         }
 

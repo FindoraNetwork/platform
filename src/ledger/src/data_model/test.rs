@@ -46,7 +46,7 @@ fn test_gen_random_with_rng() {
     let uniform_stddev = 1.0 / (12.0f64).sqrt();
     let average = sum as f64 / sample_size as f64;
     let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
-    println!("Average {}, stddev {}", average, stddev);
+    println!("Average {average}, stddev {stddev}");
     assert!(average > 127.5 - 5.0 * stddev);
     assert!(average < 127.5 + 5.0 * stddev);
 }

@@ -6,7 +6,7 @@ use tokio::task::JoinError;
 pub fn convert_join_error_to_rpc_error(e: JoinError) -> Error {
     Error {
         code: ErrorCode::InternalError,
-        message: format!("{:?}", e),
+        message: format!("{e:?}"),
         data: None,
     }
 }
@@ -14,7 +14,7 @@ pub fn convert_join_error_to_rpc_error(e: JoinError) -> Error {
 pub fn convert_error_to_rpc_error(e: impl Debug) -> Error {
     Error {
         code: ErrorCode::InternalError,
-        message: format!("{:?}", e),
+        message: format!("{e:?}"),
         data: None,
     }
 }

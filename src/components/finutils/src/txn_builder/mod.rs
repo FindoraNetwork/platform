@@ -947,7 +947,7 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if input_total != output_total {
-            return Err(eg!(format!("{} != {}", input_total, output_total)));
+            return Err(eg!(format!("{input_total} != {output_total}")));
         }
 
         Ok(())
@@ -1014,7 +1014,7 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
-            return Err(eg!(format!("{} != {}", spend_total, output_total)));
+            return Err(eg!(format!("{spend_total} != {output_total}")));
         }
         self.output_records.append(&mut partially_consumed_inputs);
 

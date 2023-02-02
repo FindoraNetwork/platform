@@ -156,11 +156,11 @@ impl CheckPointConfig {
                             return Some(config);
                         }
                         Err(error) => {
-                            panic!("failed to create file: {:?}", error)
+                            panic!("failed to create file: {error:?}",)
                         }
                     };
                 } else {
-                    panic!("failed to open file: {:?}", error)
+                    panic!("failed to open file: {error:?}",)
                 }
             }
         };
@@ -566,7 +566,7 @@ pub mod global_cfg {
             .into_iter()
             .rev()
             .for_each(|h| {
-                println!("    {}", h);
+                println!("    {h}",);
             });
         exit(0);
     }
@@ -584,7 +584,7 @@ pub mod global_cfg {
             || m.is_present("snapshot-rollback-to")
             || m.is_present("snapshot-rollback-to-exact")
         {
-            println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
+            println!("\x1b[31;01m\n{HINTS}\x1b[00m");
 
             let (h, strict) = m
                 .value_of("snapshot-rollback-to-exact")
