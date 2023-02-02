@@ -25,21 +25,16 @@ use fp_types::{
     actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
-use fp_utils::ecdsa::SecpPair;
-use fp_utils::tx::EvmRawTxWrapper;
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
-use std::collections::BTreeMap;
-use std::convert::Into;
-use std::ops::Range;
-use std::sync::Arc;
+use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
-use tokio::runtime::Runtime;
-use tokio::task::spawn_blocking;
+use tokio::runtime::{Handle, Runtime};
 use tracing::{debug, warn};
 
 lazy_static! {
@@ -54,6 +49,28 @@ lazy_static! {
             .unwrap_or(1424654);
         h
     };
+}
+
+// After the asynchronous rpc feature is enabled,
+// the web3 server could crash when handling rpc calls coming from websocket.
+//
+// The root cause is that the tokio runtime is not properly initialized when web3 server is starting.
+//
+// This is a temporary correction. When processing rpc requests, it first checks that the tokio runtime
+// has been properly initialized to avoid application crash.
+//
+// FixMe: Please remove me and initialize tokio runtime properly for both http and websocket when web3 server is booting.
+//
+fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    if Handle::try_current().is_ok() {
+        tokio::task::spawn_blocking(f)
+    } else {
+        RT.spawn_blocking(f)
+    }
 }
 
 pub struct EthApiImpl {
