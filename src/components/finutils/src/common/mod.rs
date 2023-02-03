@@ -130,8 +130,7 @@ pub fn stake(
         || diff!(network_height, local_height) > 3
     {
         println!(
-            "The difference in block height of your node and the remote network is too big: \n remote / local: {} / {}",
-            network_height, local_height
+            "The difference in block height of your node and the remote network is too big: \n remote / local: {network_height} / {local_height}",
         );
         if !force {
             println!("Append option --force to ignore this warning.");
@@ -285,7 +284,7 @@ pub fn show(basic: bool) -> Result<()> {
     let kp = get_keypair().c(d!())?;
 
     let serv_addr = ruc::info!(get_serv_addr()).map(|i| {
-        println!("\x1b[31;01mServer URL:\x1b[00m\n{}\n", i);
+        println!("\x1b[31;01mServer URL:\x1b[00m\n{i}\n");
     });
 
     let xfr_account = ruc::info!(get_keypair()).map(|i| {
@@ -300,7 +299,7 @@ pub fn show(basic: bool) -> Result<()> {
     });
 
     let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
-        println!("\x1b[31;01mNode Balance:\x1b[00m\n{} FRA units\n", i);
+        println!("\x1b[31;01mNode Balance:\x1b[00m\n{i} FRA units\n");
     });
 
     if basic {
@@ -309,7 +308,7 @@ pub fn show(basic: bool) -> Result<()> {
 
     let td_info = ruc::info!(get_td_pubkey()).map(|i| {
         let addr = td_pubkey_to_td_addr(&i);
-        println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{}\n", addr);
+        println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{addr}\n");
         (i, addr)
     });
 
@@ -323,7 +322,7 @@ pub fn show(basic: bool) -> Result<()> {
         serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
     });
     let delegation_info = ruc::info!(delegation_info).map(|i| {
-        println!("\x1b[31;01mYour Delegation:\x1b[00m\n{}\n", i);
+        println!("\x1b[31;01mYour Delegation:\x1b[00m\n{i}\n");
     });
 
     if let Ok((tpk, addr)) = td_info.as_ref() {
@@ -337,7 +336,7 @@ pub fn show(basic: bool) -> Result<()> {
                         .c(d!("server returned invalid data"))
                 })
                 .map(|i| {
-                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{}\n", i);
+                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{i}\n");
                 });
             ruc::info_omit!(res);
         }
@@ -573,8 +572,7 @@ pub fn gen_key() -> (String, String, String, XfrKeyPair) {
 pub fn gen_key_and_print() {
     let (wallet_addr, mnemonic, key, _) = gen_key();
     println!(
-        "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        wallet_addr, mnemonic, key
+        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n", 
     );
 }
 

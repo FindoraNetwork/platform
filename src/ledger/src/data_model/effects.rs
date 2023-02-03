@@ -717,7 +717,7 @@ impl BlockEffect {
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
         let height = self.staking_simulator.cur_height();
 
-        println!("Current height is: {}", height);
+        println!("Current height is: {height}");
 
         if (CFG.checkpoint.utxo_checktx_height as u64) < height {
             HashOf::new(&self.txns)

@@ -47,7 +47,7 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let signer = recover_signer(&tx).c(d!()).map_err(error_to_jsvalue)?;
-        Ok(format!("{:?}", signer))
+        Ok(format!("{signer:?}"))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -67,7 +67,7 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
-        Ok(format!("{:?}", hash))
+        Ok(format!("{hash:?}"))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -89,7 +89,7 @@ mod test {
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(
-                format!("{:?}", signer),
+                format!("{signer:?}"),
                 "0xa5225cbee5052100ec2d2d94aa6d258558073757"
             );
         } else {
@@ -106,7 +106,7 @@ mod test {
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
-                format!("{:?}", hash),
+                format!("{hash:?}"),
                 "0x0eeb0ff455b1b57b821634cf853e7247e584a675610f13097cc49c2022505df3"
             );
         } else {

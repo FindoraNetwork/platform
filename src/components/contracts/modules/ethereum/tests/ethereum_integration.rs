@@ -110,7 +110,7 @@ fn test_abci_deliver_tx() {
         resp.code, resp.log
     );
 
-    println!("transfer resp: {:?}", resp);
+    println!("transfer resp: {resp:?}");
 
     // initial balance = 100_0000_0000_0000_0000_u64, gas limit = 21000, transfer balance = 10
     assert_eq!(

@@ -30,7 +30,6 @@ use fp_utils::tx::EvmRawTxWrapper;
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
-use tracing::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
@@ -41,6 +40,7 @@ use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use tokio::task::spawn_blocking;
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref RT: Runtime =
@@ -99,8 +99,7 @@ impl EthApiImpl {
                 Some(block) => Some(block.header.number.as_u64()),
                 None => {
                     return Err(internal_err(format!(
-                        "block number not found, hash: {:?}",
-                        hash
+                        "block number not found, hash: {hash:?}",
                     )))
                 }
             },
@@ -109,8 +108,7 @@ impl EthApiImpl {
                     Some(num)
                 } else {
                     return Err(internal_err(format!(
-                        "block number: {} exceeds version range: {:?}",
-                        num, range
+                        "block number: {num} exceeds version range: {range:?}",
                     )));
                 }
             }
@@ -374,9 +372,9 @@ impl EthApi for EthApiImpl {
                         &ctx, call, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner call error: {:?}", err))
+                        internal_err(format!("evm runner call error: {err:?}"))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner call result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &info.value)?;
 
@@ -396,9 +394,9 @@ impl EthApi for EthApiImpl {
                         &ctx, create, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner create error: {:?}", err))
+                        internal_err(format!("evm runner create error: {err:?}"))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner create result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &[])?;
 
@@ -759,8 +757,7 @@ impl EthApi for EthApiImpl {
                         (Some(BlockId::Number(U256::from(num))), false)
                     } else {
                         return Err(internal_err(format!(
-                            "block number: {} exceeds version range: {:?}",
-                            num, range
+                            "block number: {num} exceeds version range: {range:?}",
                         )));
                     }
                 }
@@ -838,7 +835,7 @@ impl EthApi for EthApiImpl {
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
                     .map_err(|err| {
-                        internal_err(format!("create query context error: {:?}", err))
+                        internal_err(format!("create query context error: {err:?}"))
                     })?;
 
                 let CallRequest {
@@ -875,7 +872,7 @@ impl EthApi for EthApiImpl {
                             &ctx, call, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner call error: {:?}", err))
+                            internal_err(format!("evm runner call error: {err:?}"))
                         })?;
                         debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
@@ -899,7 +896,7 @@ impl EthApi for EthApiImpl {
                             &ctx, create, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner create error: {:?}", err))
+                            internal_err(format!("evm runner create error: {err:?}"))
                         })?;
                         debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 
