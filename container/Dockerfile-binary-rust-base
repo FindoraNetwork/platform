@@ -3,8 +3,9 @@ ENV WORK_DIR /platform
 ENV WASM_DIR /tmp/wasm-js-bindings
 
 RUN apt update -y && \
-    apt install -y zip unzip git make curl wget python3-pip protobuf-compiler musl-tools jq libleveldb-dev clang libclang-dev pkg-config libssl-dev
+    apt install -y zip unzip git make curl wget python3-pip protobuf-compiler musl-tools jq libleveldb-dev clang libclang-dev pkg-config libssl-dev gcc g++ ca-certificates 
 RUN pip3 install awscli
+
 RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 RUN mkdir -p /opt && \
     cd /opt && \

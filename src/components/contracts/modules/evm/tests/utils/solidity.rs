@@ -28,8 +28,8 @@ impl ContractConstructor {
         P2: AsRef<Path>,
         P3: AsRef<Path>,
     {
-        let bin_file = format!("{}.bin", contract_name);
-        let abi_file = format!("{}.abi", contract_name);
+        let bin_file = format!("{contract_name}.bin");
+        let abi_file = format!("{contract_name}.abi");
         let hex_path = artifacts_base_path.as_ref().join(bin_file);
         let hex_rep = match std::fs::read_to_string(&hex_path) {
             Ok(hex) => hex,

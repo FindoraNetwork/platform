@@ -80,7 +80,7 @@ pub fn create_temp_db_path() -> PathBuf {
         .unwrap()
         .as_nanos();
     let mut path = temp_dir();
-    path.push(format!("temp-findora-db–{}", time));
+    path.push(format!("temp-findora-db–{time}"));
     path
 }
 

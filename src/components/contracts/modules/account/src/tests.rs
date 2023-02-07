@@ -19,7 +19,7 @@ fn setup() -> Context {
         .unwrap()
         .as_nanos();
     let mut path = temp_dir();
-    path.push(format!("temp-findora-db–{}", time));
+    path.push(format!("temp-findora-db–{time}"));
 
     let fdb = FinDB::open(path).unwrap();
     let chain_state = Arc::new(RwLock::new(ChainState::new(
@@ -29,7 +29,7 @@ fn setup() -> Context {
     )));
 
     let mut rocks_path = temp_dir();
-    rocks_path.push(format!("temp-rocks-db–{}", time));
+    rocks_path.push(format!("temp-rocks-db–{time}"));
 
     let rdb = RocksDB::open(rocks_path).unwrap();
     let chain_db = Arc::new(RwLock::new(ChainState::new(

@@ -40,7 +40,7 @@ use {
             Arc,
         },
     },
-    tracing::info
+    tracing::info,
 };
 
 #[cfg(feature = "web3_service")]
@@ -272,11 +272,11 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
                             resp.code = 1;
                             resp.log =
-                                format!("deliver convert account tx failed: {:?}", err);
+                                format!("deliver convert account tx failed: {err:?}");
                             return resp;
                         }
 

@@ -17,12 +17,12 @@ pub trait PrecompileSet {
     /// Otherwise, calculate the amount of gas needed with given `input` and
     /// `target_gas`. Return `Some(Ok(status, output, gas_used))` if the execution
     /// is successful. Otherwise return `Some(Err(_))`.
-    fn execute<'context, 'vicinity, 'config, T>(
+    fn execute<T>(
         address: H160,
         input: &[u8],
         target_gas: Option<u64>,
         context: &Context,
-        state: &mut FindoraStackState<'context, 'vicinity, 'config, T>,
+        state: &mut FindoraStackState<'_, '_, '_, T>,
         is_static: bool,
     ) -> Option<PrecompileResult>;
 }
@@ -53,12 +53,12 @@ pub trait PrecompileId {
 impl PrecompileSet for Tuple {
     for_tuples!( where #( Tuple: Precompile + PrecompileId )* );
 
-    fn execute<'context, 'vicinity, 'config, T>(
+    fn execute<T>(
         address: H160,
         input: &[u8],
         target_gas: Option<u64>,
         context: &Context,
-        state: &mut FindoraStackState<'context, 'vicinity, 'config, T>,
+        state: &mut FindoraStackState<'_, '_, '_, T>,
         _is_static: bool,
     ) -> Option<PrecompileResult> {
         for_tuples!( #(

@@ -6,9 +6,9 @@ use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialTransfer;
 use fp_types::{actions::xhub::NonConfidentialOutput, crypto::Address};
 use ledger::data_model::ASSET_TYPE_FRA;
-use tracing::debug;
 use primitive_types::U256;
 use ruc::*;
+use tracing::debug;
 
 impl<C: Config> App<C> {
     pub fn transfer_to_nonconfidential_utxo(

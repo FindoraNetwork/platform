@@ -131,7 +131,7 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
         resp.code, resp.log
     );
 
-    println!("deploy erc20 result: {:?}\n", resp);
+    println!("deploy erc20 result: {resp:?}\n");
 
     let info = serde_json::from_slice::<CallOrCreateInfo>(&resp.data).unwrap();
     if let CallOrCreateInfo::Create(info) = info {
@@ -144,7 +144,7 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
         println!("erc20 contract address: {:?}\n", info.value);
         (info.value, contract_abi)
     } else {
-        panic!("not expected result: {:?}", info)
+        panic!("not expected result: {info:?}")
     }
 }
 
@@ -197,7 +197,7 @@ fn test_mint_deliver_tx(contract: ERC20) {
         resp.code, resp.log
     );
 
-    println!("call erc20 mint result: {:?}\n", resp);
+    println!("call erc20 mint result: {resp:?}\n");
 }
 
 fn test_transfer_check_tx(contract: ERC20) {
@@ -239,7 +239,7 @@ fn test_transfer_deliver_tx(contract: ERC20) {
         resp.code, resp.log
     );
 
-    println!("call erc20 transfer result: {:?}\n", resp);
+    println!("call erc20 transfer result: {resp:?}\n");
 }
 
 fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
@@ -255,7 +255,7 @@ fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
         resp.code, resp.log
     );
 
-    println!("call erc20 balanceOf result: {:?}\n", resp);
+    println!("call erc20 balanceOf result: {resp:?}\n");
 
     let info = serde_json::from_slice::<CallOrCreateInfo>(&resp.data).unwrap();
     if let CallOrCreateInfo::Call(info) = info {
@@ -267,7 +267,7 @@ fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
 
         U256::from_big_endian(info.value.as_ref())
     } else {
-        panic!("not expected result: {:?}", info)
+        panic!("not expected result: {info:?}")
     }
 }
 
@@ -297,7 +297,7 @@ fn test_balance_of_with_eth_call(contract: ERC20, who: H160) -> U256 {
     )
     .unwrap();
 
-    println!("eth call erc20 balanceOf result: {:?}\n", info);
+    println!("eth call erc20 balanceOf result: {info:?}\n");
 
     U256::from_big_endian(info.value.as_ref())
 }

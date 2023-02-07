@@ -27,7 +27,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
     } else {
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> Block interval: {} seconds", interval);
+        println!(">>> Block interval: {interval} seconds");
 
         println!(">>> Define and issue FRA ...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;

@@ -263,7 +263,7 @@ ci_build_image:
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
 
 
 # ========================== dev ARM64/v8 ===========================
@@ -335,9 +335,6 @@ ci_build_image_web3:
 	@ docker rm -f findorad-binary
 	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
 
-ifeq ($(ENV),release)
-	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 # ========================== push image and clean up===========================
 
@@ -359,9 +356,6 @@ ci_build_wasm_js_bindings:
 
 clean_image_dockerhub:
 	docker rmi $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
-ifeq ($(ENV),release)
-	docker rmi $(DOCKERHUB_URL)/findorad:latest
-endif
 
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)

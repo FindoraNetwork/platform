@@ -8,12 +8,12 @@ use {
     actix_web::{error, middleware, web, App, HttpServer},
     finutils::api::NetworkRoute,
     ledger::data_model::Transaction,
-    tracing::info,
     parking_lot::RwLock,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::result::Result as StdResult,
     std::sync::Arc,
+    tracing::info,
 };
 
 /// Ping route to check for liveness of API
@@ -130,7 +130,7 @@ impl SubmissionApi {
                     web::get().to(txn_status::<RNG, TF>),
                 )
         })
-        .bind(&format!("{}:{}", host, port))
+        .bind(&format!("{host}:{port}"))
         .c(d!())?
         .run();
 

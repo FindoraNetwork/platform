@@ -294,8 +294,7 @@ impl BlockHeader {
             && block_contents != BIT_HEADER
         {
             return Err(eg!(format!(
-                "That content type ({}) is invalid.",
-                block_contents
+                "That content type ({block_contents}) is invalid.",
             )));
         }
 
@@ -672,10 +671,10 @@ impl BitMap {
         let file_size = file.seek(SeekFrom::End(0)).c(d!())?;
 
         if file_size % BLOCK_SIZE as u64 != 0 {
-            return Err(eg!(format!("That file size ({}) is invalid.", file_size)));
+            return Err(eg!(format!("That file size ({file_size}) is invalid.")));
         }
 
-        file.seek(SeekFrom::Start(0)).c(d!())?;
+        file.rewind().c(d!())?;
         let total_blocks = file_size / BLOCK_SIZE as u64;
 
         // Reserve space in our vectors.
@@ -738,11 +737,11 @@ impl BitMap {
 
             if validate_checksums {
                 if let Err(e) = block.validate(BIT_ARRAY, i as u64) {
-                    println!("Block {} failed validation:  {}", i, e);
+                    println!("Block {i} failed validation:  {e}");
                     pass = false;
                 }
             } else if let Err(e) = header.validate(BIT_ARRAY, i as u64) {
-                println!("Block {} failed validation:  {}", i, e);
+                println!("Block {i} failed validation:  {e}");
                 pass = false;
             }
 
@@ -1255,7 +1254,7 @@ impl BitMap {
         let bytes_consumed = list_size as usize * INDEX_SIZE;
 
         if index + bytes_consumed > bytes.len() {
-            return Err(eg!(format!("An index list was too long:  {}", list_size)));
+            return Err(eg!(format!("An index list was too long:  {list_size}",)));
         }
 
         for _ in 0..list_size {

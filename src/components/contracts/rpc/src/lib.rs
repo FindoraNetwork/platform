@@ -18,11 +18,11 @@ use fp_rpc_core::{
 use fp_rpc_server::{rpc_handler, start_http, start_ws, RpcHandler, RpcMiddleware};
 use fp_utils::ecdsa::SecpPair;
 use jsonrpc_core::types::error::{Error, ErrorCode};
-use tracing::error;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use serde_json::Value;
 use std::sync::Arc;
+use tracing::error;
 
 const MAX_PAST_LOGS: u32 = 10000;
 const MAX_STORED_FILTERS: usize = 500;
@@ -161,7 +161,7 @@ pub fn error_on_execution_failure(
             }
             Err(Error {
                 code: ErrorCode::InternalError,
-                message: format!("evm error: {:?}", e),
+                message: format!("evm error: {e:?}"),
                 data: Some(Value::String("0x".to_string())),
             })
         }
@@ -174,7 +174,7 @@ pub fn error_on_execution_failure(
                 let message_len = data[36..68].iter().sum::<u8>();
                 let body: &[u8] = &data[68..68 + message_len as usize];
                 if let Ok(reason) = std::str::from_utf8(body) {
-                    message = format!("{} {}", message, reason);
+                    message = format!("{message} {reason}");
                 }
             }
             Err(Error {
@@ -185,7 +185,7 @@ pub fn error_on_execution_failure(
         }
         ExitReason::Fatal(e) => Err(Error {
             code: ErrorCode::InternalError,
-            message: format!("evm fatal: {:?}", e),
+            message: format!("evm fatal: {e:?}"),
             data: Some(Value::String("0x".to_string())),
         }),
     }

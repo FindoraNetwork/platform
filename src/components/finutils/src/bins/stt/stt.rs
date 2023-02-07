@@ -379,20 +379,20 @@ fn print_info(
 
     if show_user_list {
         let user_list = serde_json::to_string_pretty(&*USER_LIST).c(d!())?;
-        println!("\x1b[31;01mUSER LIST:\x1b[00m\n{}\n", user_list);
+        println!("\x1b[31;01mUSER LIST:\x1b[00m\n{user_list}\n");
     }
 
     if show_validator_list {
         let validator_list = serde_json::to_string_pretty(&*VALIDATOR_LIST).c(d!())?;
-        println!("\x1b[31;01mVALIDATOR LIST:\x1b[00m\n{}\n", validator_list);
+        println!("\x1b[31;01mVALIDATOR LIST:\x1b[00m\n{validator_list}\n");
     }
 
     if let Some(u) = user {
         let balance = get_balance(u).c(d!())?;
-        println!("\x1b[31;01mUSER BALANCE:\x1b[00m\n{} FRA units\n", balance);
+        println!("\x1b[31;01mUSER BALANCE:\x1b[00m\n{balance} FRA units\n");
 
         let user_info = get_delegation_info(u).c(d!())?;
-        println!("\x1b[31;01mUSER DELEGATION:\x1b[00m\n{}\n", user_info);
+        println!("\x1b[31;01mUSER DELEGATION:\x1b[00m\n{user_info}\n");
     }
 
     Ok(())
