@@ -89,7 +89,6 @@ pub struct CheckPointConfig {
     pub validators_limit_v2_height: u64,
     // eip1559 support switch.
     pub enable_eip1559_height: u64,
-
     // https://github.com/FindoraNetwork/platform/pull/707
     // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
     pub fix_deliver_tx_revert_nonce_height: i64,
