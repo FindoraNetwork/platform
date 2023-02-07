@@ -21,6 +21,7 @@ fp-utils = { path = "../../primitives/utils" }
 rlp = "0.5"
 ruc = "1.0"
 sha3 = "0.10"
+serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 

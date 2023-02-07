@@ -87,6 +87,7 @@ pub struct CheckPointConfig {
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+    // eip1559 support switch.
     pub enable_eip1559_height: u64,
 
     // https://github.com/FindoraNetwork/platform/pull/707

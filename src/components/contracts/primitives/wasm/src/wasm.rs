@@ -3,14 +3,15 @@
 use core::fmt::Display;
 use ethereum::{
     LegacyTransactionMessage, TransactionSignature, TransactionV0 as LegacyTransaction,
-    TransactionV2,
+    TransactionV2 as Transaction,
 };
 use ethereum_types::{H160, H256};
+use serde::{Deserialize, Serialize};
 
 use fp_types::{
-    actions::{ethereum::Action2 as EthAction2, Action2},
-    assemble::UncheckedTransaction2,
-    crypto::secp256k1_ecdsa_recover,
+    actions::{evm, template, xhub},
+    crypto::{secp256k1_ecdsa_recover, Address, Signature},
+    transaction,
 };
 use fp_utils::tx::EvmRawTxWrapper;
 use ruc::{d, err::RucResult};
@@ -19,6 +20,22 @@ use wasm_bindgen::prelude::*;
 
 use baseapp::BaseApp;
 use fp_traits::evm::FeeCalculator;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EthAction {
+    Transact(Transaction),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Action {
+    Ethereum(EthAction),
+    Evm(evm::Action),
+    XHub(xhub::Action),
+    Template(template::Action),
+}
+
+pub type UncheckedTransaction<Extra> =
+    transaction::UncheckedTransaction<Address, Action, Signature, Extra>;
 
 #[inline(always)]
 pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
@@ -36,7 +53,7 @@ pub fn recover_signer(transaction: &LegacyTransaction) -> Option<H160> {
 
     let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
     Some(H160::from(H256::from_slice(
-        Keccak256::digest(&pubkey).as_slice(),
+        Keccak256::digest(pubkey).as_slice(),
     )))
 }
 
@@ -49,10 +66,10 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    let unchecked_tx: UncheckedTransaction2<()> = serde_json::from_slice(raw_tx)
+    let unchecked_tx: UncheckedTransaction<()> = serde_json::from_slice(raw_tx)
         .c(d!())
         .map_err(error_to_jsvalue)?;
-    if let Action2::Ethereum(EthAction2::Transact(tx)) = unchecked_tx.function {
+    if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let tx = match new_tx2legcay_tx(tx) {
             Some(tx) => tx,
             None => return Err(error_to_jsvalue("invalid raw tx")),
@@ -73,10 +90,10 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    let unchecked_tx: UncheckedTransaction2<()> = serde_json::from_slice(raw_tx)
+    let unchecked_tx: UncheckedTransaction<()> = serde_json::from_slice(raw_tx)
         .c(d!())
         .map_err(error_to_jsvalue)?;
-    if let Action2::Ethereum(EthAction2::Transact(tx)) = unchecked_tx.function {
+    if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let tx = match new_tx2legcay_tx(tx) {
             Some(tx) => tx,
             None => return Err(error_to_jsvalue("invalid raw tx")),
@@ -88,7 +105,7 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
     }
 }
 
-fn new_tx2legcay_tx(tx: TransactionV2) -> Option<LegacyTransaction> {
+fn new_tx2legcay_tx(tx: Transaction) -> Option<LegacyTransaction> {
     let transaction: LegacyTransaction = match tx {
         ethereum::TransactionV2::Legacy(tx) => tx,
         ethereum::TransactionV2::EIP1559(tx) => {
@@ -130,13 +147,13 @@ mod test {
     fn recover_signer_works() {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
-        let unchecked_tx: UncheckedTransaction2<()> =
+        let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
-        if let Action2::Ethereum(EthAction2::Transact(tx)) = unchecked_tx.function {
+        if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let tx: LegacyTransaction = new_tx2legcay_tx(tx).unwrap();
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(
-                format!("{:?}", signer),
+                format!("{signer:?}"),
                 "0x5050a4f4b3f9338c3472dcc01a87c76a144b3c9c"
             );
         } else {
@@ -148,13 +165,13 @@ mod test {
     fn evm_tx_hash_works() {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
-        let unchecked_tx: UncheckedTransaction2<()> =
+        let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
-        if let Action2::Ethereum(EthAction2::Transact(tx)) = unchecked_tx.function {
+        if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let tx: LegacyTransaction = new_tx2legcay_tx(tx).unwrap();
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
-                format!("{:?}", hash),
+                format!("{hash:?}"),
                 "0x83901d025accca27ee53fdf1ee354f4437418731e0995ee031beb99499405d26"
             );
         } else {
