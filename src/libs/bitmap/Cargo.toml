@@ -5,7 +5,7 @@ authors = ["FindoraNetwork"]
 edition = "2021"
 
 [dependencies]
-ruc = "1.0"
+ruc = "4.0"
 parking_lot = "0.12"
 
 arrayref = "0.3.5"

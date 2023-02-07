@@ -19,7 +19,7 @@ libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
 rand = "0.8"
-ruc = "1.0"
+ruc = "4.0"
 serde = { version = "1.0.124", features = ["derive"] }
 sha2 = "0.10"
 sha3 = "0.10"

@@ -27,7 +27,7 @@ js-sys = "0.3.27"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 ring = "0.16.19"
-ruc = "1.0"
+ruc = "4.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"

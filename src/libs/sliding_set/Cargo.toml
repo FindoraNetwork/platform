@@ -5,7 +5,7 @@ authors = ["FindoraNetwork"]
 edition = "2021"
 
 [dependencies]
-ruc = "1.0"
+ruc = "4.0"
 bincode = "1.2.1"
 cryptohash = { path = "../cryptohash" }
 rand = "0.8"

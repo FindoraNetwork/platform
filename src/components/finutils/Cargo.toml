@@ -29,7 +29,7 @@ noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 
-ruc = "1.0"
+ruc = "4.0"
 rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
 
