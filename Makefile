@@ -189,6 +189,7 @@ wasm:
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
 debug_env: stop_debug_env build_release_debug
+	- rm -f checkpoint.toml
 	- rm -rf $(FIN_DEBUG)
 	mkdir $(FIN_DEBUG)
 	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
@@ -361,6 +362,7 @@ clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
 
 reset:
+	- rm -f checkpoint.toml
 	@./tools/devnet/stopnodes.sh
 	@./tools/devnet/resetnodes.sh 1 1
 
