@@ -1568,10 +1568,7 @@ pub fn get_address_by_public_key(hex_pub_key: &str) -> Result<String, JsValue> {
 /// Extracts the public key as a string from a transfer key pair.
 pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
     if let XfrPublicKeyInner::Ed25519(pk) = key_pair.get_pk().inner() {
-        format!(
-            "\"{}\"",
-            base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
-        )
+        base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
     } else {
         String::from("key type error")
     }
@@ -1581,10 +1578,7 @@ pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
 /// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str_old(key_pair: &XfrKeyPair) -> String {
     if let XfrSecretKey::Ed25519(sk) = key_pair.get_sk_ref() {
-        format!(
-            "\"{}\"",
-            base64::encode_config(&sk.to_bytes(), base64::URL_SAFE)
-        )
+        base64::encode_config(&sk.to_bytes(), base64::URL_SAFE)
     } else {
         String::from("key type error")
     }
@@ -1938,10 +1932,7 @@ pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
 pub fn bech32_to_base64_old(pk: &str) -> Result<String, JsValue> {
     let pub_key = public_key_from_bech32(pk)?;
     let ret = if let XfrPublicKeyInner::Ed25519(pk) = pub_key.inner() {
-        format!(
-            "\"{}\"",
-            base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
-        )
+        base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
     } else {
         String::from("key type error")
     };

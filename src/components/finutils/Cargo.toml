@@ -25,9 +25,9 @@ tokio = "1.10.1"
 wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 getrandom = "0.2"
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
-noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 
 ruc = "1.0"
 rucv3 = { package = "ruc", version = "3.0" }
