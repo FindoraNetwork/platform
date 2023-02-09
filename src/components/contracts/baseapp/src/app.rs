@@ -50,7 +50,7 @@ impl crate::BaseApp {
 
         let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
-            return err_resp(format!("Cannot create query context with err: {}!", e));
+            return err_resp(format!("Cannot create query context with err: {e}!",));
         }
 
         match path.remove(0) {
@@ -144,14 +144,14 @@ impl crate::BaseApp {
                         }
                         resp.code = ar.code;
                         if ar.code != 0 {
-                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            info!(target: "baseapp", "Transaction check error, action result {ar:?}", );
                             resp.log = ar.log;
                         }
                     }
                     Err(e) => {
-                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        info!(target: "baseapp", "Transaction check error: {e}", );
                         resp.code = 1;
-                        resp.log = format!("Transaction check error: {}", e);
+                        resp.log = format!("Transaction check error: {e}",);
                     }
                 }
             };
@@ -294,9 +294,9 @@ impl crate::BaseApp {
                     resp
                 }
                 Err(e) => {
-                    error!(target: "baseapp", "Ethereum transaction deliver error: {}", e);
+                    error!(target: "baseapp", "Ethereum transaction deliver error: {e}", );
                     resp.code = 1;
-                    resp.log = format!("Ethereum transaction deliver error: {}", e);
+                    resp.log = format!("Ethereum transaction deliver error: {e}",);
                     resp
                 }
             }
@@ -334,8 +334,8 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|e| {
-                println!("{:?}", e);
-                panic!("Failed to commit chain state at height: {}", block_height)
+                println!("{e:?}",);
+                panic!("Failed to commit chain state at height: {block_height}",)
             });
 
         // Commit module data based on root_hash
@@ -347,7 +347,7 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
+                panic!("Failed to commit chain db at height: {block_height}",)
             });
 
         // Reset the deliver state, but keep the ethereum cache

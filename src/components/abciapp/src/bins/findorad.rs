@@ -49,6 +49,13 @@ fn node_command() -> Result<()> {
         .checkpoint_file
         .clone()
         .unwrap_or_else(|| String::from("./checkpoint.toml"));
+    let arc_history_arg = {
+        if let Some(interval) = CFG.arc_history.1 {
+            format!("{},{}", CFG.arc_history.0, interval)
+        } else {
+            format!("{}", CFG.arc_history.0)
+        }
+    };
 
     abcid
         .arg("--submission-service-port")
@@ -58,7 +65,9 @@ fn node_command() -> Result<()> {
         .arg("--checkpoint-file")
         .arg(&checkpoint_file)
         .arg("--ledger-dir")
-        .arg(&CFG.ledger_dir);
+        .arg(&CFG.ledger_dir)
+        .arg("--arc-history")
+        .arg(&arc_history_arg);
 
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
@@ -67,6 +76,7 @@ fn node_command() -> Result<()> {
         (CFG.enable_snapshot, "--enable-snapshot"),
         (CFG.snapshot_list, "--snapshot-list"),
         (CFG.snapshot_rollback, "--snapshot-rollback"),
+        (CFG.arc_fresh, "--arc-fresh"),
     ] {
         if condition {
             abcid.arg(action);
@@ -123,10 +133,10 @@ fn node_command() -> Result<()> {
     ctrlc::set_handler(move || {
         //info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
         pnk!(abcid_child.kill().c(d!()));
-        pnk!(abcid_child.wait().c(d!()).map(|s| println!("{}", s)));
+        pnk!(abcid_child.wait().c(d!()).map(|s| println!("{s}",)));
 
         pnk!(tendermint_child.kill());
-        pnk!(tendermint_child.wait().c(d!()).map(|s| println!("{}", s)));
+        pnk!(tendermint_child.wait().c(d!()).map(|s| println!("{s}",)));
 
         pnk!(send.send(()));
     })
@@ -163,7 +173,7 @@ fn init_command() -> Result<()> {
 fn pack() -> Result<()> {
     let bin_path_orig = get_bin_path().c(d!())?;
     let bin_name = bin_path_orig.file_name().c(d!())?.to_str().c(d!())?;
-    let bin_path = format!("/tmp/{}", bin_name);
+    let bin_path = format!("/tmp/{bin_name}",);
     fs::copy(bin_path_orig, &bin_path).c(d!())?;
 
     let mut f = OpenOptions::new().append(true).open(bin_path).c(d!())?;
