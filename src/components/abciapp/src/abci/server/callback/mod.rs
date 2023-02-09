@@ -23,6 +23,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
+        data_model::Operation,
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -128,6 +129,26 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
+                    if CFG.checkpoint.check_signatures_num >= td_height {
+                        let ret = tx
+                            .body
+                            .operations
+                            .iter()
+                            .map(|op| {
+                                if let Operation::TransferAsset(op) = op {
+                                    if op.body_signatures.len() > 1 {
+                                        return true;
+                                    }
+                                }
+                                false
+                            })
+                            .all(|x| x);
+                        if ret || tx.signatures.len() > 1 || tx.pubkey_sign_map.len() > 1
+                        {
+                            resp.log = "Too many signatures".to_owned();
+                            resp.code = 1;
+                        }
+                    }
                     if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
@@ -235,6 +256,26 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
+                if CFG.checkpoint.check_signatures_num >= td_height {
+                    let ret = tx
+                        .body
+                        .operations
+                        .iter()
+                        .map(|op| {
+                            if let Operation::TransferAsset(op) = op {
+                                if op.body_signatures.len() > 1 {
+                                    return true;
+                                }
+                            }
+                            false
+                        })
+                        .all(|x| x);
+                    if ret || tx.signatures.len() > 1 || tx.pubkey_sign_map.len() > 1 {
+                        resp.log = "Too many signatures".to_owned();
+                        resp.code = 1;
+                        return resp;
+                    }
+                }
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
