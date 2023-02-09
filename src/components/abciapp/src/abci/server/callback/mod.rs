@@ -147,6 +147,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         {
                             resp.log = "Too many signatures".to_owned();
                             resp.code = 1;
+                            return resp;
                         }
                     }
                     if !tx.valid_in_abci() {
