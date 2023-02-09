@@ -9,7 +9,7 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
     sig::XfrPublicKey,
-    structs::{XfrAmount, XfrAssetType},
+    structs::{AssetType, XfrAmount, XfrAssetType},
 };
 
 /// Use this operation to transfer.
@@ -26,6 +26,14 @@ pub struct ConvertAccount {
     /// convert UTXOs value
     #[serde(with = "serde_strz")]
     pub value: u64,
+
+    /// convert asset type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_type: Option<AssetType>,
+
+    /// convert asset lowlevel data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lowlevel_data: Option<Vec<u8>>,
 }
 
 #[allow(missing_docs)]

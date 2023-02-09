@@ -38,7 +38,6 @@ use {
         parse_td_validator_keys,
     },
     zei::{
-        setup::PublicParams,
         xfr::{
             asset_record::AssetRecordType,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -783,7 +782,6 @@ pub fn issue_asset_x(
             builder.get_seq_id(),
             amount,
             confidentiality_flags,
-            &PublicParams::default(),
         )
         .c(d!())?;
     utils::gen_fee_op(kp)

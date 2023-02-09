@@ -7,6 +7,7 @@
 
 use {
     credentials::CredUserSecretKey,
+    crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens,
     curve25519_dalek::scalar::Scalar,
     fp_types::crypto::MultiSigner,
     globutils::SignatureOf,
@@ -300,7 +301,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         confidentiality_flags: AssetRecordType,
-        zei_params: &PublicParams,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let ar = AssetRecordTemplate::with_no_asset_tracing(
@@ -310,8 +310,10 @@ impl TransactionBuilder {
             key_pair.get_pk(),
         );
 
+        let pc_gens =  RistrettoPedersenGens::default();
+
         let (ba, _, owner_memo) =
-            build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         self.add_operation_issue_asset(
             key_pair,
             token_code,
@@ -640,13 +642,18 @@ impl TransactionBuilder {
         &mut self,
         kp: &XfrKeyPair,
         addr: MultiSigner,
+        asset: Option<AssetTypeCode>,
         amount: u64,
+        lowlevel_data: Option<Vec<u8>>,
     ) -> Result<&mut Self> {
+        let asset_type = asset.map(|a| a.val);
         self.add_operation(Operation::ConvertAccount(ConvertAccount {
             signer: kp.get_pk(),
             nonce: self.txn.body.no_replay_token,
             receiver: addr,
             value: amount,
+            asset_type,
+            lowlevel_data,
         }));
         Ok(self)
     }

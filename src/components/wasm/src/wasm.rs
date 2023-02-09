@@ -377,7 +377,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> Result<TransactionBuilder, JsValue> {
         let asset_token = AssetTypeCode::new_from_base64(&code)
             .c(d!())
@@ -394,7 +393,6 @@ impl TransactionBuilder {
                 seq_num,
                 amount,
                 confidentiality_flags,
-                zei_params.get_ref(),
             )
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -497,6 +495,8 @@ impl TransactionBuilder {
         keypair: &XfrKeyPair,
         ethereum_address: String,
         amount: u64,
+        asset_code: Option<String>,
+        lowlevel_data_hex: Option<String>,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
@@ -504,8 +504,27 @@ impl TransactionBuilder {
         if let MultiSigner::Xfr(_pk) = ea {
             return Err(error_to_jsvalue("Invalid Ethereum address"));
         }
+
+        let lowlevel_data = if let Some(data) = lowlevel_data_hex {
+            let data = hex::decode(data).c(d!()).map_err(error_to_jsvalue)?;
+            Some(data)
+        } else {
+            None
+        };
+
+        let asset = asset_code.map(|code| AssetTypeCode::new_from_base64(&code));
+        if let Some(Err(e)) = asset {
+            return Err(error_to_jsvalue(e));
+        }
+
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea, amount)
+            .add_operation_convert_account(
+                keypair,
+                ea,
+                asset.map(Result::unwrap),
+                amount,
+                lowlevel_data,
+            )
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -526,10 +545,14 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Do nothing, compatible with frontend
+    pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
+        Ok(self)
+    }
+
     #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign_to_map(kp);
-
         Ok(self)
     }
 
@@ -539,7 +562,6 @@ impl TransactionBuilder {
         kp: &XfrKeyPair,
     ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
-
         Ok(self)
     }
 
