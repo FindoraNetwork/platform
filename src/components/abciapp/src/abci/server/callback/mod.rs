@@ -130,27 +130,31 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
                     if CFG.checkpoint.check_signatures_num >= td_height {
-                        let ret = tx
-                            .body
-                            .operations
-                            .iter()
-                            .map(|op| {
-                                if let Operation::TransferAsset(op) = op {
-                                    if op.body_signatures.len() > 1 {
-                                        return true;
-                                    }
+                        for op in tx.body.operations.iter() {
+                            if let Operation::TransferAsset(op) = op {
+                                let mut body_signatures = op.body_signatures.clone();
+                                body_signatures.dedup();
+                                if body_signatures.len() > 1 {
+                                    resp.log = "too many body_signatures".to_owned();
+                                    resp.code = 1;
+                                    return resp;
                                 }
-                                false
-                            })
-                            .all(|x| x);
-                        if ret || tx.signatures.len() > 1 || tx.pubkey_sign_map.len() > 1
-                        {
+                            }
+                        }
+                        let mut signatures = tx.signatures.clone();
+                        signatures.dedup();
+                        if signatures.len() > 1 {
                             resp.log = "Too many signatures".to_owned();
                             resp.code = 1;
                             return resp;
                         }
-                    }
-                    if !tx.valid_in_abci() {
+
+                        if tx.pubkey_sign_map.len() > 1 {
+                            resp.log = "too many pubkey_sign_map".to_owned();
+                            resp.code = 1;
+                            return resp;
+                        }
+                    } else if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
@@ -258,21 +262,27 @@ pub fn deliver_tx(
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
                 if CFG.checkpoint.check_signatures_num >= td_height {
-                    let ret = tx
-                        .body
-                        .operations
-                        .iter()
-                        .map(|op| {
-                            if let Operation::TransferAsset(op) = op {
-                                if op.body_signatures.len() > 1 {
-                                    return true;
-                                }
+                    for op in tx.body.operations.iter() {
+                        if let Operation::TransferAsset(op) = op {
+                            let mut body_signatures = op.body_signatures.clone();
+                            body_signatures.dedup();
+                            if body_signatures.len() > 1 {
+                                resp.log = "too many body_signatures".to_owned();
+                                resp.code = 1;
+                                return resp;
                             }
-                            false
-                        })
-                        .all(|x| x);
-                    if ret || tx.signatures.len() > 1 || tx.pubkey_sign_map.len() > 1 {
+                        }
+                    }
+                    let mut signatures = tx.signatures.clone();
+                    signatures.dedup();
+                    if signatures.len() > 1 {
                         resp.log = "Too many signatures".to_owned();
+                        resp.code = 1;
+                        return resp;
+                    }
+
+                    if tx.pubkey_sign_map.len() > 1 {
+                        resp.log = "too many pubkey_sign_map".to_owned();
                         resp.code = 1;
                         return resp;
                     }
