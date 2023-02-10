@@ -466,9 +466,9 @@ impl LedgerState {
         block_vote_percent: Option<[Power; 2]>,
     ) -> Result<()> {
         // Get Staking Ratio
-        let gdp = self.staking_get_global_delegation_percent();
+        let gdp = dbg!(self.staking_get_global_delegation_percent());
         // Realtime_network_APY (modifier has been included)
-        let return_rate = self.staking_get_block_rewards_rate();
+        let return_rate = dbg!(self.staking_get_block_rewards_rate());
 
         // Record RT_APY for this block in Historical Data
         self.get_staking_mut()
@@ -622,10 +622,10 @@ impl LedgerState {
     /// Returns amount staked (by all validators across the network and total amount of FRA unlocked )
     /// Returns the latest value from LedgerStatus
     pub fn staking_get_global_delegation_percent(&self) -> [u64; 2] {
-        [
+        dbg!([
             self.get_staking().get_global_delegation_amount(),
             self.staking_get_global_unlocked_amount(),
-        ]
+        ])
     }
 
     #[inline(always)]

@@ -7,10 +7,12 @@ use {
         td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
         STAKING_VALIDATOR_MIN_POWER,
     },
+    globutils::wallet,
     indexmap::IndexMap,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::convert::TryFrom,
+    zei::xfr::sig::XfrKeyPair,
 };
 
 // The initial power of an initor.
@@ -37,6 +39,19 @@ pub struct ValidatorStr {
     commission_rate: Option<[u64; 2]>,
     memo: Option<String>,
     kind: Option<ValidatorKind>,
+}
+
+#[derive(Deserialize)]
+/// Use for init staking with mnemonic
+pub struct ValidatorMnemonic {
+    /// Mnemonic
+    pub mnemonic: String,
+    ///Tendermint address.
+    pub td_addr: String,
+    /// Tendermint PubKey, in base64 format
+    pub td_pubkey: String,
+    td_power: Option<Power>,
+    commission_rate: Option<[u64; 2]>,
 }
 
 impl TryFrom<ValidatorStr> for Validator {
@@ -68,6 +83,36 @@ pub fn get_inital_validators() -> Result<Vec<Validator>> {
             .collect::<Result<Vec<_>>>()
             .c(d!())
     })
+}
+
+/// generate the initial validator-set with mnemonics
+pub fn get_inital_validators_with_mnemonics(
+    staking_mnemonic_list: &[u8],
+) -> Result<(Vec<Validator>, Vec<XfrKeyPair>)> {
+    let vms: Vec<ValidatorMnemonic> =
+        serde_json::from_slice(staking_mnemonic_list).c(d!())?;
+
+    let mut validators = vec![];
+    let mut key_pairs = vec![];
+
+    for vm in vms.into_iter() {
+        let key_pair = wallet::restore_keypair_from_mnemonic_default(&vm.mnemonic)?;
+        let v = Validator {
+            td_pubkey: base64::decode(&vm.td_pubkey).c(d!())?,
+            td_addr: td_addr_to_bytes(&vm.td_addr).c(d!())?,
+            td_power: vm.td_power.unwrap_or(DEFAULT_POWER),
+            commission_rate: vm.commission_rate.unwrap_or([1, 100]),
+            id: key_pair.get_pk(),
+            memo: Default::default(),
+            kind: ValidatorKind::Initiator,
+            signed_last_block: false,
+            signed_cnt: 0,
+            delegators: IndexMap::new(),
+        };
+        validators.push(v);
+        key_pairs.push(key_pair);
+    }
+    Ok((validators, key_pairs))
 }
 
 #[allow(missing_docs)]

@@ -63,7 +63,7 @@ impl Validator {
 
 /// The detail information of a validator which includes
 /// staking information, expected annulation, and voting power etc.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct ValidatorDetail {
     /// tendermint node address
     pub addr: TendermintAddr,
@@ -93,6 +93,8 @@ pub struct ValidatorDetail {
     pub block_proposed_cnt: u64,
     /// expected annulation of thi validator
     pub validator_realtime_apy: [u128; 2],
+    /// expected annulation of thi validator (f64)
+    pub validator_realtime_apy_float:f64,
     /// total number of its delegators
     pub delegator_cnt: u64,
 }

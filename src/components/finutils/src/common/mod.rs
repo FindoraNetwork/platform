@@ -27,7 +27,7 @@ use {
         staking::{
             check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
             td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
-            TendermintAddrRef,
+            TendermintAddrRef, Validator,
         },
     },
     ruc::*,
@@ -485,6 +485,14 @@ pub fn transfer_asset_batch_x(
 /// and can be also used in test scenes.
 pub fn set_initial_validators() -> Result<()> {
     utils::set_initial_validators().c(d!())
+}
+
+/// initial the validators, commonly used in test scenes.
+pub fn set_initial_validators_with_mnemonics(
+    staking_mnemonic_list_path: &str,
+) -> Result<(Vec<Validator>, Vec<XfrKeyPair>)> {
+    let staking_mnemonic_list = fs::read(staking_mnemonic_list_path).c(d!())?;
+    utils::set_initial_validators_with_mnemonics(&staking_mnemonic_list).c(d!())
 }
 
 /// Get the effective address of server

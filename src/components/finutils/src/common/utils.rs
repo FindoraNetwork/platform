@@ -15,7 +15,7 @@ use {
             Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
+        staking::{init::{get_inital_validators, get_inital_validators_with_mnemonics}, Validator,TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
@@ -61,6 +61,21 @@ pub fn set_initial_validators() -> Result<()> {
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())
+}
+
+/// init with mnemonics
+pub fn set_initial_validators_with_mnemonics(
+    staking_mnemonic_list: &[u8],
+) -> Result<(Vec<Validator>, Vec<XfrKeyPair>)> {
+    let mut builder = new_tx_builder().c(d!())?;
+    let (vs, kps) =
+        get_inital_validators_with_mnemonics(staking_mnemonic_list).c(d!())?;
+    builder
+        .add_operation_update_validator(&[], 1, vs.clone())
+        .c(d!())?;
+
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok((vs, kps))
 }
 
 #[inline(always)]

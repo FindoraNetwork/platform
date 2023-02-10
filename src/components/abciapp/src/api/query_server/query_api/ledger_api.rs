@@ -548,6 +548,8 @@ pub async fn query_validator_detail(
                 network_realtime_apy[1] * one_sub_commission_rate[1],
             ];
 
+            let validator_realtime_apy_float:f64 = validator_realtime_apy[0] as f64 / validator_realtime_apy[1] as f64;
+
             // fra_rewards: all delegators rewards including self-delegation
             let mut fra_rewards = v_self_delegation.rwd_amount;
             for (delegator, _) in &v.delegators {
@@ -575,6 +577,7 @@ pub async fn query_validator_detail(
                 block_signed_cnt: v.signed_cnt,
                 block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
                 validator_realtime_apy,
+                validator_realtime_apy_float,
                 kind: v.kind(),
                 delegator_cnt: v.delegators.len() as u64,
             };
