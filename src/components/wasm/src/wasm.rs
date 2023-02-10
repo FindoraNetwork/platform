@@ -22,6 +22,7 @@ use {
         CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
         OwnerMemo, PublicParams, TracingPolicies, TxoRef,
     },
+    fbnc::NumKey,
     credentials::{
         credential_commit, credential_issuer_key_gen, credential_open_commitment,
         credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
@@ -43,11 +44,11 @@ use {
         crypto::{Address, MultiSignature, MultiSigner},
         U256,
     },
-    fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper},
+    fp_utils::{ecdsa::SecpPair,  hashing::keccak_256, tx::EvmRawTxWrapper},
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
+            gen_random_keypair, AssetTypeCode, AssetTypePrefix,AuthenticatedTransaction, Operation,
             TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
             BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
@@ -96,6 +97,22 @@ pub fn build_id() -> String {
 /// asset type
 pub fn random_asset_type() -> String {
     AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
+pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
+    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut original_asset_code.to_bytes());
+    let derived_asset_code = AssetTypeCode {
+        val: ZeiAssetType(keccak_256(&asset_code)),
+    };
+
+    Ok(derived_asset_code.to_base64())
 }
 
 #[wasm_bindgen]

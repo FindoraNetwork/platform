@@ -748,6 +748,27 @@ impl NumKey for TxnSID {
     }
 }
 
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize)]
+pub enum AssetTypePrefix {
+    UserDefined,
+    ERC20,
+    NFT,
+}
+
+impl AssetTypePrefix {
+    #[allow(missing_docs)]
+    pub fn bytes(&self) -> Vec<u8> {
+        let code = match self {
+            AssetTypePrefix::UserDefined => "56",
+            AssetTypePrefix::ERC20 => "77",
+            AssetTypePrefix::NFT => "02",
+        };
+
+        hex::decode(format!("{code:0>64}",)).unwrap()
+    }
+}
+
 /// (sid, hash)
 pub type TxnIDHash = (TxnSID, String);
 

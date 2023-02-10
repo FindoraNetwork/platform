@@ -40,6 +40,7 @@ globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
+fbnc = { version = "0.2.9", default-features = false}
 
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
