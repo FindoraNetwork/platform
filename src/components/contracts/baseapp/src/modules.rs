@@ -120,8 +120,6 @@ impl ModuleManager {
             let amount = EthereumDecimalsMapping::from_native_token(amount)
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
 
-            println!("{} -> {}", &addr, &amount);
-
             let addr = Address::from(addr);
             module_account::App::<BaseApp>::mint(ctx, &addr, amount)?;
         }
