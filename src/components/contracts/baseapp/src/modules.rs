@@ -119,8 +119,10 @@ impl ModuleManager {
         for (addr, amount) in ops {
             let amount = EthereumDecimalsMapping::from_native_token(amount)
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            let addr = Address::from(addr);
 
+            println!("{} -> {}", &addr, &amount);
+
+            let addr = Address::from(addr);
             module_account::App::<BaseApp>::mint(ctx, &addr, amount)?;
         }
 
@@ -141,7 +143,7 @@ impl ModuleManager {
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
         &self,
-        ctx: Context,
+        ctx: &Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
         let checked = tx.clone().check()?;

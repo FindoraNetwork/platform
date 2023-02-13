@@ -82,7 +82,7 @@ impl crate::BaseApp {
                     ctx.run_mode = mode;
                     ctx
                 };
-                let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
+                let result = self.modules.process_tx::<SignedExtra>(&ctx, tx);
                 match result {
                     Ok(ar) => {
                         #[cfg(feature = "enterprise-web3")]
@@ -214,11 +214,11 @@ impl crate::BaseApp {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
             #[cfg(feature = "enterprise-web3")]
             let tmp_tx = tx.clone();
-            let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
+            let ret = self.modules.process_tx::<SignedExtra>(&ctx, tx);
 
             if let Err(e) = self
                 .modules
-                .mint_evm_staking_claims_to_account(&self.deliver_state)
+                .mint_evm_staking_claims_to_account(&ctx)
             {
                 tracing::error!("Error on mint amount from staking: {}", e);
             }
