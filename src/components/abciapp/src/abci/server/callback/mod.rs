@@ -43,6 +43,7 @@ use {
     tracing::info,
 };
 
+use cryptohash::sha256;
 #[cfg(feature = "web3_service")]
 use enterprise_web3::{
     BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
@@ -269,8 +270,9 @@ pub fn deliver_tx(
                             resp.log = e.to_string();
                         }
                     } else if is_convert_account(&tx) {
+                        let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
                         {
                             info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
