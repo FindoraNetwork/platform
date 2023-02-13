@@ -150,9 +150,9 @@ impl ModuleManager {
                 actions::ethereum::Action,
                 module_ethereum::App<BaseApp>,
                 Extra,
-            >(&ctx, action, checked),
+            >(ctx, action, checked),
             _ => Self::dispatch::<actions::Action, BaseApp, Extra>(
-                &ctx,
+                ctx,
                 tx.function,
                 checked,
             ),
