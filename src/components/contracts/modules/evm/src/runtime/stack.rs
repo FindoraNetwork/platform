@@ -15,7 +15,7 @@ use fp_traits::{
 };
 use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
-use tracing::info;
+use tracing::{debug, error, info};
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -284,7 +284,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_storage(&mut self, address: H160, index: H256, value: H256) {
         if value == H256::default() {
-            tracing::debug!(
+            debug!(
                 target: "evm",
                 "Removing storage for {:?} [index: {:?}]",
                 address,
@@ -296,7 +296,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
             );
         } else {
-            tracing::debug!(
+            debug!(
                 target: "evm",
                 "Updating storage for {:?} [index: {:?}, value: {:?}]",
                 address,
@@ -309,7 +309,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
                 &value,
             ) {
-                tracing::error!(
+                error!(
                     target: "evm",
                     "Failed updating storage for {:?} [index: {:?}, value: {:?}], error: {:?}",
                     address,
@@ -365,6 +365,11 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
+        debug!(
+            target: "evm",
+            "Removing storage with prefix {:?}",
+            address,
+        );
         AccountStorages::remove_prefix(
             self.ctx.state.write().borrow_mut(),
             &address.into(),
@@ -381,7 +386,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_code(&mut self, address: H160, code: Vec<u8>) {
         let code_len = code.len();
-        tracing::debug!(
+        debug!(
             target: "evm",
             "Inserting code ({} bytes) at {:?}",
            code_len,
@@ -392,7 +397,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
         let result = App::<C>::create_account(self.ctx, address.into(), code);
         if let Err(e) = result {
-            tracing::error!(
+            error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",
                 code_len,
