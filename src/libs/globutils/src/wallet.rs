@@ -277,14 +277,17 @@ pub fn nullifier_to_base58(n: &Nullifier) -> String {
 #[inline(always)]
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
     let bytes = &XfrPublicKey::noah_to_bytes(key);
+    if bytes.len() == 32 {
+        return bech32enc_fra(bytes);
+    }
     match bytes[0] {
         0u8 => bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap()),
         1u8 => bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap()),
         2u8 => {
-            panic!("public key not supported")
+            panic!("public key not supported {bytes:?}")
         }
         _ => {
-            panic!("public key not supported")
+            panic!("public key not supported {bytes:?}")
         }
     }
 }
