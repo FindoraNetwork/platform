@@ -90,6 +90,10 @@ pub struct CheckPointConfig {
     pub disable_delegate_frc20: i64,
 
     pub fix_exec_code: i64,
+
+    pub prismxx_inital_height: i64,
+
+    pub prism_bridge_address: String,
 }
 
 impl CheckPointConfig {
@@ -125,6 +129,10 @@ impl CheckPointConfig {
                                 evm_substate_v2_height: 0,
                                 disable_delegate_frc20: 0,
                                 fix_exec_code: 0,
+                                prismxx_inital_height: 1,
+                                prism_bridge_address:
+                                    "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
+                                        .to_owned(),
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -150,6 +158,8 @@ impl CheckPointConfig {
                                 evm_substate_v2_height: 3351349,
                                 disable_delegate_frc20: 3401450,
                                 fix_exec_code: 3401450,
+                                prism_bridge_address: String::new(),
+                                prismxx_inital_height: 50000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
