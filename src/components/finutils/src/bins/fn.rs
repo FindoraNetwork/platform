@@ -193,7 +193,7 @@ fn run() -> Result<()> {
                 .c(d!())?;
         } else {
             let help = "fn asset [--create | --issue | --show]";
-            println!("{}", help);
+            println!("{help}");
         }
     } else if let Some(m) = matches.subcommand_matches("staker-update") {
         let vm = if let Some(memo) = m.value_of("validator-memo") {
@@ -386,7 +386,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
         let (account, info) = contract_account_info(address)?;
-        println!("AccountId: {}\n{:#?}\n", account, info);
+        println!("AccountId: {account}\n{info:#?}\n");
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
@@ -777,7 +777,7 @@ fn tip_fail(e: impl fmt::Display) {
     eprintln!(
         "\x1b[35;01mTips\x1b[01m:\n\tPlease send your error messages to us,\n\tif you can't understand their meanings ~^!^~\x1b[00m"
     );
-    eprintln!("\n{}", e);
+    eprintln!("\n{e}");
 }
 
 fn tip_success() {

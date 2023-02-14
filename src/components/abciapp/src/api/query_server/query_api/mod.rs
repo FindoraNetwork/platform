@@ -24,7 +24,6 @@ use {
         },
     },
     ledger_api::*,
-    log::info,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
@@ -33,6 +32,7 @@ use {
         collections::{BTreeMap, HashSet},
         sync::Arc,
     },
+    tracing::info,
     zei::{
         serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
@@ -651,7 +651,7 @@ impl QueryApi {
         });
 
         for (host, port) in addrs.iter() {
-            hdr = hdr.bind(&format!("{}:{}", host, port)).c(d!())?
+            hdr = hdr.bind(&format!("{host}:{port}")).c(d!())?
         }
 
         hdr.run();

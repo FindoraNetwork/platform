@@ -47,8 +47,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
     let (addr, ports) = env.get_addrports_any_node();
     let port = ports[IDX_TM_RPC];
     let page_size = env.custom_data.initial_validator_num;
-    let tmrpc_endpoint =
-        format!("http://{}:{}/validators?per_page={}", addr, port, page_size);
+    let tmrpc_endpoint = format!("http://{addr}:{port}/validators?per_page={page_size}");
 
     let tm_validators = attohttpc::get(&tmrpc_endpoint)
         .send()
@@ -161,7 +160,7 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
     let (addr, ports) = env.get_addrports_any_node();
     let port = ports[IDX_APP_8669];
-    let rpc_endpoint = format!("http://{}:{}/submit_transaction", addr, port);
+    let rpc_endpoint = format!("http://{addr}:{port}/submit_transaction");
     attohttpc::post(&rpc_endpoint)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&serde_json::to_vec(tx).c(d!())?)
@@ -224,7 +223,7 @@ fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
 fn gen_8668_endpoint(env: &Env) -> String {
     let (addr, ports) = env.get_addrports_any_node();
     let port = ports[IDX_APP_8668];
-    format!("http://{}:{}", addr, port)
+    format!("http://{addr}:{port}")
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

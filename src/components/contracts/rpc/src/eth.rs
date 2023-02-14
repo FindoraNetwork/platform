@@ -25,22 +25,17 @@ use fp_types::{
     actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
-use fp_utils::ecdsa::SecpPair;
-use fp_utils::tx::EvmRawTxWrapper;
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
-use log::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
-use std::collections::BTreeMap;
-use std::convert::Into;
-use std::ops::Range;
-use std::sync::Arc;
+use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
-use tokio::runtime::Runtime;
-use tokio::task::spawn_blocking;
+use tokio::runtime::{Handle, Runtime};
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref RT: Runtime =
@@ -54,6 +49,28 @@ lazy_static! {
             .unwrap_or(1424654);
         h
     };
+}
+
+// After the asynchronous rpc feature is enabled,
+// the web3 server could crash when handling rpc calls coming from websocket.
+//
+// The root cause is that the tokio runtime is not properly initialized when web3 server is starting.
+//
+// This is a temporary correction. When processing rpc requests, it first checks that the tokio runtime
+// has been properly initialized to avoid application crash.
+//
+// FixMe: Please remove me and initialize tokio runtime properly for both http and websocket when web3 server is booting.
+//
+fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    if Handle::try_current().is_ok() {
+        tokio::task::spawn_blocking(f)
+    } else {
+        RT.spawn_blocking(f)
+    }
 }
 
 pub struct EthApiImpl {
@@ -99,8 +116,7 @@ impl EthApiImpl {
                 Some(block) => Some(block.header.number.as_u64()),
                 None => {
                     return Err(internal_err(format!(
-                        "block number not found, hash: {:?}",
-                        hash
+                        "block number not found, hash: {hash:?}",
                     )))
                 }
             },
@@ -109,8 +125,7 @@ impl EthApiImpl {
                     Some(num)
                 } else {
                     return Err(internal_err(format!(
-                        "block number: {} exceeds version range: {:?}",
-                        num, range
+                        "block number: {num} exceeds version range: {range:?}",
                     )));
                 }
             }
@@ -317,9 +332,9 @@ impl EthApi for EthApiImpl {
     fn call(
         &self,
         request: CallRequest,
-        _: Option<BlockNumber>,
+        block_number: Option<BlockNumber>,
     ) -> BoxFuture<Result<Bytes>> {
-        debug!(target: "eth_rpc", "call, request:{:?}", request);
+        debug!(target: "eth_rpc", "call, height {:?}, request:{:?}", block_number, request);
 
         let account_base_app = self.account_base_app.clone();
 
@@ -334,18 +349,14 @@ impl EthApi for EthApiImpl {
                 nonce,
             } = request;
 
-            let block = account_base_app.read().current_block(None);
+            let id = native_block_id(block_number);
+            let block = account_base_app
+                .read()
+                .current_block(id)
+                .ok_or_else(|| internal_err("failed to get block"))?;
+
             // use given gas limit or query current block's limit
-            let gas_limit = match gas {
-                Some(amount) => amount,
-                None => {
-                    if let Some(block) = block.clone() {
-                        block.header.gas_limit
-                    } else {
-                        <BaseApp as module_evm::Config>::BlockGasLimit::get()
-                    }
-                }
-            };
+            let gas_limit = gas.unwrap_or(block.header.gas_limit);
             let data = data.map(|d| d.0).unwrap_or_default();
 
             let mut config = <BaseApp as module_ethereum::Config>::config().clone();
@@ -353,18 +364,14 @@ impl EthApi for EthApiImpl {
 
             let mut ctx = account_base_app
                 .read()
-                .create_query_context(None, false)
-                .map_err(|err| {
-                    internal_err(format!("create query context error: {:?}", err))
-                })?;
-            if let Some(block) = block {
-                ctx.header
-                    .mut_time()
-                    .set_seconds(block.header.timestamp as i64);
-                ctx.header.height = block.header.number.as_u64() as i64;
-                ctx.header.proposer_address =
-                    Vec::from(block.header.beneficiary.as_bytes())
-            }
+                .create_context_at(block.header.number.as_u64())
+                .ok_or_else(|| internal_err("failed to create context"))?;
+
+            ctx.header
+                .mut_time()
+                .set_seconds(block.header.timestamp as i64);
+            ctx.header.height = block.header.number.as_u64() as i64;
+            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
 
             match to {
                 Some(to) => {
@@ -382,9 +389,9 @@ impl EthApi for EthApiImpl {
                         &ctx, call, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner call error: {:?}", err))
+                        internal_err(format!("evm runner call error: {err:?}"))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner call result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &info.value)?;
 
@@ -404,9 +411,9 @@ impl EthApi for EthApiImpl {
                         &ctx, create, &config,
                     )
                     .map_err(|err| {
-                        internal_err(format!("evm runner create error: {:?}", err))
+                        internal_err(format!("evm runner create error: {err:?}"))
                     })?;
-                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                    debug!(target: "eth_rpc", "evm runner create result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &[])?;
 
@@ -767,8 +774,7 @@ impl EthApi for EthApiImpl {
                         (Some(BlockId::Number(U256::from(num))), false)
                     } else {
                         return Err(internal_err(format!(
-                            "block number: {} exceeds version range: {:?}",
-                            num, range
+                            "block number: {num} exceeds version range: {range:?}",
                         )));
                     }
                 }
@@ -820,7 +826,7 @@ impl EthApi for EthApiImpl {
                     }
                     let allowance = available / gas_price;
                     if highest < allowance {
-                        log::warn!(
+                        warn!(
                         "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
                         highest,
                         balance,
@@ -846,7 +852,7 @@ impl EthApi for EthApiImpl {
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
                     .map_err(|err| {
-                        internal_err(format!("create query context error: {:?}", err))
+                        internal_err(format!("create query context error: {err:?}"))
                     })?;
 
                 let CallRequest {
@@ -883,7 +889,7 @@ impl EthApi for EthApiImpl {
                             &ctx, call, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner call error: {:?}", err))
+                            internal_err(format!("evm runner call error: {err:?}"))
                         })?;
                         debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
@@ -907,7 +913,7 @@ impl EthApi for EthApiImpl {
                             &ctx, create, &config,
                         )
                         .map_err(|err| {
-                            internal_err(format!("evm runner create error: {:?}", err))
+                            internal_err(format!("evm runner create error: {err:?}"))
                         })?;
                         debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 

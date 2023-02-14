@@ -73,49 +73,40 @@ impl ApiCache {
         ApiCache {
             prefix: prefix.to_owned(),
             related_transactions: new_mapx!(format!(
-                "api_cache/{}related_transactions",
-                prefix
+                "api_cache/{prefix}related_transactions",
             )),
-            related_transfers: new_mapx!(format!(
-                "api_cache/{}related_transfers",
-                prefix
-            )),
-            claim_hist_txns: new_mapx!(format!("api_cache/{}claim_hist_txns", prefix)),
+            related_transfers: new_mapx!(
+                format!("api_cache/{prefix}related_transfers",)
+            ),
+            claim_hist_txns: new_mapx!(format!("api_cache/{prefix}claim_hist_txns",)),
             coinbase_oper_hist: new_mapx!(format!(
-                "api_cache/{}coinbase_oper_hist",
-                prefix
+                "api_cache/{prefix}coinbase_oper_hist",
             )),
-            created_assets: new_mapx!(format!("api_cache/{}created_assets", prefix)),
-            issuances: new_mapx!(format!("api_cache/{}issuances", prefix)),
+            created_assets: new_mapx!(format!("api_cache/{prefix}created_assets",)),
+            issuances: new_mapx!(format!("api_cache/{prefix}issuances",)),
             token_code_issuances: new_mapx!(format!(
-                "api_cache/{}token_code_issuances",
-                prefix
+                "api_cache/{prefix}token_code_issuances",
             )),
-            owner_memos: new_mapxnk!(format!("api_cache/{}owner_memos", prefix)),
+            owner_memos: new_mapxnk!(format!("api_cache/{prefix}owner_memos",)),
             utxos_to_map_index: new_mapxnk!(format!(
-                "api_cache/{}utxos_to_map_index",
-                prefix
+                "api_cache/{prefix}utxos_to_map_index",
             )),
-            txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
-            txn_sid_to_hash: new_mapxnk!(format!("api_cache/{}txn_sid_to_hash", prefix)),
-            txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
+            txo_to_txnid: new_mapxnk!(format!("api_cache/{prefix}txo_to_txnid",)),
+            txn_sid_to_hash: new_mapxnk!(format!("api_cache/{prefix}txn_sid_to_hash",)),
+            txn_hash_to_sid: new_mapx!(format!("api_cache/{prefix}txn_hash_to_sid",)),
             staking_global_rate_hist: new_mapxnk!(format!(
-                "api_cache/{}staking_global_rate_hist",
-                prefix
+                "api_cache/{prefix}staking_global_rate_hist",
             )),
             staking_self_delegation_hist: new_mapx!(format!(
-                "api_cache/{}staking_self_delegation_hist",
-                prefix
+                "api_cache/{prefix}staking_self_delegation_hist",
             )),
             staking_delegation_amount_hist: new_mapx!(format!(
-                "api_cache/{}staking_delegation_amount_hist",
-                prefix
+                "api_cache/{prefix}staking_delegation_amount_hist",
             )),
             staking_delegation_rwd_hist: new_mapx!(format!(
-                "api_cache/{}staking_delegation_rwd_hist",
-                prefix
+                "api_cache/{prefix}staking_delegation_rwd_hist",
             )),
-            last_sid: new_mapx!(format!("api_cache/{}last_sid", prefix)),
+            last_sid: new_mapx!(format!("api_cache/{prefix}last_sid",)),
         }
     }
 

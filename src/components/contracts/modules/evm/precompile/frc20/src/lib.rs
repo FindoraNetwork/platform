@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use config::abci::global_cfg::CFG;
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
 use evm::{
@@ -11,12 +12,12 @@ use evm_precompile_utils::{
     error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
-use log::debug;
 use module_evm::{
     precompile::{FinState, Precompile, PrecompileId, PrecompileResult},
     Config,
 };
 use slices::u8_slice;
+use tracing::debug;
 
 /// FRC20 transfer event selector, Keccak256("Transfer(address,address,uint256)")
 ///
@@ -87,6 +88,16 @@ impl<C: Config> Precompile for FRC20<C> {
         context: &Context,
         state: &FinState,
     ) -> PrecompileResult {
+        if CFG.checkpoint.disable_delegate_frc20 < state.header.height {
+            let addr = context.address;
+
+            if addr != H160::from_low_u64_be(Self::contract_id()) {
+                return Err(PrecompileFailure::Error {
+                    exit_status: error("No delegatecall support"),
+                });
+            }
+        }
+
         let mut input = EvmDataReader::new(input);
         let selector = match input.read_selector::<Call>() {
             Ok(v) => v,
@@ -304,7 +315,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::approve(state, &caller, &spender_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}")))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -349,7 +360,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &caller, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}")))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -405,7 +416,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &from_id, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}")))?;
 
         C::AccountAsset::approve(
             state,
@@ -413,7 +424,7 @@ impl<C: Config> FRC20<C> {
             &caller,
             allowance.saturating_sub(amount),
         )
-        .map_err(|e| error(format!("{:?}", e)))?;
+        .map_err(|e| error(format!("{e:?}")))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,

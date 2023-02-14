@@ -132,7 +132,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         }
 
         let mut target_account = Self::account_of(ctx, target, None)
-            .c(d!(format!("account: {} does not exist", target)))?;
+            .c(d!(format!("account: {target} does not exist")))?;
         target_account.balance = target_account
             .balance
             .checked_sub(balance)
