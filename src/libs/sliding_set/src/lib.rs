@@ -25,7 +25,7 @@ impl<T> SlidingSet<T> {
     /// Create a new sliding window start with 0
     #[inline(always)]
     pub fn new(width: usize) -> Self {
-        let mut map = Vec::with_capacity(width as usize);
+        let mut map = Vec::with_capacity(width);
         for _ in 0..width {
             map.push(Vec::new());
         }
@@ -65,15 +65,14 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
         if index <= self.current && index + self.width >= (self.current + 1) {
             if self.map[index % self.width].contains(&key) {
                 Err(eg!(format!(
-                    "SlidingSet::insert: ({:?}, {}) already in set",
-                    key, index
+                    "SlidingSet::insert: ({key:?}, {index}) already in set",
                 )))
             } else {
                 self.map[index % self.width].push(key);
                 Ok(())
             }
         } else {
-            Err(eg!(format!("({:?}, {}) is out of range", key, index)))
+            Err(eg!(format!("({key:?}, {index}) is out of range",)))
         }
     }
 }

@@ -5,6 +5,7 @@ mod eth;
 mod eth_filter;
 mod eth_pubsub;
 mod net;
+mod utils;
 mod web3;
 
 use baseapp::BaseApp;
@@ -17,12 +18,12 @@ use fp_rpc_core::{
 use fp_rpc_server::{rpc_handler, start_http, start_ws, RpcHandler, RpcMiddleware};
 use fp_utils::ecdsa::SecpPair;
 use jsonrpc_core::types::error::{Error, ErrorCode};
-use log::error;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use serde_json::Value;
 use std::sync::Arc;
 use tendermint_rpc::HttpClient;
+use tracing::error;
 
 const MAX_PAST_LOGS: u32 = 10000;
 const MAX_STORED_FILTERS: usize = 500;
@@ -99,6 +100,8 @@ pub fn start_web3_service(
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
+    use tracing::debug;
+
     pub struct HttpServer(pub Option<fp_rpc_server::HttpServer>);
     impl Drop for HttpServer {
         fn drop(&mut self) {
@@ -124,7 +127,10 @@ mod waiting {
         fn drop(&mut self) {
             if let Some(server) = self.0.take() {
                 server.close_handle().close();
-                let _ = server.wait();
+                server
+                    .wait()
+                    .map_err(|e| debug!("WsServer drop err {:?}", e))
+                    .ok();
             }
         }
     }
@@ -156,7 +162,7 @@ pub fn error_on_execution_failure(
             }
             Err(Error {
                 code: ErrorCode::InternalError,
-                message: format!("evm error: {:?}", e),
+                message: format!("evm error: {e:?}",),
                 data: Some(Value::String("0x".to_string())),
             })
         }
@@ -169,7 +175,7 @@ pub fn error_on_execution_failure(
                 let message_len = data[36..68].iter().sum::<u8>();
                 let body: &[u8] = &data[68..68 + message_len as usize];
                 if let Ok(reason) = std::str::from_utf8(body) {
-                    message = format!("{} {}", message, reason);
+                    message = format!("{message} {reason}");
                 }
             }
             Err(Error {
@@ -180,7 +186,7 @@ pub fn error_on_execution_failure(
         }
         ExitReason::Fatal(e) => Err(Error {
             code: ErrorCode::InternalError,
-            message: format!("evm fatal: {:?}", e),
+            message: format!("evm fatal: {e:?}"),
             data: Some(Value::String("0x".to_string())),
         }),
     }

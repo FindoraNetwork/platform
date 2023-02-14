@@ -378,7 +378,7 @@ impl Staking {
     ) -> Result<Vec<Validator>> {
         self.validator_info
             .remove(&h)
-            .map(|v| v.body.into_iter().map(|(_, v)| v).collect())
+            .map(|v| v.body.into_values().collect())
             .c(d!("not exists"))
     }
 
@@ -1157,7 +1157,9 @@ impl Staking {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn delegation_get_global_rewards(&self) -> BTreeMap<XfrPublicKey, Amount> {
+    pub fn delegation_get_global_rewards(
+        &self,
+    ) -> BTreeMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
         self.delegation_get_global_rewards_before_height(self.cur_height)
     }
 
@@ -1166,11 +1168,11 @@ impl Staking {
     pub fn delegation_get_global_rewards_before_height(
         &self,
         h: BlockHeight,
-    ) -> BTreeMap<XfrPublicKey, Amount> {
+    ) -> BTreeMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
         self.delegation_get_freed_before_height(h)
             .into_iter()
             .filter(|(_, d)| 0 < d.rwd_amount)
-            .map(|(k, d)| (k, d.rwd_amount))
+            .map(|(k, d)| (k, (d.rwd_amount, d.receiver_pk)))
             .collect()
     }
 
@@ -1459,7 +1461,7 @@ impl Staking {
                 vd.addr_td_to_app
                     .get(addr)
                     .copied()
-                    .c(d!(format!("Failed to get pk {}", addr)))
+                    .c(d!(format!("Failed to get pk {addr}",)))
             })
     }
 
@@ -2450,8 +2452,7 @@ pub fn check_delegation_amount(am: Amount, is_append: bool) -> Result<()> {
         Ok(())
     } else {
         let msg = format!(
-            "Invalid delegation amount: {} (min: {}, max: {})",
-            am, lowb, MAX_DELEGATION_AMOUNT
+            "Invalid delegation amount: {am} (min: {lowb}, max: {MAX_DELEGATION_AMOUNT})", 
         );
         Err(eg!(msg))
     }

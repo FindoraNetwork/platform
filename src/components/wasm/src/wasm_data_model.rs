@@ -33,6 +33,31 @@ use {
     wasm_bindgen::prelude::*,
 };
 
+// #[wasm_bindgen]
+// /// Public parameters necessary for generating asset records. Generating this is expensive and
+// /// should be done as infrequently as possible.
+// /// @see {@link module:Findora-Wasm~TransactionBuilder#add_basic_issue_asset|add_basic_issue_asset}
+// /// for information using public parameters to create issuance asset records.
+// pub struct PublicParams {
+//     pub(crate) params: ZeiPublicParams,
+// }
+
+// #[wasm_bindgen]
+// #[allow(clippy::new_without_default)]
+// impl PublicParams {
+//     /// Generates a new set of parameters.
+//     pub fn new() -> PublicParams {
+//         PublicParams {
+//             params: ZeiPublicParams::default(),
+//         }
+//     }
+// }
+
+// impl PublicParams {
+//     pub fn get_ref(&self) -> &ZeiPublicParams {
+//         &self.params
+//     }
+// }
 #[wasm_bindgen]
 /// Indicates whether the TXO ref is an absolute or relative value.
 #[derive(Copy, Clone)]

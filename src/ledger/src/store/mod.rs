@@ -579,7 +579,7 @@ impl LedgerState {
     /// Initialize a new Ledger structure.
     pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
         let prefix = if let Some(p) = prefix {
-            format!("{}_", p)
+            format!("{p}_",)
         } else {
             "".to_owned()
         };
@@ -859,7 +859,7 @@ impl LedgerState {
                     let authenticated_spent_status = match self.get_utxo_status(id) {
                         Ok(s) => s,
                         Err(e) => {
-                            log::error!("{}", e);
+                            tracing::error!("{}", e);
                             return None;
                         }
                     };
@@ -906,7 +906,7 @@ impl LedgerState {
                     let authenticated_spent_status = match self.get_utxo_status(addr) {
                         Ok(s) => s,
                         Err(e) => {
-                            log::error!("{}", e);
+                            tracing::error!("{}", e);
                             return None;
                         }
                     };
@@ -972,7 +972,7 @@ impl LedgerState {
                                 utxos.push(Some(auth_utxo));
                             }
                             Err(e) => {
-                                log::error!("{}", e);
+                                tracing::error!("{}", e);
                                 utxos.push(None);
                             }
                         };
@@ -1402,7 +1402,7 @@ impl LedgerStatus {
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
     pub fn new(basedir: &str, snapshot_file: &str) -> Result<LedgerStatus> {
-        let path = format!("{}/{}", basedir, snapshot_file);
+        let path = format!("{basedir}/{snapshot_file}",);
         match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
             Err(e) => {
@@ -1474,14 +1474,13 @@ impl LedgerStatus {
         );
         if seq_id > self.block_commit_count {
             return Err(eg!(("Transaction seq_id ahead of block_count")));
-        } else if seq_id + (TRANSACTION_WINDOW_WIDTH as u64) < self.block_commit_count {
+        } else if seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
             return Err(eg!(("Transaction seq_id too far behind block_count")));
         } else {
             // Check to see that this nrpt has not been seen before
             if self.sliding_set.has_key_at(seq_id as usize, rand) {
                 return Err(eg!(format!(
-                    "No replay token ({:?}, {})seen before at  possible replay",
-                    rand, seq_id
+                    "No replay token ({rand:?}, {seq_id})seen before at  possible replay",
                 )));
             }
         }
@@ -1744,7 +1743,7 @@ impl LedgerStatus {
                 no_replay_token.get_seq_id() as usize,
             );
             if let Err(e) = self.sliding_set.insert(rand, seq_id) {
-                pd!(format!("Error inserting into window: {}", e));
+                pd!(format!("Error inserting into window: {e}",));
             }
         }
         block.no_replay_tokens.clear();
@@ -1769,7 +1768,7 @@ impl LedgerStatus {
         // Apply memo updates
         for (code, memo) in block.memo_updates.drain() {
             let mut asset = self.asset_types.get_mut(&code).unwrap();
-            (*asset).properties.memo = memo;
+            asset.properties.memo = memo;
         }
 
         for (code, amount) in block.issuance_amounts.drain() {
@@ -1883,9 +1882,11 @@ fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
                 .nodes
                 .iter()
                 .map(|e| MTNode {
-                    siblings1: e.siblings1,
-                    siblings2: e.siblings2,
+                    left: e.left,
+                    mid: e.mid,
+                    right: e.right,
                     is_left_child: (e.path == TreePath::Left) as u8,
+                    is_mid_child: (e.path == TreePath::Middle) as u8,
                     is_right_child: (e.path == TreePath::Right) as u8,
                 })
                 .collect(),

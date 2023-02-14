@@ -4,9 +4,9 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
+use tracing::{debug, error, info};
 
 impl crate::BaseApp {
     /// info implements the ABCI interface.
@@ -50,7 +50,7 @@ impl crate::BaseApp {
 
         let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
-            return err_resp(format!("Cannot create query context with err: {}!", e));
+            return err_resp(format!("Cannot create query context with err: {e}!",));
         }
 
         match path.remove(0) {
@@ -74,6 +74,8 @@ impl crate::BaseApp {
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
+            #[cfg(feature = "enterprise-web3")]
+            let tmp_tx = tx.clone();
             let check_fn = |mode: RunTxMode| {
                 let ctx = {
                     let mut ctx = self.check_state.clone();
@@ -83,16 +85,73 @@ impl crate::BaseApp {
                 let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
                 match result {
                     Ok(ar) => {
+                        #[cfg(feature = "enterprise-web3")]
+                        {
+                            use enterprise_web3::{
+                                Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
+                                REDIS_CLIENT,
+                            };
+                            use std::{collections::HashMap, mem::replace};
+                            let code_map =
+                                if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
+                                    replace(&mut *code_map, HashMap::new())
+                                } else {
+                                    tracing::error!("{}", "");
+                                    Default::default()
+                                };
+                            let state_list = if let Ok(mut state_list) =
+                                PENDING_STATE_UPDATE_LIST.lock()
+                            {
+                                replace(&mut *state_list, vec![])
+                            } else {
+                                tracing::error!("{}", "");
+                                Default::default()
+                            };
+                            if 0 == ar.code {
+                                if let fp_types::actions::Action::Ethereum(
+                                    fp_types::actions::ethereum::Action::Transact(tx),
+                                ) = tmp_tx.function
+                                {
+                                    let redis_pool =
+                                        REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                    let mut conn =
+                                        redis_pool.get().expect("get redis connect");
+                                    let mut setter =
+                                        Setter::new(&mut *conn, "evm".to_string());
+
+                                    setter
+                                        .set_pending_tx(tx)
+                                        .map_err(|e| tracing::error!("{:?}", e))
+                                        .unwrap_or(());
+                                    for (addr, code) in code_map.iter() {
+                                        setter
+                                            .set_pending_code(*addr, code.clone())
+                                            .map_err(|e| tracing::error!("{:?}", e))
+                                            .unwrap_or(());
+                                    }
+                                    for state in state_list.iter() {
+                                        setter
+                                            .set_pending_state(
+                                                state.address.clone(),
+                                                state.index.clone(),
+                                                state.value.clone(),
+                                            )
+                                            .map_err(|e| tracing::error!("{:?}", e))
+                                            .unwrap_or(());
+                                    }
+                                }
+                            }
+                        }
                         resp.code = ar.code;
                         if ar.code != 0 {
-                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            info!(target: "baseapp", "Transaction check error, action result {ar:?}", );
                             resp.log = ar.log;
                         }
                     }
                     Err(e) => {
-                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        info!(target: "baseapp", "Transaction check error: {e}", );
                         resp.code = 1;
-                        resp.log = format!("Transaction check error: {}", e);
+                        resp.log = format!("Transaction check error: {e}",);
                     }
                 }
             };
@@ -153,10 +212,74 @@ impl crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
-
+            #[cfg(feature = "enterprise-web3")]
+            let tmp_tx = tx.clone();
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
+                    #[cfg(feature = "enterprise-web3")]
+                    {
+                        use enterprise_web3::{
+                            Setter, REDIS_CLIENT, REMOVE_PENDING_CODE_MAP,
+                            REMOVE_PENDING_STATE_UPDATE_LIST,
+                        };
+                        use std::{mem::replace, ops::DerefMut};
+                        let code_map =
+                            if let Ok(mut code_map) = REMOVE_PENDING_CODE_MAP.lock() {
+                                let m = code_map.deref_mut();
+                                let map = replace(m, vec![]);
+                                map.clone()
+                            } else {
+                                tracing::error!("{}", "");
+                                Default::default()
+                            };
+                        let state_list = if let Ok(mut state_list) =
+                            REMOVE_PENDING_STATE_UPDATE_LIST.lock()
+                        {
+                            let v = state_list.deref_mut();
+                            let v2 = replace(v, vec![]);
+                            v2.clone()
+                        } else {
+                            tracing::error!("{}", "");
+                            Default::default()
+                        };
+                        if 0 == ar.code {
+                            if let fp_types::actions::Action::Ethereum(
+                                fp_types::actions::ethereum::Action::Transact(tx),
+                            ) = tmp_tx.function
+                            {
+                                let redis_pool =
+                                    REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                let mut conn =
+                                    redis_pool.get().expect("get redis connect");
+                                let mut setter =
+                                    Setter::new(&mut *conn, "evm".to_string());
+
+                                setter
+                                    .remove_pending_tx(tx)
+                                    .map_err(|e| tracing::error!("{:?}", e))
+                                    .unwrap_or(());
+
+                                for addr in code_map.iter() {
+                                    setter
+                                        .remove_pending_code(*addr)
+                                        .map_err(|e| tracing::error!("{:?}", e))
+                                        .unwrap_or(());
+                                }
+
+                                for (address, index) in state_list.iter() {
+                                    setter
+                                        .remove_pending_state(
+                                            address.clone(),
+                                            index.clone(),
+                                        )
+                                        .map_err(|e| tracing::error!("{:?}", e))
+                                        .unwrap_or(());
+                                }
+                            }
+                        }
+                    }
+
                     if ar.code != 0 {
                         info!(target: "baseapp", "deliver tx with result: {:?}", ar);
                     } else {
@@ -171,9 +294,9 @@ impl crate::BaseApp {
                     resp
                 }
                 Err(e) => {
-                    error!(target: "baseapp", "Ethereum transaction deliver error: {}", e);
+                    error!(target: "baseapp", "Ethereum transaction deliver error: {e}", );
                     resp.code = 1;
-                    resp.log = format!("Ethereum transaction deliver error: {}", e);
+                    resp.log = format!("Ethereum transaction deliver error: {e}",);
                     resp
                 }
             }
@@ -211,8 +334,8 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|e| {
-                println!("{:?}", e);
-                panic!("Failed to commit chain state at height: {}", block_height)
+                println!("{e:?}",);
+                panic!("Failed to commit chain state at height: {block_height}",)
             });
 
         // Commit module data based on root_hash
@@ -224,10 +347,10 @@ impl crate::BaseApp {
             .write()
             .commit(block_height)
             .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
+                panic!("Failed to commit chain db at height: {block_height}",)
             });
 
-        // Reset the deliver state
+        // Reset the deliver state, but keep the ethereum cache
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
 
         pnk!(self

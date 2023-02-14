@@ -374,7 +374,7 @@ pub fn check_merkle_proof(
         };
     }
 
-    iter.next() == None && hash == *merkle_root
+    iter.next().is_none() && hash == *merkle_root
 }
 
 pub mod helpers {
@@ -480,7 +480,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let mut path = temp_dir();
-        path.push(format!("temp-findora-db–{}", time));
+        path.push(format!("temp-findora-db–{time}",));
         TempRocksDB::open(path).expect("failed to open rocksdb")
     }
 
@@ -910,7 +910,7 @@ fn test_nullfier() {
         .unwrap()
         .as_nanos();
     let mut path = temp_dir();
-    path.push(format!("temp-findora-db–{}", time));
+    path.push(format!("temp-findora-db–{time}",));
     let rocksdb = TempRocksDB::open(path).expect("failed to open rocksdb");
 
     let mut smt = SmtMap256::new(rocksdb);

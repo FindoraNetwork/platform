@@ -52,7 +52,7 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
     let tx_bytes = serde_json::to_vec(tx).c(d!())?;
 
-    let _ = attohttpc::post(&url)
+    let _ = attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&tx_bytes)
         .send()
@@ -137,6 +137,9 @@ pub fn transfer_batch(
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(owner_kp);
 
     send_tx(&tx).c(d!())
 }
@@ -479,9 +482,9 @@ struct TmStatus {
 // retrieve tendermint status and node info
 #[inline(always)]
 fn get_network_status(addr: &str) -> Result<TmStatus> {
-    let url = format!("{}:26657/status", addr);
+    let url = format!("{addr}:26657/status",);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -512,7 +515,7 @@ pub fn get_local_block_height() -> u64 {
 pub fn get_asset_type(code: &str) -> Result<AssetType> {
     let url = format!("{}:8668/asset_token/{}", get_serv_addr().c(d!())?, code);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -530,7 +533,7 @@ pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
         wallet::public_key_to_base64(addr)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -584,7 +587,7 @@ fn get_owned_utxos_x(
         wallet::public_key_to_base64(addr)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -605,7 +608,7 @@ pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonAssetRecord)> {
         wallet::commitment_to_base58(com)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -634,7 +637,7 @@ fn get_seq_id() -> Result<u64> {
 
     let url = format!("{}:8668/global_state", get_serv_addr().c(d!())?);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -659,7 +662,7 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
         ids
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -675,7 +678,7 @@ pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<AxfrOwnerMemo>> {
     let id = id.0.to_string();
     let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -695,7 +698,7 @@ pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
         atxo_sid
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -714,7 +717,7 @@ pub fn check_nullifier_hash(null_hash: &str) -> Result<Option<bool>> {
         null_hash
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -732,7 +735,7 @@ pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
         wallet::public_key_to_base64(pk)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -750,7 +753,7 @@ pub fn get_validator_detail(td_addr: TendermintAddrRef) -> Result<ValidatorDetai
         td_addr
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()

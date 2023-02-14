@@ -11,12 +11,12 @@ use evm_precompile_utils::{
     error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
-use log::debug;
 use module_evm::{
     precompile::{FinState, Precompile, PrecompileId, PrecompileResult},
     Config,
 };
 use slices::u8_slice;
+use tracing::debug;
 
 /// FRC20 transfer event selector, Keccak256("Transfer(address,address,uint256)")
 ///
@@ -304,7 +304,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::approve(state, &caller, &spender_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -349,7 +349,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &caller, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
@@ -405,7 +405,7 @@ impl<C: Config> FRC20<C> {
         );
 
         C::AccountAsset::transfer(state, &from_id, &recipient_id, amount)
-            .map_err(|e| error(format!("{:?}", e)))?;
+            .map_err(|e| error(format!("{e:?}",)))?;
 
         C::AccountAsset::approve(
             state,
@@ -413,7 +413,7 @@ impl<C: Config> FRC20<C> {
             &caller,
             allowance.saturating_sub(amount),
         )
-        .map_err(|e| error(format!("{:?}", e)))?;
+        .map_err(|e| error(format!("{e:?}",)))?;
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,

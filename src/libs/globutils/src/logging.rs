@@ -16,16 +16,17 @@ pub fn init_logging(verbose: Option<&str>) {
             env_filter = env_filter.add_directive(LevelFilter::DEBUG.into());
         } else {
             env_filter =
-                env_filter.add_directive(format!("{}=debug", module).parse().unwrap());
+                env_filter.add_directive(format!("{module}=debug",).parse().unwrap());
         }
     }
 
     if let Ok(rust_log) = env::var("RUST_LOG") {
+        println!("{rust_log}",);
         if !rust_log.is_empty() {
             for directive in rust_log.split(',').filter_map(|s| match s.parse() {
                 Ok(directive) => Some(directive),
                 Err(err) => {
-                    eprintln!("Ignoring directive `{}`: {}", s, err);
+                    eprintln!("Ignoring directive `{s}`: {err}",);
                     None
                 }
             }) {

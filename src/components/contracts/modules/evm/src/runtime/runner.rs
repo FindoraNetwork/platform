@@ -16,6 +16,7 @@ use fp_types::actions::evm::*;
 use ruc::*;
 use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
+use tracing::{debug, trace};
 
 #[derive(Default)]
 pub struct ActionRunner<C: Config> {
@@ -96,7 +97,7 @@ impl<C: Config> ActionRunner<C> {
 
         let used_gas = U256::from(executor.used_gas());
         let actual_fee = executor.fee(gas_price);
-        log::debug!(
+        debug!(
             target: "evm",
             "Execution {:?} [source: {:?}, value: {}, gas_price {}, gas_limit: {}, actual_fee: {}]",
             reason,
@@ -115,7 +116,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -124,7 +125,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,
@@ -176,7 +177,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -185,7 +186,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,
@@ -232,7 +233,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -241,7 +242,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,
@@ -309,6 +310,7 @@ impl<C: Config> Runner for ActionRunner<C> {
                 let address = executor.create_address(evm::CreateScheme::Legacy {
                     caller: args.source,
                 });
+
                 (
                     executor
                         .transact_create(

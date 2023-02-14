@@ -20,11 +20,11 @@ use futures::{
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use lazy_static::lazy_static;
-use log::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref EXECUTOR: ThreadPool =
@@ -255,10 +255,8 @@ impl SubscriptionResult {
         for (receipt_index, receipt) in receipts.into_iter().enumerate() {
             let transaction_hash: Option<H256> = if !receipt.logs.is_empty() {
                 Some(H256::from_slice(
-                    Keccak256::digest(&rlp::encode(
-                        &block.transactions[receipt_index as usize],
-                    ))
-                    .as_slice(),
+                    Keccak256::digest(&rlp::encode(&block.transactions[receipt_index]))
+                        .as_slice(),
                 ))
             } else {
                 None

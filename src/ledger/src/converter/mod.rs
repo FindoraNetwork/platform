@@ -3,7 +3,8 @@
 use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
-use fp_types::crypto::MultiSigner;
+use config::abci::global_cfg::CFG;
+use fp_types::{crypto::MultiSigner, H160};
 use noah::xfr::{
     sig::XfrPublicKey,
     structs::{AssetType, XfrAmount, XfrAssetType},
@@ -66,7 +67,8 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 #[allow(missing_docs)]
 pub fn check_convert_account(
     tx: &Transaction,
-) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>)> {
+    height: i64,
+) -> Result<(XfrPublicKey, H160, u64, AssetType, Vec<u8>)> {
     let signer;
     let target;
     let expected_value;
@@ -79,15 +81,18 @@ pub fn check_convert_account(
                 "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
             ));
         }
-        if tx.check_has_signature(&ca.signer).is_err() {
+        if CFG.checkpoint.utxo_checktx_height > height {
+            if tx.check_has_signature(&ca.signer).is_err() {
+                return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
+            }
+        } else if tx.check_has_signature_from_map(&ca.signer).is_err() {
             return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
         }
-        if let MultiSigner::Xfr(_pk) = ca.receiver {
-            return Err(eg!("TransferUTXOsToEVM error: invalid receiver address"));
-        }
+
+        target = H160::try_from(ca.receiver.clone())
+            .map_err(|_| eg!("TransferUTXOsToEVM error: invalid receiver address"))?;
 
         signer = ca.signer;
-        target = ca.receiver.clone();
         expected_value = ca.value;
         if let Some(at) = ca.asset_type {
             expected_asset = at;

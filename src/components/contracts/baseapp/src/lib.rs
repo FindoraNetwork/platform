@@ -27,28 +27,31 @@ use fp_evm::BlockId;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     base::BaseProvider,
-    evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
+    evm::{EthereumAddressMapping, EthereumDecimalsMapping},
 };
-use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
+use fp_types::{actions::Action, crypto::Address};
 use lazy_static::lazy_static;
-use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
+use ledger::data_model::Transaction as FindoraTransaction;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
-use storage::state::ChainState;
+use storage::state::{ChainState, ChainStateOpts};
+use tracing::info;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
     static ref EVM_CAHIN_ID: u64 = std::env::var("EVM_CHAIN_ID").map(
         |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
+
 }
 
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
-const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
+const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
+const SNAPSHOT_INTERVAL: u64 = 10 * 24;
 
 #[derive(Clone)]
 pub struct BaseApp {
@@ -157,15 +160,33 @@ impl module_xhub::Config for BaseApp {
 }
 
 impl BaseApp {
-    pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
+    pub fn new(
+        basedir: &Path,
+        empty_block: bool,
+        arc_history: (u16, Option<u16>),
+        is_fresh: bool,
+    ) -> Result<Self> {
+        info!(
+            target: "baseapp",
+            "create new baseapp with basedir {:?}, empty_block {}, trace history {:?} days, is_fresh {}",
+            basedir, empty_block, arc_history, is_fresh
+        );
+
         // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
-        let chain_state = Arc::new(RwLock::new(ChainState::new(
-            fdb,
-            "findora_db".to_owned(),
-            CHAIN_STATE_MIN_VERSIONS,
-        )));
+
+        let opts = ChainStateOpts {
+            name: Some("findora_db".to_owned()),
+            ver_window: BLOCKS_IN_DAY * arc_history.0 as u64,
+            cleanup_aux: is_fresh,
+            interval: arc_history
+                .1
+                .map_or(SNAPSHOT_INTERVAL * arc_history.0 as u64, |v| {
+                    BLOCKS_IN_DAY * v as u64
+                }),
+        };
+        let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts)));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;
@@ -287,6 +308,10 @@ impl BaseApp {
         }
     }
 
+    pub fn create_context_at(&self, height: u64) -> Option<Context> {
+        self.check_state.state_at(height)
+    }
+
     /// retrieve the context for the txBytes and other memoized values.
     pub fn retrieve_context(&mut self, mode: RunTxMode) -> &mut Context {
         let ctx = if mode == RunTxMode::Deliver {
@@ -299,7 +324,7 @@ impl BaseApp {
     }
 
     fn validate_height(&self, height: i64) -> Result<()> {
-        ensure!(height >= 1, format!("invalid height: {}", height));
+        ensure!(height >= 1, format!("invalid height: {height}",));
         let mut expected_height =
             self.chain_state.read().height().unwrap_or_default() as i64;
         if expected_height == 0 {
@@ -309,7 +334,7 @@ impl BaseApp {
         }
         ensure!(
             height == expected_height,
-            format!("invalid height: {}; expected: {}", height, expected_height)
+            format!("invalid height: {height}; expected: {expected_height}")
         );
         Ok(())
     }
@@ -339,43 +364,13 @@ impl BaseApp {
         self.modules
             .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
     }
-
-    pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
-        let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
-
-        for output in &outputs {
-            if output.asset == ASSET_TYPE_FRA {
-                let address =
-                    Address::from(self.modules.evm_module.contracts.bridge_address);
-                if let Some(amount) =
-                    EthereumDecimalsMapping::from_native_token(U256::from(output.amount))
-                {
-                    if let Err(e) = module_account::App::<Self>::burn(
-                        &self.deliver_state,
-                        &address,
-                        amount,
-                    ) {
-                        log::error!("Error when burn account: {:?}", e);
-                    }
-                }
-            }
-        }
-
-        let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
-
-        if let Some(mut e) = outputs2 {
-            outputs.append(&mut e);
-        }
-
-        Some(outputs)
-    }
 }
 
 impl BaseProvider for BaseApp {
     fn account_of(&self, who: &Address, height: Option<u64>) -> Result<SmartAccount> {
         let ctx = self.create_query_context(height, false)?;
         module_account::App::<Self>::account_of(&ctx, who, height)
-            .ok_or(eg!(format!("account does not exist: {}", who)))
+            .ok_or(eg!(format!("account does not exist: {who}",)))
     }
 
     fn current_block(&self, id: Option<BlockId>) -> Option<Block> {

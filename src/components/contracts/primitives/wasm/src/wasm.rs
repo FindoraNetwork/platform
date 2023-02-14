@@ -29,13 +29,13 @@ pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
 
     let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
     Some(H160::from(H256::from_slice(
-        Keccak256::digest(&pubkey).as_slice(),
+        Keccak256::digest(pubkey).as_slice(),
     )))
 }
 
 #[wasm_bindgen]
 pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
-    let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
+    let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)
@@ -47,7 +47,7 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let signer = recover_signer(&tx).c(d!()).map_err(error_to_jsvalue)?;
-        Ok(format!("{:?}", signer))
+        Ok(format!("{signer:?}",))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -55,7 +55,7 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
 
 #[wasm_bindgen]
 pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
-    let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
+    let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)
@@ -67,7 +67,7 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
-        Ok(format!("{:?}", hash))
+        Ok(format!("{hash:?}",))
     } else {
         Err(error_to_jsvalue("invalid raw tx"))
     }
@@ -82,14 +82,14 @@ mod test {
     #[test]
     fn recover_signer_works() {
         let raw_tx = String::from("ZXZtOnsic2lnbmF0dXJlIjpudWxsLCJmdW5jdGlvbiI6eyJFdGhlcmV1bSI6eyJUcmFuc2FjdCI6eyJub25jZSI6IjB4MSIsImdhc19wcmljZSI6IjB4MTc0ODc2ZTgwMCIsImdhc19saW1pdCI6IjB4NTIwOCIsImFjdGlvbiI6eyJDYWxsIjoiMHgyYWQzMjg0NmM2ZGQyZmZkM2VkYWRiZTUxY2Q1YWUwNGFhNWU1NzVlIn0sInZhbHVlIjoiMHg1NmJjNzVlMmQ2MzEwMDAwMCIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjEwODIsInIiOiIweGY4YWVmN2Y4MDUzZDg5ZmVlMzk1MGM0ZDcwMjA4MGJmM2E4MDcyYmVkNWQ4NGEzYWYxOWEzNjAwODFiNjM2YTIiLCJzIjoiMHgyOTYyOTlhOGYyNDMwYjg2ZmQzZWI5NzZlYWJjNzMwYWMxY2ZiYmJlMzZlYjY5ZWFlMzM4Y2ZmMzNjNGE5OGMxIn19fX19");
-        let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE).unwrap();
+        let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(evm_tx).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(
-                format!("{:?}", signer),
+                format!("{signer:?}",),
                 "0xa5225cbee5052100ec2d2d94aa6d258558073757"
             );
         } else {
@@ -100,13 +100,13 @@ mod test {
     #[test]
     fn evm_tx_hash_works() {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
-        let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE).unwrap();
+        let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
-                format!("{:?}", hash),
+                format!("{hash:?}",),
                 "0x0eeb0ff455b1b57b821634cf853e7247e584a675610f13097cc49c2022505df3"
             );
         } else {

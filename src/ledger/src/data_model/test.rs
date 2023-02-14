@@ -46,7 +46,7 @@ fn test_gen_random_with_rng() {
     let uniform_stddev = 1.0 / (12.0f64).sqrt();
     let average = sum as f64 / sample_size as f64;
     let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
-    println!("Average {}, stddev {}", average, stddev);
+    println!("Average {average}, stddev {stddev}");
     assert!(average > 127.5 - 5.0 * stddev);
     assert!(average < 127.5 + 5.0 * stddev);
 }
@@ -218,7 +218,7 @@ fn gen_sample_tx() -> Transaction {
     let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
     // Instantiate an DefineAsset operation
-    let mut asset = Box::new(Asset::default());
+    let mut asset = Box::<Asset>::default();
     asset.code = AssetTypeCode::gen_random();
 
     let asset_creation = DefineAsset::new(

@@ -33,12 +33,12 @@ define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+	cp -f \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
@@ -93,6 +93,14 @@ build_release_debug: tendermint_goleveldb
 	cargo build --features debug_env --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
+build_release_web3_goleveldb: tendermint_goleveldb
+	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
+build_release_web3: tendermint_cleveldb
+	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
 tendermint_cleveldb:
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
@@ -107,6 +115,7 @@ tendermint_goleveldb:
 test:
 	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
+	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \
@@ -128,6 +137,8 @@ lint:
 	cargo clippy --workspace --tests
 
 update:
+	git submodule update --recursive --init
+	rustup update stable
 	cargo update
 
 fmt:
@@ -138,10 +149,10 @@ fmtall:
 
 clean:
 	cargo clean
-	rm -rf tools/tendermint .git/modules/tools/tendermint
-	rm -rf debug release Cargo.lock
+	rm -rf debug release
 
 cleanall: clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
 	git clean -fdx
 
 wasm:
@@ -178,6 +189,9 @@ join_qa01: stop_debug_env build_release_goleveldb
 join_qa02: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa02
 
+join_qa03: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh qa03
+
 join_testnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh testnet
 
@@ -185,7 +199,7 @@ join_mainnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh mainnet
 
 start_localnode: stop_debug_env
-	bash tools/node_init.sh _ _
+	bash -x tools/node_init.sh _ _
 
 
 
@@ -272,6 +286,29 @@ ci_build_image_dockerhub_arm:
 # ifeq ($(ENV),release)
 # 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 # endif
+
+# ========================== build RPC node===========================
+
+build_release_web3_goleveldb: tendermint_goleveldb
+	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
+ci_build_release_web3_binary_image:
+	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-enterprise-web3
+	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-enterprise-web3 .
+
+ci_build_image_web3:
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
+	fi
+	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
+	@ docker cp findorad-binary:/binary ./binary
+	@ docker rm -f findorad-binary
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
+
+ifeq ($(ENV),release)
+	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
+endif
 
 # ========================== push image and clean up===========================
 

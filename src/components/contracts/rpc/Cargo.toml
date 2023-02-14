@@ -10,7 +10,7 @@ readme = "README.md"
 
 [dependencies]
 config = {path = "../../config"}
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = "0.7.2"
 async-std = "1.9.0"
 baseapp = { path = "../baseapp" }
 base64 = "0.13"
@@ -21,17 +21,17 @@ fp-rpc-core = { path = "../primitives/rpc-core" }
 fp-rpc-server = { path = "../primitives/rpc-server" }
 futures = { version = "0.3.16", features = ["compat", "thread-pool"] }
 hex-literal = "0.3"
-jsonrpc-core = "18.0"
-jsonrpc-core-client = "18.0"
-jsonrpc-derive = "18.0"
-jsonrpc-pubsub = "18.0"
-jsonrpc-http-server = "18.0"
-jsonrpc-tcp-server = "18.0"
+jsonrpc-core = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core" }
+jsonrpc-core-client = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core-client" }
+jsonrpc-derive = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-derive" }
+jsonrpc-pubsub = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-pubsub" }
+jsonrpc-http-server = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-http-server" }
+jsonrpc-tcp-server = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-tcp-server" }
 libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
 lazy_static = "1.4.0"
-log = "0.4.8"
-parking_lot = "0.12"
+tracing = "0.1"
 rand = "0.8"
+parking_lot = "0.12"
 rlp = "0.5"
 ruc = "1.0"
 rustc-hex = { version = "2.1.0" }

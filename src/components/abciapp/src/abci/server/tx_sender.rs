@@ -50,7 +50,7 @@ pub fn forward_txn_with_mode(
             )
     };
 
-    let tendermint_reply = format!("http://{}", url);
+    let tendermint_reply = format!("http://{url}",);
     if 2000 > TX_PENDING_CNT.fetch_add(1, Ordering::Relaxed) {
         POOL.spawn_ok(async move {
             ruc::info_omit!(attohttpc::post(&tendermint_reply)

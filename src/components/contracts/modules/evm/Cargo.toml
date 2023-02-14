@@ -9,14 +9,14 @@ description = "Findora module supporting evm smart contract"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = "0.7.2"
 ethereum-types = { version = "0.13.1", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.35.0", default-features = false }
 evm-gasometer = { version = "0.30.0", default-features = false }
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 impl-trait-for-tuples = "0.2"
-log = "0.4"
+tracing = "0.1"
 rlp = { version = "0.5", default-features = false }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
@@ -24,8 +24,8 @@ serde_json = "1.0.64"
 sha3 = { version = "0.10", default-features = false }
 hex = "0.4.2"
 ethabi = "17.1.0"
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -35,9 +35,11 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 ledger = { path = "../../../../ledger" }
+enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
+
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
@@ -45,3 +47,6 @@ fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
 module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"
+
+[features]
+web3_service = ["enterprise-web3"]

@@ -17,11 +17,11 @@ path = "src/bins/abcid.rs"
 parking_lot = "0.12"
 base64 = "0.13"
 bincode = "1.3.1"
-log = "0.4.8"
+tracing = "0.1"
 rand = "0.8"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
-attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
+attohttpc = { version = "0.23", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.40"
 lazy_static = "1.4.0"
@@ -44,14 +44,14 @@ ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
 module-evm = { path = "../contracts/modules/evm"}
 ethereum-types = { version = "0.13.1", default-features = false }
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 
 chrono = "0.4"
 tokio = "1.10.1"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0c" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], tag = "v0.19.0c" }
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
@@ -62,7 +62,12 @@ tempfile = "3.1.0"
 baseapp = { path = "../contracts/baseapp" }
 fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
-fp-utils = { path = "../contracts/primitives/utils" }
+fp-types = {path = "../contracts/primitives/types"}
+fp-utils = {path = "../contracts/primitives/utils" }
+
+
+enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
+
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
@@ -75,5 +80,5 @@ vergen = "=3.1.0"
 [features]
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
-debug_env = ["ledger/debug_env", "config/debug_env"]
-
+debug_env = ["ledger/debug_env", "config/debug_env", "baseapp/debug_env"]
+web3_service = ["enterprise-web3", "baseapp/web3_service"]

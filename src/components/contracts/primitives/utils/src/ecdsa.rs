@@ -72,10 +72,9 @@ impl<'de> Deserialize<'de> for Public {
         D: Deserializer<'de>,
     {
         let pk =
-            base64::decode_config(&String::deserialize(deserializer)?, base64::URL_SAFE)
-                .map_err(|e| de::Error::custom(format!("{:?}", e)))?;
-        Public::try_from(pk.as_slice())
-            .map_err(|e| de::Error::custom(format!("{:?}", e)))
+            base64::decode_config(String::deserialize(deserializer)?, base64::URL_SAFE)
+                .map_err(|e| de::Error::custom(format!("{e:?}",)))?;
+        Public::try_from(pk.as_slice()).map_err(|e| de::Error::custom(format!("{e:?}",)))
     }
 }
 
@@ -173,10 +172,10 @@ impl<'de> Deserialize<'de> for Signature {
     where
         D: Deserializer<'de>,
     {
-        let signature_hex = hex::decode(&String::deserialize(deserializer)?)
-            .map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+        let signature_hex = hex::decode(String::deserialize(deserializer)?)
+            .map_err(|e| de::Error::custom(format!("{e:?}",)))?;
         Signature::try_from(signature_hex.as_ref())
-            .map_err(|e| de::Error::custom(format!("{:?}", e)))
+            .map_err(|e| de::Error::custom(format!("{e:?}",)))
     }
 }
 
@@ -323,7 +322,7 @@ impl SecpPair {
             .map_err(|_| eg!("InvalidPhrase"))?;
         let bs = mnemonic.to_seed(password.unwrap_or(""));
         let ext = XPrv::derive_from_path(
-            &bs,
+            bs,
             &DerivationPath::from_str("m/44'/60'/0'/0/0")
                 .map_err(|_| eg!("InvalidDerivationPath"))?,
         )
@@ -360,7 +359,7 @@ impl SecpPair {
     pub fn address(&self) -> H160 {
         let mut res = [0u8; 64];
         res.copy_from_slice(&self.public.serialize()[1..65]);
-        H160::from(H256::from_slice(Keccak256::digest(&res).as_slice()))
+        H160::from(H256::from_slice(Keccak256::digest(res).as_slice()))
     }
 
     /// Sign a message.
@@ -444,7 +443,7 @@ mod test {
             "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000"
         );
         let signature = pair.sign(&message[..]);
-        println!("Correct signature: {:?}", signature);
+        println!("Correct signature: {signature:?}",);
         assert!(SecpPair::verify(&signature, &message[..], &public));
         assert!(!SecpPair::verify(&signature, "Other message", &public));
     }

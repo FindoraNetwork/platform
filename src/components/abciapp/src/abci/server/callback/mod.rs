@@ -32,6 +32,7 @@ use {
         staking::KEEP_HIST,
         store::api_cache,
     },
+    module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event},
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
@@ -101,7 +102,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    log::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
+    tracing::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
 
     if la.all_commited() {
         la.begin_block();
@@ -256,7 +257,7 @@ pub fn deliver_tx(
                 if txn.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        log::info!(target: "abciapp",
+                        tracing::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, txn
                         );
@@ -285,11 +286,11 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
                         {
-                            log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            tracing::error!(target: "abciapp", "deliver convert account tx failed: {err:?}", );
 
                             resp.code = 1;
                             resp.log =
-                                format!("deliver convert account tx failed: {:?}", err);
+                                format!("deliver convert account tx failed: {err:?}",);
                             return resp;
                         }
 
@@ -327,7 +328,7 @@ pub fn deliver_tx(
                     } else if is_tm_transaction(&txn)
                         && td_height < CFG.checkpoint.enable_triple_masking_height
                     {
-                        log::info!(target: "abciapp",
+                        tracing::info!(target: "abciapp",
                             "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, txn
                         );
@@ -372,7 +373,7 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    log::info!(
+                    tracing::info!(
                         target:
                         "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
@@ -382,31 +383,85 @@ pub fn deliver_tx(
                 }
                 let mut resp = s.account_base_app.write().deliver_tx(req);
 
-                if td_height > CFG.checkpoint.fix_prism_mint_pay && 0 == resp.code {
-                    let mut la = s.la.write();
-                    let mut laa = la.get_committed_state().write();
-                    if let Some(tx) = staking::system_prism_mint_pay(
-                        &mut *laa,
-                        &mut *s.account_base_app.write(),
-                        td_height,
-                    ) {
-                        drop(laa);
-                        if la.cache_transaction(tx).is_ok() {
-                            return resp;
+                if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code {
+                    let deposit_asset_topic = deposit_asset_event_topic_str();
+
+                    for evt in resp.events.iter() {
+                        if evt.field_type == *"ethereum_ContractLog" {
+                            let mut bridge_contract_found = false;
+                            let mut deposit_asset_foud = false;
+
+                            for pair in evt.attributes.iter() {
+                                let key = String::from_utf8(pair.key.clone())
+                                    .unwrap_or_default();
+                                if key == *"address" {
+                                    let addr = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+                                    if addr
+                                        == CFG
+                                            .checkpoint
+                                            .prism_bridge_address
+                                            .to_lowercase()
+                                    {
+                                        bridge_contract_found = true
+                                    }
+                                }
+                                if key == *"topics" {
+                                    let topic = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+                                    if topic == deposit_asset_topic {
+                                        deposit_asset_foud = true
+                                    }
+                                }
+                                if key == *"data"
+                                    && bridge_contract_found
+                                    && deposit_asset_foud
+                                {
+                                    let data = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+
+                                    let data_vec = serde_json::from_str(&data).unwrap();
+
+                                    let deposit_asset =
+                                        parse_deposit_asset_event(data_vec);
+
+                                    match deposit_asset {
+                                        Ok(deposit) => {
+                                            let mut la = s.la.write();
+                                            let mut laa =
+                                                la.get_committed_state().write();
+                                            if let Some(tx) =
+                                                staking::system_prism_mint_pay(
+                                                    &mut laa, deposit,
+                                                )
+                                            {
+                                                drop(laa);
+                                                if la.cache_transaction(tx).is_ok() {
+                                                    return resp;
+                                                }
+                                                resp.code = 1;
+                                                s.account_base_app
+                                                    .read()
+                                                    .deliver_state
+                                                    .state
+                                                    .write()
+                                                    .discard_session();
+                                                s.account_base_app
+                                                    .read()
+                                                    .deliver_state
+                                                    .db
+                                                    .write()
+                                                    .discard_session();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            resp.code = 1;
+                                            resp.log = e.to_string();
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        resp.code = 1;
-                        s.account_base_app
-                            .read()
-                            .deliver_state
-                            .state
-                            .write()
-                            .discard_session();
-                        s.account_base_app
-                            .read()
-                            .deliver_state
-                            .db
-                            .write()
-                            .discard_session();
                     }
                 }
                 resp
@@ -443,11 +498,7 @@ pub fn end_block(
     // mint coinbase, cache system transactions to ledger
     {
         let mut laa = la.get_committed_state().write();
-        if let Some(tx) = staking::system_mint_pay(
-            td_height,
-            &mut *laa,
-            &mut *s.account_base_app.write(),
-        ) {
+        if let Some(tx) = staking::system_mint_pay(td_height, &mut laa) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();
@@ -466,7 +517,7 @@ pub fn end_block(
     }
 
     staking::system_ops(
-        &mut *la.get_committed_state().write(),
+        &mut la.get_committed_state().write(),
         &header,
         begin_block_req.last_commit_info.as_ref(),
         &begin_block_req.byzantine_validators.as_slice(),
@@ -508,6 +559,126 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);
+
+    #[cfg(feature = "web3_service")]
+    {
+        use enterprise_web3::{
+            Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
+            STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+        };
+        use std::collections::HashMap;
+        use std::mem::replace;
+
+        let height = state.get_tendermint_height() as u32;
+        if height as u64 > *WEB3_SERVICE_START_HEIGHT {
+            let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+            let mut conn = redis_pool.get().expect("get redis connect");
+            let mut setter = Setter::new(&mut *conn, "evm".to_string());
+
+            let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
+                replace(&mut *nonce_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
+                replace(&mut *code_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
+                replace(&mut *balance_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
+                replace(&mut *state_list, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            let block = if let Ok(mut block) = BLOCK.lock() {
+                block.take()
+            } else {
+                None
+            };
+
+            let txs = if let Ok(mut txs) = TXS.lock() {
+                replace(&mut *txs, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
+                replace(&mut *receipts, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
+
+            if !code_map.is_empty()
+                || !nonce_map.is_empty()
+                || !balance_map.is_empty()
+                || !state_list.is_empty()
+                || !txs.is_empty()
+                || !receipts.is_empty()
+                || block.is_some()
+            {
+                setter
+                    .set_height(height)
+                    .map_err(|e| tracing::error!("{:?}", e))
+                    .unwrap_or(());
+
+                for (addr, code) in code_map.iter() {
+                    setter
+                        .set_byte_code(height, *addr, code.clone())
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
+
+                for (addr, nonce) in nonce_map.iter() {
+                    setter
+                        .set_nonce(height, *addr, *nonce)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
+
+                for (addr, balance) in balance_map.iter() {
+                    setter
+                        .set_balance(height, *addr, *balance)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
+
+                for state in state_list.iter() {
+                    setter
+                        .set_state(
+                            height,
+                            state.address.clone(),
+                            state.index.clone(),
+                            state.value.clone(),
+                        )
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
+
+                if let Some(block) = block {
+                    setter
+                        .set_block_info(block, receipts, txs)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
+            }
+        }
+    }
+
     r
 }
 
@@ -519,7 +690,7 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::info!(target: "abciapp",
+    tracing::info!(target: "abciapp",
         "app_hash_{}: {}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),
@@ -545,7 +716,7 @@ fn app_hash_v2(
     mut cs_hash: Vec<u8>,
     mut tm_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::info!(target: "abciapp",
+    tracing::info!(target: "abciapp",
         "app_hash_{}: {}_{}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),

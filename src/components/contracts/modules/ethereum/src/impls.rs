@@ -16,14 +16,15 @@ use fp_core::{
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
+use fp_types::crypto::Address;
 use fp_types::{
     actions::evm as EvmAction,
     crypto::{secp256k1_ecdsa_recover, HA256},
 };
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
+use tracing::{debug, info};
 const BLOCK_MIGRATE: &str = "block_migrate";
 
 impl<C: Config> App<C> {
@@ -72,7 +73,7 @@ impl<C: Config> App<C> {
 
         let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
         Some(H160::from(H256::from_slice(
-            Keccak256::digest(&pubkey).as_slice(),
+            Keccak256::digest(pubkey).as_slice(),
         )))
     }
 
@@ -162,6 +163,54 @@ impl<C: Config> App<C> {
                 &block_hash,
                 &statuses,
             )?;
+
+            #[cfg(feature = "web3_service")]
+            {
+                use enterprise_web3::{
+                    TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT,
+                };
+
+                use ethereum::{BlockAny, FrontierReceiptData, ReceiptAny};
+
+                if block_number.as_u64() > *WEB3_SERVICE_START_HEIGHT {
+                    if let Ok(mut b) = BLOCK.lock() {
+                        if b.is_none() {
+                            let block = BlockAny::from(block);
+                            b.replace(block);
+                        } else {
+                            tracing::error!("the block is not none");
+                        }
+                    }
+                    if let Ok(mut txs) = TXS.lock() {
+                        for status in statuses.iter() {
+                            let tx_status = TxState {
+                                transaction_hash: status.transaction_hash,
+                                transaction_index: status.transaction_index,
+                                from: status.from,
+                                to: status.to,
+                                contract_address: status.contract_address,
+                                logs: status.logs.clone(),
+                                logs_bloom: status.logs_bloom.clone(),
+                            };
+
+                            txs.push(tx_status);
+                        }
+                    }
+
+                    if let Ok(mut rs) = RECEIPTS.lock() {
+                        for receipt in receipts.iter() {
+                            let f = FrontierReceiptData {
+                                state_root: receipt.state_root,
+                                used_gas: receipt.used_gas,
+                                logs_bloom: receipt.logs_bloom,
+                                logs: receipt.logs.clone(),
+                            };
+
+                            rs.push(ReceiptAny::Frontier(f));
+                        }
+                    }
+                }
+            }
         }
 
         debug!(target: "ethereum", "store new ethereum block: {}", block_number);
@@ -201,72 +250,95 @@ impl<C: Config> App<C> {
             transaction.action,
         );
 
-        if let Err(e) = execute_ret {
-            let mut to = Default::default();
-            if let ethereum::TransactionAction::Call(target) = transaction.action {
-                to = target;
-            }
-            events.push(Event::emit_event(
-                Self::name(),
-                TransactionExecuted {
-                    sender: source,
-                    to,
-                    contract_address: Default::default(),
-                    transaction_hash,
-                    reason: ExitReason::Fatal(ExitFatal::UnhandledInterrupt),
-                },
-            ));
+        let (ar_code, info, to, contract_address, reason, data, status, used_gas) =
+            match execute_ret {
+                Err(e) => {
+                    let to = if let ethereum::TransactionAction::Call(target) =
+                        transaction.action
+                    {
+                        Some(target)
+                    } else {
+                        None
+                    };
 
-            return Ok(ActionResult {
-                code: 1,
-                data: vec![],
-                log: format!("{}", e),
-                gas_wanted: gas_limit.low_u64(),
-                gas_used: 0,
-                events,
-            });
-        }
+                    let logs = vec![ethereum::Log {
+                        address: source,
+                        topics: vec![],
+                        data: format!("{e}").as_str().into(),
+                    }];
 
-        let (to, contract_address, info) = execute_ret.unwrap();
+                    let reason = ExitReason::Fatal(ExitFatal::UnhandledInterrupt);
+                    let data = vec![];
+                    let status = TransactionStatus {
+                        transaction_hash,
+                        transaction_index,
+                        from: source,
+                        to,
+                        contract_address: None,
+                        logs: logs.clone(),
+                        logs_bloom: {
+                            let mut bloom: Bloom = Bloom::default();
+                            Self::logs_bloom(logs, &mut bloom);
+                            bloom
+                        },
+                    };
+                    let used_gas = U256::zero();
 
-        let (reason, data, status, used_gas) = match info.clone() {
-            CallOrCreateInfo::Call(info) => (
-                info.exit_reason,
-                info.value.clone(),
-                TransactionStatus {
-                    transaction_hash,
-                    transaction_index,
-                    from: source,
-                    to,
-                    contract_address: None,
-                    logs: info.logs.clone(),
-                    logs_bloom: {
-                        let mut bloom: Bloom = Bloom::default();
-                        Self::logs_bloom(info.logs, &mut bloom);
-                        bloom
-                    },
-                },
-                info.used_gas,
-            ),
-            CallOrCreateInfo::Create(info) => (
-                info.exit_reason,
-                vec![],
-                TransactionStatus {
-                    transaction_hash,
-                    transaction_index,
-                    from: source,
-                    to,
-                    contract_address: Some(info.value),
-                    logs: info.logs.clone(),
-                    logs_bloom: {
-                        let mut bloom: Bloom = Bloom::default();
-                        Self::logs_bloom(info.logs, &mut bloom);
-                        bloom
-                    },
-                },
-                info.used_gas,
-            ),
-        };
+                    (Some(1), None, to, None, reason, data, status, used_gas)
+                }
+
+                Ok((to, contract_address, info)) => {
+                    let (reason, data, status, used_gas) = match info.clone() {
+                        CallOrCreateInfo::Call(info) => (
+                            info.exit_reason,
+                            info.value.clone(),
+                            TransactionStatus {
+                                transaction_hash,
+                                transaction_index,
+                                from: source,
+                                to,
+                                contract_address: None,
+                                logs: info.logs.clone(),
+                                logs_bloom: {
+                                    let mut bloom: Bloom = Bloom::default();
+                                    Self::logs_bloom(info.logs, &mut bloom);
+                                    bloom
+                                },
+                            },
+                            info.used_gas,
+                        ),
+                        CallOrCreateInfo::Create(info) => (
+                            info.exit_reason,
+                            vec![],
+                            TransactionStatus {
+                                transaction_hash,
+                                transaction_index,
+                                from: source,
+                                to,
+                                contract_address: Some(info.value),
+                                logs: info.logs.clone(),
+                                logs_bloom: {
+                                    let mut bloom: Bloom = Bloom::default();
+                                    Self::logs_bloom(info.logs, &mut bloom);
+                                    bloom
+                                },
+                            },
+                            info.used_gas,
+                        ),
+                    };
+
+                    (
+                        None,
+                        Some(info),
+                        to,
+                        contract_address,
+                        reason,
+                        data,
+                        status,
+                        used_gas,
+                    )
+                }
+            };
 
         for log in &status.logs {
             debug!(target: "ethereum", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
@@ -284,7 +356,7 @@ impl<C: Config> App<C> {
 
         let (code, message) = match reason {
             ExitReason::Succeed(_) => (0, String::new()),
-            // code 1 indicates `Failed to execute evm function`, see above
+            // code 1 indicates `Failed to execute evm function`, see the `ar_code`
             ExitReason::Error(_) => (2, "EVM error".to_string()),
             ExitReason::Revert(_) => {
                 let mut message =
@@ -295,12 +367,14 @@ impl<C: Config> App<C> {
                     let message_len = data[36..68].iter().sum::<u8>();
                     let body: &[u8] = &data[68..68 + message_len as usize];
                     if let Ok(reason) = std::str::from_utf8(body) {
-                        message = format!("{} {}", message, reason);
+                        message = format!("{message} {reason}");
                     }
                 }
                 (3, message)
             }
-            ExitReason::Fatal(_) => (4, "EVM Fatal error".to_string()),
+            ExitReason::Fatal(_) => {
+                (ar_code.unwrap_or(4), "EVM Fatal error".to_string())
+            }
         };
 
         if code != 0 {
@@ -345,7 +419,10 @@ impl<C: Config> App<C> {
 
         Ok(ActionResult {
             code,
-            data: serde_json::to_vec(&info).unwrap_or_default(),
+            source: Some(Address::from(source)),
+            data: info
+                .and_then(|i| serde_json::to_vec(&i).ok())
+                .unwrap_or_default(),
             log: message,
             gas_wanted: gas_limit.low_u64(),
             gas_used: used_gas.low_u64(),

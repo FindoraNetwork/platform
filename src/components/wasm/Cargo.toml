@@ -24,7 +24,7 @@ rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
-wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 bs58 = "0.4"
 
 ring = "0.16.19"
@@ -36,9 +36,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -71,7 +71,7 @@ features = [
 serde = "1.0.124"
 serde_json = "1.0.41"
 vergen = "=3.1.0"
-wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 
 [dev-dependencies]
 # Must enable the "js"-feature,

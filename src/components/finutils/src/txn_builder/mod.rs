@@ -385,6 +385,11 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
+    pub fn take_transaction(self) -> Transaction {
+        self.txn
+    }
+
+    #[allow(missing_docs)]
     pub fn build_and_take_transaction(&mut self) -> Result<Transaction> {
         self.build()?;
         Ok(self.txn.clone())
@@ -794,7 +799,7 @@ impl TransactionBuilder {
             return Err(eg!("insufficient FRA to pay fees!"));
         }
         if fra_remainder > 0 {
-            println!("Transaction FRA Remainder Amount: {:?}", fra_remainder);
+            println!("Transaction FRA Remainder Amount: {fra_remainder:?}",);
             let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
@@ -1348,7 +1353,7 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if input_total != output_total {
-            return Err(eg!(format!("{} != {}", input_total, output_total)));
+            return Err(eg!(format!("{input_total} != {output_total}",)));
         }
 
         Ok(())
@@ -1416,8 +1421,7 @@ impl TransferOperationBuilder {
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
             return Err(eg!(format!(
-                "Spend total != output, {} != {}",
-                spend_total, output_total
+                "Spend total != output, {spend_total} != {output_total}",
             )));
         }
         self.output_records.append(&mut partially_consumed_inputs);
@@ -1867,7 +1871,7 @@ impl AnonTransferOperationBuilder {
                 };
             }
 
-            let remainder = sum_input - sum_output - (fees as u64);
+            let remainder = sum_input - sum_output - fees;
             if remainder > 0 {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder)

@@ -170,7 +170,7 @@ pub struct CoSigRule {
 impl CoSigRule {
     #[allow(missing_docs)]
     pub fn new(threshold: [u64; 2]) -> Result<Self> {
-        if threshold[0] > threshold[1] || threshold[1] > MAX_TOTAL_POWER as u64 {
+        if threshold[0] > threshold[1] || threshold[1] > MAX_TOTAL_POWER {
             return Err(eg!("invalid threshold"));
         }
 
@@ -207,7 +207,7 @@ impl fmt::Display for CoSigErr {
             CoSigErr::WeightInsufficient => "total weight is lower than the threshold",
             CoSigErr::SigInvalid => "invalid signature",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}",)
     }
 }
 
@@ -263,7 +263,7 @@ mod test {
         vd.cosig_rule = pnk!(CoSigRule::new([75, 100]));
 
         assert!(CoSigRule::new([200, 100]).is_err());
-        assert!(CoSigRule::new([200, 1 + MAX_TOTAL_POWER as u64]).is_err());
+        assert!(CoSigRule::new([200, 1 + MAX_TOTAL_POWER]).is_err());
 
         let mut data = CoSigOp::create(Data::default(), no_replay_token());
         pnk!(data.batch_sign(&kps.iter().skip(10).collect::<Vec<_>>()));

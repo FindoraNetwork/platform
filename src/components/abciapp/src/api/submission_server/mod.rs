@@ -229,7 +229,7 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                log::error!("Error in cache_transaction {}", e);
+                tracing::error!("Error in cache_transaction {}", e);
                 self.txn_status
                     .insert(handle, TxnStatus::Rejected(e.to_string()));
                 Err(e)
@@ -272,7 +272,7 @@ pub enum TxCatalog {
 pub fn try_tx_catalog(tx: &[u8], log: bool) -> TxCatalog {
     // print tx
     if log {
-        log::info!(target: "abciapp", "try_tx_catalog: {:?}", base64::encode(tx));
+        tracing::info!(target: "abciapp", "try_tx_catalog: {:?}", base64::encode(tx));
     }
 
     let len = EVM_TX_TAG.len();

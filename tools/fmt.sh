@@ -45,4 +45,4 @@ for file in $(find .. -type f \
     perl -pi -e 's/ +$//g' $file
 done
 
-cargo fmt --all
+make -C .. fmt

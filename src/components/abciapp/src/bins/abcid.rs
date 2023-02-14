@@ -13,7 +13,7 @@ use {
 
 fn main() {
     globutils::logging::init_logging(None);
-    log::info!(concat!(
+    tracing::info!(target: "abciapp", concat!(
         "Build: ",
         env!("VERGEN_SHA"),
         " ",

@@ -40,7 +40,7 @@ fn get_pending_hash() -> Result<Vec<H256>, attohttpc::Error> {
     );
     let mut pending_hash = vec![];
 
-    attohttpc::post(&url)
+    attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .text(json)
         .send()
@@ -50,7 +50,7 @@ fn get_pending_hash() -> Result<Vec<H256>, attohttpc::Error> {
         })
         .map(|json_resp| {
             for tx in json_resp.result.txs {
-                base64::decode(&tx)
+                base64::decode(tx)
                     .map(|bytes| {
                         let hasher = sha2_256(&bytes);
                         pending_hash.push(H256::from_slice(&hasher))
@@ -122,7 +122,7 @@ fn get_status() -> Result<bool, attohttpc::Error> {
     let json = String::from(
         "{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"status\",\"params\":{}}",
     );
-    attohttpc::post(&url)
+    attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .text(json)
         .send()

@@ -23,8 +23,9 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 lazy_static! {
-    pub static ref BASE_APP: Mutex<BaseApp> =
-        Mutex::new(BaseApp::new(create_temp_db_path().as_path(), false).unwrap());
+    pub static ref BASE_APP: Mutex<BaseApp> = Mutex::new(
+        BaseApp::new(create_temp_db_path().as_path(), false, (0, None), false).unwrap()
+    );
     pub static ref ALICE_ECDSA: KeyPair = generate_address(1);
     pub static ref BOB_ECDSA: KeyPair = generate_address(2);
     pub static ref ALICE_XFR: XfrKeyPair =
@@ -79,7 +80,7 @@ pub fn create_temp_db_path() -> PathBuf {
         .unwrap()
         .as_nanos();
     let mut path = temp_dir();
-    path.push(format!("temp-findora-db–{}", time));
+    path.push(format!("temp-findora-db–{time}",));
     path
 }
 
@@ -90,7 +91,7 @@ pub struct KeyPair {
 }
 
 pub fn generate_address(seed: u8) -> KeyPair {
-    let private_key = H256::from_slice(&[(seed + 1) as u8; 32]);
+    let private_key = H256::from_slice(&[(seed + 1); 32]);
     let secret_key = libsecp256k1::SecretKey::parse_slice(&private_key[..]).unwrap();
     let public_key =
         &libsecp256k1::PublicKey::from_secret_key(&secret_key).serialize()[1..65];
