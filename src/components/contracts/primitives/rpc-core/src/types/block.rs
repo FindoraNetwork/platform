@@ -21,8 +21,7 @@ use std::ops::Deref;
 
 use crate::types::{Bytes, Transaction};
 use ethereum_types::{Bloom as H2048, H160, H256, U256};
-use serde::ser::Error;
-use serde::{Serialize, Serializer};
+use serde::{ser::Error, Serialize, Serializer};
 
 /// Block Transactions
 #[derive(Debug)]
@@ -90,6 +89,9 @@ pub struct Block {
     pub transactions: BlockTransactions,
     /// Size in bytes
     pub size: Option<U256>,
+    /// Base Fee for post-EIP1559 blocks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_fee_per_gas: Option<U256>,
 }
 
 /// Block header representation.

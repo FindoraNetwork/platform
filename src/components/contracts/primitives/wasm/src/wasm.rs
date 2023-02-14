@@ -1,17 +1,41 @@
 #![allow(clippy::unused_unit)]
 
 use core::fmt::Display;
-use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
+use ethereum::{
+    LegacyTransactionMessage, TransactionSignature, TransactionV0 as LegacyTransaction,
+    TransactionV2 as Transaction,
+};
 use ethereum_types::{H160, H256};
+use serde::{Deserialize, Serialize};
+
 use fp_types::{
-    actions::{ethereum::Action as EthAction, Action},
-    assemble::UncheckedTransaction,
-    crypto::secp256k1_ecdsa_recover,
+    actions::{evm, template, xhub},
+    crypto::{secp256k1_ecdsa_recover, Address, Signature},
+    transaction,
 };
 use fp_utils::tx::EvmRawTxWrapper;
 use ruc::{d, err::RucResult};
 use sha3::{Digest, Keccak256};
 use wasm_bindgen::prelude::*;
+
+use baseapp::BaseApp;
+use fp_traits::evm::FeeCalculator;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EthAction {
+    Transact(Transaction),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Action {
+    Ethereum(EthAction),
+    Evm(evm::Action),
+    XHub(xhub::Action),
+    Template(template::Action),
+}
+
+pub type UncheckedTransaction<Extra> =
+    transaction::UncheckedTransaction<Address, Action, Signature, Extra>;
 
 #[inline(always)]
 pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
@@ -19,7 +43,7 @@ pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
 }
 
 #[inline(always)]
-pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
+pub fn recover_signer(transaction: &LegacyTransaction) -> Option<H160> {
     let mut sig = [0u8; 65];
     let mut msg = [0u8; 32];
     sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
@@ -46,6 +70,10 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
         .c(d!())
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
+        let tx = match new_tx2legcay_tx(tx) {
+            Some(tx) => tx,
+            None => return Err(error_to_jsvalue("invalid raw tx")),
+        };
         let signer = recover_signer(&tx).c(d!()).map_err(error_to_jsvalue)?;
         Ok(format!("{signer:?}",))
     } else {
@@ -66,6 +94,10 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
         .c(d!())
         .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
+        let tx = match new_tx2legcay_tx(tx) {
+            Some(tx) => tx,
+            None => return Err(error_to_jsvalue("invalid raw tx")),
+        };
         let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
         Ok(format!("{hash:?}",))
     } else {
@@ -73,24 +105,56 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
     }
 }
 
+fn new_tx2legcay_tx(tx: Transaction) -> Option<LegacyTransaction> {
+    let transaction: LegacyTransaction = match tx {
+        ethereum::TransactionV2::Legacy(tx) => tx,
+        ethereum::TransactionV2::EIP1559(tx) => {
+            let min_gas_price_eip1559 =
+                <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(0);
+            let chain_id: u64 = <BaseApp as module_ethereum::Config>::ChainId::get();
+            let v: u64 = if tx.odd_y_parity {
+                chain_id * 2 + 36
+            } else {
+                chain_id * 2 + 35
+            };
+            let signature = match TransactionSignature::new(v, tx.r, tx.s) {
+                Some(sig) => sig,
+                None => return None,
+            };
+
+            ethereum::TransactionV0 {
+                nonce: tx.nonce,
+                gas_price: min_gas_price_eip1559,
+                gas_limit: tx.gas_limit,
+                action: tx.action,
+                value: tx.value,
+                input: tx.input,
+                signature,
+            }
+        }
+        _ => return None,
+    };
+
+    Some(transaction)
+}
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
     use super::*;
-    use fp_types::actions::Action;
 
     #[test]
     fn recover_signer_works() {
-        let raw_tx = String::from("ZXZtOnsic2lnbmF0dXJlIjpudWxsLCJmdW5jdGlvbiI6eyJFdGhlcmV1bSI6eyJUcmFuc2FjdCI6eyJub25jZSI6IjB4MSIsImdhc19wcmljZSI6IjB4MTc0ODc2ZTgwMCIsImdhc19saW1pdCI6IjB4NTIwOCIsImFjdGlvbiI6eyJDYWxsIjoiMHgyYWQzMjg0NmM2ZGQyZmZkM2VkYWRiZTUxY2Q1YWUwNGFhNWU1NzVlIn0sInZhbHVlIjoiMHg1NmJjNzVlMmQ2MzEwMDAwMCIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjEwODIsInIiOiIweGY4YWVmN2Y4MDUzZDg5ZmVlMzk1MGM0ZDcwMjA4MGJmM2E4MDcyYmVkNWQ4NGEzYWYxOWEzNjAwODFiNjM2YTIiLCJzIjoiMHgyOTYyOTlhOGYyNDMwYjg2ZmQzZWI5NzZlYWJjNzMwYWMxY2ZiYmJlMzZlYjY5ZWFlMzM4Y2ZmMzNjNGE5OGMxIn19fX19");
+        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
-        let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
-            serde_json::from_slice(evm_tx).unwrap();
+            serde_json::from_slice(tx_bytes.as_slice()).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
+            let tx: LegacyTransaction = new_tx2legcay_tx(tx).unwrap();
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(
-                format!("{signer:?}",),
-                "0xa5225cbee5052100ec2d2d94aa6d258558073757"
+                format!("{signer:?}"),
+                "0x5050a4f4b3f9338c3472dcc01a87c76a144b3c9c"
             );
         } else {
             panic!()
@@ -99,15 +163,16 @@ mod test {
 
     #[test]
     fn evm_tx_hash_works() {
-        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
+        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
+            let tx: LegacyTransaction = new_tx2legcay_tx(tx).unwrap();
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
-                format!("{hash:?}",),
-                "0x0eeb0ff455b1b57b821634cf853e7247e584a675610f13097cc49c2022505df3"
+                format!("{hash:?}"),
+                "0x83901d025accca27ee53fdf1ee354f4437418731e0995ee031beb99499405d26"
             );
         } else {
             panic!()

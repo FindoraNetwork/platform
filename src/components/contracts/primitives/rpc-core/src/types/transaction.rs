@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::types::Bytes;
+use ethereum::AccessListItem;
 use ethereum_types::{H160, H256, H512, U256, U64};
-use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -46,7 +46,14 @@ pub struct Transaction {
     /// Transfered value
     pub value: U256,
     /// Gas Price
-    pub gas_price: U256,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas_price: Option<U256>,
+    /// eip1559. Max BaseFeePerGas the user is willing to pay.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_fee_per_gas: Option<U256>,
+    /// eip1559.The miner's tip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_priority_fee_per_gas: Option<U256>,
     /// Gas
     pub gas: U256,
     /// Data
@@ -67,6 +74,9 @@ pub struct Transaction {
     pub r: U256,
     /// The S field of the signature.
     pub s: U256,
+    /// eip1559. Pre-pay to warm storage access.
+    #[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+    pub access_list: Option<Vec<AccessListItem>>,
 }
 
 /// Local Transaction Status
