@@ -497,6 +497,8 @@ impl TransactionBuilder {
         keypair: &XfrKeyPair,
         ethereum_address: String,
         amount: u64,
+        asset: Option<String>,
+        lowlevel_data: Option<String>,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
@@ -504,8 +506,24 @@ impl TransactionBuilder {
         if let MultiSigner::Xfr(_pk) = ea {
             return Err(error_to_jsvalue("Invalid Ethereum address"));
         }
+        let asset = if let Some(asset) = asset {
+            let code =
+                AssetTypeCode::new_from_base64(&asset).map_err(error_to_jsvalue)?;
+
+            Some(code)
+        } else {
+            None
+        };
+
+        let lowlevel_data = if let Some(data) = lowlevel_data {
+            let data = hex::decode(data).c(d!()).map_err(error_to_jsvalue)?;
+            Some(data)
+        } else {
+            None
+        };
+
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea, amount)
+            .add_operation_convert_account(keypair, ea, amount, asset, lowlevel_data)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)

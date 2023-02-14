@@ -94,6 +94,10 @@ pub struct CheckPointConfig {
     // https://github.com/FindoraNetwork/platform/pull/707
     // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
     pub fix_deliver_tx_revert_nonce_height: i64,
+
+    pub prismxx_inital_height: i64,
+
+    pub prism_bridge_address: String,
 }
 
 impl CheckPointConfig {
@@ -130,6 +134,10 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 0,
                                 fix_exec_code: 0,
                                 fix_deliver_tx_revert_nonce_height: 0,
+                                prismxx_inital_height: 1,
+                                prism_bridge_address:
+                                    "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
+                                        .to_owned(),
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -156,6 +164,8 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 3401450,
                                 fix_exec_code: 3401450,
                                 fix_deliver_tx_revert_nonce_height: 40000000,
+                                prism_bridge_address: String::new(),
+                                prismxx_inital_height: 50000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
