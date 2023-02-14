@@ -8,16 +8,18 @@ use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use noah::anon_xfr::structs::Nullifier;
+use noah::xfr::sig::XfrPublicKeyInner;
 use noah::{
     anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
         structs::Commitment,
     },
-    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    xfr::sig::{KeyType, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 use noah_algebra::serialization::NoahFromToBytes;
 use noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 use ruc::*;
+use sha3::{Digest, Keccak256};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -331,17 +333,46 @@ pub fn nullifier_to_base58(n: &Nullifier) -> String {
     bs58::encode(&Nullifier::noah_to_bytes(n)).into_string()
 }
 
+/// Convert a XfrPublicKey to human-readable address
+#[inline(always)]
+pub fn public_key_to_human(key: &XfrPublicKey) -> String {
+    match key.inner() {
+        XfrPublicKeyInner::Ed25519(_) | XfrPublicKeyInner::Secp256k1(_) => {
+            public_key_to_bech32(key)
+        }
+        XfrPublicKeyInner::Address(bytes) => {
+            // checksum encode
+            let hex = hex::encode(bytes);
+
+            let mut hasher = Keccak256::new();
+            hasher.update(hex.as_bytes());
+            let hash = hasher.finalize();
+            let check_hash = hex::encode(hash);
+
+            let mut res = String::from("0x");
+            for (index, byte) in hex[..40].chars().enumerate() {
+                if check_hash.chars().nth(index).unwrap().to_digit(16).unwrap() > 7 {
+                    res += &byte.to_uppercase().to_string();
+                } else {
+                    res += &byte.to_string();
+                }
+            }
+            res
+        }
+    }
+}
+
 /// Convert a XfrPublicKey to bech32 human-readable address
 #[inline(always)]
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
     let bytes = &XfrPublicKey::noah_to_bytes(key);
-    match bytes[0] {
-        0u8 => bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap()),
-        1u8 => bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap()),
-        2u8 => {
-            panic!("public key not supported")
+    let keytype = KeyType::from_byte(bytes[0]);
+    match keytype {
+        KeyType::Ed25519 => bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap()),
+        KeyType::Secp256k1 => {
+            bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap())
         }
-        _ => {
+        KeyType::Address => {
             panic!("public key not supported")
         }
     }
