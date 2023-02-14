@@ -209,7 +209,7 @@ impl<C: Config> App<C> {
             }
         }
     }
-
+    #[allow(clippy::too_many_arguments)]
     fn system_transaction(
         transaction_hash: H256,
         input: Vec<u8>,
