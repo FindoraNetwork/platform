@@ -827,6 +827,12 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn insert_asset_type(&mut self, code: AssetTypeCode, at: AssetType) {
+        self.status.asset_types.insert(code, at);
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_block_commit_count(&self) -> u64 {
         self.status.block_commit_count
     }

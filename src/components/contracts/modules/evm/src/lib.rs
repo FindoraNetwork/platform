@@ -8,6 +8,7 @@ pub mod impls;
 pub mod precompile;
 pub mod runtime;
 pub mod system_contracts;
+pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
 use ethabi::Token;

@@ -4,6 +4,10 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
+use ledger::data_model::{
+    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
+};
+
 mod whoami;
 
 #[cfg(test)]
@@ -14,6 +18,7 @@ use {
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
     config::abci::global_cfg::CFG,
+    fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -277,6 +282,56 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
         _ => return Err(eg!()),
     };
     governance_penalty_tendermint_auto(staking, bz.addr, &kind).c(d!())
+}
+
+/// Pay for freed 'Delegations' and 'FraDistributions'.
+pub fn system_prism_mint_pay(
+    la: &mut LedgerState,
+    mint: NonConfidentialOutput,
+) -> Option<Transaction> {
+    let mut mints = Vec::new();
+
+    if mint.asset != ASSET_TYPE_FRA {
+        let atc = AssetTypeCode { val: mint.asset };
+        let at = if let Some(mut at) = la.get_asset_type(&atc) {
+            at.properties.issuer = IssuerPublicKey {
+                key: *BLACK_HOLE_PUBKEY_STAKING,
+            };
+            if mint.max_supply != 0 {
+                at.properties.asset_rules.max_units = Some(mint.max_supply);
+            }
+            at.properties.asset_rules.decimals = mint.decimal;
+            at
+        } else {
+            let mut at = AssetType::default();
+            at.properties.issuer = IssuerPublicKey {
+                key: *BLACK_HOLE_PUBKEY_STAKING,
+            };
+
+            if mint.max_supply != 0 {
+                at.properties.asset_rules.max_units = Some(mint.max_supply);
+            }
+            at.properties.asset_rules.decimals = mint.decimal;
+
+            at.properties.code = AssetTypeCode { val: mint.asset };
+
+            at
+        };
+
+        la.insert_asset_type(atc, at);
+    }
+
+    let mint_entry =
+        MintEntry::new(MintKind::Other, mint.target, None, mint.amount, mint.asset);
+
+    mints.push(mint_entry);
+
+    let mint_ops =
+        Operation::MintFra(MintFraOps::new(la.get_staking().cur_height(), mints));
+    Some(Transaction::from_operation_coinbase_mint(
+        mint_ops,
+        la.get_state_commitment().1,
+    ))
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
