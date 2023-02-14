@@ -222,6 +222,7 @@ where
                     .apply_transaction(&mut block, txn_effect)
                     .c(d!("Failed to apply transaction"))
             });
+
         match temp_sid {
             Ok(temp_sid) => {
                 self.pending_txns.push((temp_sid, handle.clone(), txn));
