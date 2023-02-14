@@ -93,6 +93,7 @@ impl<C: Config> Default for App<C> {
 }
 
 impl<C: Config> App<C> {
+    #[allow(clippy::too_many_arguments)]
     pub fn withdraw_frc20(
         &self,
         ctx: &Context,
@@ -150,7 +151,7 @@ impl<C: Config> App<C> {
             logs,
         ))
     }
-
+    #[allow(clippy::too_many_arguments)]
     pub fn withdraw_fra(
         &self,
         ctx: &Context,
