@@ -9,9 +9,9 @@ description = "MODEXP precompiles for EVM module."
 readme = "README.md"
 
 [dependencies]
-evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.37.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../modules/evm"}
-ethereum-types = "0.13.1"
+ethereum-types = "0.14.1"
 evm-precompile-basic = { path = "./basic" }
 evm-precompile-sha3fips = {path = "./sha3fips" }
 evm-precompile-modexp = { path = "./modexp" }

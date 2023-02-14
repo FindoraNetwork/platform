@@ -1,4 +1,6 @@
 use crate::*;
+use ethereum_types::{H160, H256};
+use evm::{Context, ExitReason, Transfer};
 use fp_mocks::*;
 use pallet_evm_test_vector_support::test_precompile_test_vectors;
 
@@ -20,12 +22,9 @@ fn test_empty_input() -> std::result::Result<(), ExitError> {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(_) => {
             panic!("Test not expected to pass");
         }
@@ -60,12 +59,9 @@ fn test_insufficient_input() -> std::result::Result<(), ExitError> {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(_) => {
             panic!("Test not expected to pass");
         }
@@ -98,12 +94,9 @@ fn test_excessive_input() -> std::result::Result<(), ExitError> {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(_) => {
             panic!("Test not expected to pass");
         }
@@ -143,12 +136,9 @@ fn test_simple_inputs() {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(precompile_result) => {
             assert_eq!(precompile_result.output.len(), 1); // should be same length as mod
             let result = BigUint::from_bytes_be(&precompile_result.output[..]);
@@ -183,12 +173,9 @@ fn test_large_inputs() {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(precompile_result) => {
             assert_eq!(precompile_result.output.len(), 32); // should be same length as mod
             let result = BigUint::from_bytes_be(&precompile_result.output[..]);
@@ -221,12 +208,9 @@ fn test_large_computation() {
         apparent_value: From::from(0),
     };
 
-    match Modexp::execute(
-        &input,
-        Some(cost),
-        &context,
-        &BASE_APP.lock().unwrap().deliver_state,
-    ) {
+    let mut handle = MockHandle::new(input.to_vec(), Some(cost), context);
+
+    match Modexp::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state) {
         Ok(precompile_result) => {
             assert_eq!(precompile_result.output.len(), 32); // should be same length as mod
             let result = BigUint::from_bytes_be(&precompile_result.output[..]);
@@ -236,5 +220,74 @@ fn test_large_computation() {
         Err(_) => {
             panic!("Modexp::execute() returned error"); // TODO: how to pass error on?
         }
+    }
+}
+
+pub struct MockHandle {
+    pub input: Vec<u8>,
+    pub gas_limit: Option<u64>,
+    pub context: Context,
+    pub is_static: bool,
+    pub gas_used: u64,
+}
+
+impl MockHandle {
+    pub fn new(input: Vec<u8>, gas_limit: Option<u64>, context: Context) -> Self {
+        Self {
+            input,
+            gas_limit,
+            context,
+            is_static: false,
+            gas_used: 0,
+        }
+    }
+}
+
+impl PrecompileHandle for MockHandle {
+    /// Perform subcall in provided context.
+    /// Precompile specifies in which context the subcall is executed.
+    fn call(
+        &mut self,
+        _: H160,
+        _: Option<Transfer>,
+        _: Vec<u8>,
+        _: Option<u64>,
+        _: bool,
+        _: &Context,
+    ) -> (ExitReason, Vec<u8>) {
+        unimplemented!()
+    }
+
+    fn record_cost(&mut self, cost: u64) -> Result<(), ExitError> {
+        self.gas_used += cost;
+        Ok(())
+    }
+
+    fn log(&mut self, _: H160, _: Vec<H256>, _: Vec<u8>) -> Result<(), ExitError> {
+        unimplemented!()
+    }
+
+    fn remaining_gas(&self) -> u64 {
+        unimplemented!()
+    }
+
+    fn code_address(&self) -> H160 {
+        unimplemented!()
+    }
+
+    fn input(&self) -> &[u8] {
+        &self.input
+    }
+
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn is_static(&self) -> bool {
+        self.is_static
+    }
+
+    fn gas_limit(&self) -> Option<u64> {
+        self.gas_limit
     }
 }

@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 eth_pairings = { git = "https://github.com/FindoraNetwork/eip1962", branch = "master" }
-evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.37.0", default-features = false, features = ["with-serde"] }
 evm-precompile-utils = { path = "../utils"}
 tracing = "0.1"
 module-evm = { path = "../../../../modules/evm"}
@@ -16,5 +16,5 @@ num_enum = { version = "0.5.4", default-features = false }
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }
 fp-mocks = { path = "../../../../primitives/mocks" }
-ethereum-types = { version = "0.13.1", default-features = false }
+ethereum-types = { version = "0.14.1", default-features = false }
 hex = "0.4"

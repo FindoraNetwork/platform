@@ -21,8 +21,10 @@ mod tests;
 use core::cmp::max;
 use core::ops::BitAnd;
 use evm::{
-    executor::stack::{PrecompileFailure, PrecompileOutput},
-    Context, ExitError, ExitSucceed,
+    executor::stack::{PrecompileFailure, PrecompileHandle, PrecompileOutput},
+    // Context,
+    ExitError,
+    ExitSucceed,
 };
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 use num::{BigUint, FromPrimitive, One, ToPrimitive, Zero};
@@ -103,11 +105,12 @@ fn calculate_gas_cost(
 
 impl Precompile for Modexp {
     fn execute(
-        input: &[u8],
-        target_gas: Option<u64>,
-        _context: &Context,
+        handle: &mut impl PrecompileHandle,
         _state: &FinState,
     ) -> PrecompileResult {
+        let input = handle.input();
+        let target_gas = handle.gas_limit();
+
         if input.len() < 96 {
             return Err(PrecompileFailure::Error {
                 exit_status: ExitError::Other(
@@ -162,7 +165,7 @@ impl Precompile for Modexp {
         }
 
         // Gas formula allows arbitrary large exp_len when base and modulus are empty, so we need to handle empty base first.
-        let (r, gas_cost) = if base_len == 0 && mod_len == 0 {
+        let (r, _gas_cost) = if base_len == 0 && mod_len == 0 {
             (BigUint::zero(), MIN_GAS_COST)
         } else {
             // read the numbers themselves.
@@ -210,9 +213,9 @@ impl Precompile for Modexp {
             }),
             Ordering::Equal => Ok(PrecompileOutput {
                 exit_status: ExitSucceed::Returned,
-                cost: gas_cost,
+                // cost: gas_cost,
                 output: bytes.to_vec(),
-                logs: Default::default(),
+                // logs: Default::default(),
             }),
             Ordering::Greater => {
                 let mut ret = Vec::with_capacity(mod_len);
@@ -220,9 +223,9 @@ impl Precompile for Modexp {
                 ret.extend_from_slice(&bytes[..]);
                 Ok(PrecompileOutput {
                     exit_status: ExitSucceed::Returned,
-                    cost: gas_cost,
+                    // cost: gas_cost,
                     output: ret.to_vec(),
-                    logs: Default::default(),
+                    // logs: Default::default(),
                 })
             }
         }
