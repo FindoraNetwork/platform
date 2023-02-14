@@ -7,7 +7,7 @@ NC='\033[0m'
 
 # default environment values
 DEFAULT_BIN_CFG="release"
-DEFAULT_BLOCK_INTERVAL="2"
+DEFAULT_BLOCK_INTERVAL="17"
 DEFAULT_ENDPOINT="http://0.0.0.0"
 
 # binary config
