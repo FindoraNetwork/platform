@@ -18,7 +18,7 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
-serde_with = { version = "1.9.4"}
+serde_with = { version = "2.2.0"}
 
 # primitives
 fp-types = { path = "../types" }
