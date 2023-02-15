@@ -1,6 +1,9 @@
 use super::stack::FindoraStackState;
 // use crate::precompile::PrecompileSet;
-use crate::{App, Config};
+use crate::{
+    utils::{deposit_asset_event, parse_deposit_asset_event},
+    App, Config,
+};
 use ethereum_types::{H160, H256, U256};
 use evm::{
     executor::stack::{StackExecutor, StackSubstateMetadata},
@@ -123,7 +126,8 @@ impl<C: Config> ActionRunner<C> {
             );
             App::<C>::remove_account(ctx, &address.into())
         }
-
+        let mut non_confidential_outputs = Vec::new();
+        let topic = deposit_asset_event().signature();
         for log in &state.substate.logs {
             trace!(
                 target: "evm",
@@ -134,6 +138,13 @@ impl<C: Config> ActionRunner<C> {
                 log.data.len(),
                 log.data
             );
+            let _ = log.topics.get(0).c(d!()).map(|val| {
+                if topic == *val {
+                    if let Ok(v) = parse_deposit_asset_event((log.data[0..]).to_vec()) {
+                        non_confidential_outputs.push(v);
+                    }
+                }
+            });
         }
 
         Ok(ExecutionInfo {
@@ -141,6 +152,7 @@ impl<C: Config> ActionRunner<C> {
             exit_reason: reason,
             used_gas,
             logs: state.substate.logs,
+            non_confidential_outputs,
         })
     }
     pub fn execute_systemc_contract(

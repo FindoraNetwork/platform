@@ -2,7 +2,9 @@ use crate::extensions::SignedExtra;
 use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
-use fp_types::assemble::convert_unchecked_transaction;
+use fp_types::{
+    actions::xhub::NonConfidentialOutput, assemble::convert_unchecked_transaction,
+};
 use fp_utils::tx::EvmRawTxWrapper;
 use primitive_types::U256;
 use ruc::*;
@@ -198,7 +200,10 @@ impl crate::BaseApp {
         ResponseBeginBlock::default()
     }
 
-    pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
+    pub fn deliver_tx(
+        &mut self,
+        req: &RequestDeliverTx,
+    ) -> (ResponseDeliverTx, Vec<NonConfidentialOutput>) {
         let mut resp = ResponseDeliverTx::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
@@ -207,7 +212,7 @@ impl crate::BaseApp {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
-            return resp;
+            return (resp, Vec::new());
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
@@ -291,19 +296,19 @@ impl crate::BaseApp {
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
                     resp.events = protobuf::RepeatedField::from_vec(ar.events);
-                    resp
+                    (resp, ar.non_confidential_outputs)
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
                     resp.code = 1;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
-                    resp
+                    (resp, Vec::new())
                 }
             }
         } else {
             resp.code = 1;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
-            resp
+            (resp, Vec::new())
         }
     }
 

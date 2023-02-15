@@ -1,7 +1,10 @@
 use crate::context::{Context, RunTxMode};
 use abci::Event;
 use config::abci::global_cfg::CFG;
-use fp_types::{crypto::Address, transaction::CheckedTransaction};
+use fp_types::{
+    actions::xhub::NonConfidentialOutput,
+    {crypto::Address, transaction::CheckedTransaction},
+};
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
 use std::fmt::Debug;
@@ -221,4 +224,6 @@ pub struct ActionResult {
     /// Events contains a slice of Event objects that were emitted during message
     /// or handler execution.
     pub events: Vec<Event>,
+
+    pub non_confidential_outputs: Vec<NonConfidentialOutput>,
 }

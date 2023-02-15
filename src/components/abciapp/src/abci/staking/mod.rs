@@ -287,7 +287,7 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 /// Pay for freed 'Delegations' and 'FraDistributions'.
 pub fn system_prism_mint_pay(
     la: &mut LedgerState,
-    mint: NonConfidentialOutput,
+    mint: &NonConfidentialOutput,
 ) -> Option<Transaction> {
     let mut mints = Vec::new();
 

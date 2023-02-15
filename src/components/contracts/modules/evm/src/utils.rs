@@ -59,11 +59,7 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
     };
     let result = event.parse_log(log).c(d!())?;
 
-    let asset = result.params[0]
-        .value
-        .clone()
-        .into_fixed_bytes()
-        .unwrap_or_default();
+    let asset = result.params[0].value.clone().into_fixed_bytes().c(d!())?;
     let mut temp = [0u8; ASSET_TYPE_LENGTH];
     temp.copy_from_slice(asset.as_slice());
     let asset_type = AssetType(temp);
@@ -73,13 +69,9 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         .clone()
         .into_bytes()
         .unwrap_or_default();
-    let target = XfrPublicKey::zei_from_bytes(receiver.as_slice()).unwrap_or_default();
+    let target = XfrPublicKey::zei_from_bytes(receiver.as_slice()).c(d!())?;
 
-    let amount = result.params[2]
-        .value
-        .clone()
-        .into_uint()
-        .unwrap_or_default();
+    let amount = result.params[2].value.clone().into_uint().c(d!())?;
 
     let amount = if asset_type == ASSET_TYPE_FRA {
         EthereumDecimalsMapping::convert_to_native_token(amount).as_u64()
@@ -87,16 +79,8 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         amount.as_u64()
     };
 
-    let decimal = result.params[3]
-        .value
-        .clone()
-        .into_uint()
-        .unwrap_or_default();
-    let max_supply = result.params[4]
-        .value
-        .clone()
-        .into_uint()
-        .unwrap_or_default();
+    let decimal = result.params[3].value.clone().into_uint().c(d!())?;
+    let max_supply = result.params[4].value.clone().into_uint().c(d!())?;
 
     Ok(NonConfidentialOutput {
         asset: asset_type,
