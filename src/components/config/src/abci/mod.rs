@@ -95,6 +95,8 @@ pub struct CheckPointConfig {
     // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
     pub fix_deliver_tx_revert_nonce_height: i64,
 
+    pub utxo_asset_prefix_height: u64,
+
     pub prismxx_inital_height: i64,
 
     pub prism_bridge_address: String,
@@ -134,6 +136,7 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 0,
                                 fix_exec_code: 0,
                                 fix_deliver_tx_revert_nonce_height: 0,
+                                utxo_asset_prefix_height: 0,
                                 prismxx_inital_height: 1,
                                 prism_bridge_address:
                                     "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
@@ -164,6 +167,7 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 3401450,
                                 fix_exec_code: 3401450,
                                 fix_deliver_tx_revert_nonce_height: 40000000,
+                                utxo_asset_prefix_height: 50000000,
                                 prism_bridge_address: String::new(),
                                 prismxx_inital_height: 50000000,
                             };
