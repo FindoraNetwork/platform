@@ -158,7 +158,7 @@ impl NetworkRoute for QueryServerRoutes {
 pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<(AssetTypeCode, DefineAsset)>>> {
+) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)

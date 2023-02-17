@@ -74,14 +74,14 @@ impl QueryServer {
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
-    ) -> Option<Vec<(AssetTypeCode, DefineAsset)>> {
+    ) -> Option<Vec<DefineAsset>> {
         self.ledger_cloned
             .api_cache
             .as_ref()
             .unwrap()
             .created_assets
             .get(issuer)
-            .map(|d| d.iter().map(|(c, v)| (c, v)).collect())
+            .map(|d| d.iter().map(|(_, v)| v).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position
