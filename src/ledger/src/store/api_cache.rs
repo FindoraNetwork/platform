@@ -120,7 +120,7 @@ impl ApiCache {
     pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
         let asset_code = creation.body.asset.code;
         let code = if asset_code.val == ASSET_TYPE_FRA
-            || CFG.checkpoint.utxo_asset_prefix_height < cur_height
+            || CFG.checkpoint.utxo_asset_prefix_height > cur_height
         {
             creation.body.asset.code
         } else {
@@ -132,6 +132,8 @@ impl ApiCache {
         };
         let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
+        let mut tmp = creation.clone();
+        tmp.body.asset.code = code;
         self.created_assets
             .entry(issuer)
             .or_insert_with(|| {
@@ -141,7 +143,7 @@ impl ApiCache {
                     issuer.to_base64()
                 ))
             })
-            .insert(code, creation.clone());
+            .insert(code, tmp);
     }
 
     /// Cache issuance records
