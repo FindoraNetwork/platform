@@ -1,0 +1,16 @@
+[package]
+name = "pallet-evm-test-vector-support"
+version = "0.1.0"
+authors = ["FindoraNetwork"]
+edition = "2021"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+
+[dependencies]
+hex = { version = "0.4.2"}
+serde = { version = "1.0.124", features = ["derive"] }
+serde_json = { version = "1.0"}
+evm = { version = "0.37.0", default-features = false, features = ["with-serde"] }
+module-evm = { path = "../../../modules/evm"}
+fp-mocks = { path = "../../../primitives/mocks" }
+ethereum-types = { version = "0.14.1", default-features = false }
