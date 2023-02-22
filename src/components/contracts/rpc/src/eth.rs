@@ -3,6 +3,7 @@ use crate::utils::{
 };
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
+use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     TransactionV0 as EthereumTransaction,
@@ -40,15 +41,6 @@ use tracing::{debug, warn};
 lazy_static! {
     static ref RT: Runtime =
         Runtime::new().expect("Failed to create thread pool executor");
-    static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
-        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
-            .map(|h| {
-                h.parse()
-                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
-            })
-            .unwrap_or(1424654);
-        h
-    };
 }
 
 // After the asynchronous rpc feature is enabled,
@@ -564,7 +556,7 @@ impl EthApi for EthApiImpl {
 
         let task = spawn_blocking(move || -> Result<Option<RichBlock>> {
             if let Some(h) = height {
-                if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
+                if 0 < h && h < CFG.checkpoint.evm_first_block_height as u64 {
                     return Ok(Some(dummy_block(h, full)));
                 }
             }
@@ -1602,7 +1594,7 @@ fn native_block_id(number: Option<BlockNumber>) -> Option<BlockId> {
 }
 
 fn dummy_block(height: u64, full: bool) -> Rich<Block> {
-    let hash = if height == *EVM_FIRST_BLOCK_HEIGHT - 1 {
+    let hash = if height == (CFG.checkpoint.evm_first_block_height as u64) - 1 {
         H256([0; 32])
     } else {
         H256::from_slice(&sha3::Keccak256::digest(&height.to_le_bytes()))

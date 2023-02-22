@@ -80,12 +80,6 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        // #[cfg(feature = "debug_env")]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-        //
-        // #[cfg(not(feature = "debug_env"))]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
-
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
