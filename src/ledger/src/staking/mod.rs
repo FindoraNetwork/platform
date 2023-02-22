@@ -2183,9 +2183,14 @@ impl Delegation {
                 .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
             })
             .and_then(|mut n| {
+
+                //[TODO] cfg
+                n = n.saturating_mul(3) / 8;
+
                 let commission =
                     n.saturating_mul(commission_rate[0]) / commission_rate[1];
                 n = n.checked_sub(commission).c(d!())?;
+
                 if is_delegation_rwd && *KEEP_HIST {
                     let r = DelegationRwdDetail {
                         bond: self.amount(),
@@ -2202,6 +2207,7 @@ impl Delegation {
                         .send((self.id, cur_height, r))
                         .unwrap();
                 }
+
                 self.rwd_amount.checked_add(n).c(d!()).map(|i| {
                     self.rwd_amount = i;
                     commission

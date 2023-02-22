@@ -532,6 +532,7 @@ impl LedgerState {
 
         // Add total commission to the Validators own delegation
         if let Some(v) = self.get_staking_mut().delegation_get_mut(&pk) {
+            // [TODO] CFG
             v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
         }
 
