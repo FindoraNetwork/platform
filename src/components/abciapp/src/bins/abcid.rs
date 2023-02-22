@@ -30,6 +30,7 @@ fn main() {
         while abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
             sleep_ms!(1);
         }
+
         pnk!(tx.send(()));
     }));
 
