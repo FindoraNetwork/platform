@@ -434,11 +434,9 @@ impl<C: Config> App<C> {
             gas_used: used_gas.low_u64(),
             events,
             non_confidential_outputs: info
-                .and_then(|i| {
-                    Some(match i {
-                        CallOrCreateInfo::Call(v) => v.non_confidential_outputs,
-                        CallOrCreateInfo::Create(v) => v.non_confidential_outputs,
-                    })
+                .map(|i| match i {
+                    CallOrCreateInfo::Call(v) => v.non_confidential_outputs,
+                    CallOrCreateInfo::Create(v) => v.non_confidential_outputs,
                 })
                 .unwrap_or_default(),
         })
