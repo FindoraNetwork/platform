@@ -23,6 +23,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
+        data_model::Operation,
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -128,7 +129,32 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
-                    if !tx.valid_in_abci() {
+                    if CFG.checkpoint.check_signatures_num >= td_height {
+                        for op in tx.body.operations.iter() {
+                            if let Operation::TransferAsset(op) = op {
+                                let mut body_signatures = op.body_signatures.clone();
+                                body_signatures.dedup();
+                                if body_signatures.len() > 1 {
+                                    resp.log = "too many body_signatures".to_owned();
+                                    resp.code = 1;
+                                    return resp;
+                                }
+                            }
+                        }
+                        let mut signatures = tx.signatures.clone();
+                        signatures.dedup();
+                        if signatures.len() > 1 {
+                            resp.log = "Too many signatures".to_owned();
+                            resp.code = 1;
+                            return resp;
+                        }
+
+                        if tx.pubkey_sign_map.len() > 1 {
+                            resp.log = "too many pubkey_sign_map".to_owned();
+                            resp.code = 1;
+                            return resp;
+                        }
+                    } else if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
@@ -235,6 +261,32 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
+                if CFG.checkpoint.check_signatures_num >= td_height {
+                    for op in tx.body.operations.iter() {
+                        if let Operation::TransferAsset(op) = op {
+                            let mut body_signatures = op.body_signatures.clone();
+                            body_signatures.dedup();
+                            if body_signatures.len() > 1 {
+                                resp.log = "too many body_signatures".to_owned();
+                                resp.code = 1;
+                                return resp;
+                            }
+                        }
+                    }
+                    let mut signatures = tx.signatures.clone();
+                    signatures.dedup();
+                    if signatures.len() > 1 {
+                        resp.log = "Too many signatures".to_owned();
+                        resp.code = 1;
+                        return resp;
+                    }
+
+                    if tx.pubkey_sign_map.len() > 1 {
+                        resp.log = "too many pubkey_sign_map".to_owned();
+                        resp.code = 1;
+                        return resp;
+                    }
+                }
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
