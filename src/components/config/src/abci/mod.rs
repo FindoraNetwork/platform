@@ -95,6 +95,12 @@ pub struct CheckPointConfig {
     // https://github.com/FindoraNetwork/platform/pull/707
     // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
     pub fix_deliver_tx_revert_nonce_height: i64,
+
+    pub utxo_asset_prefix_height: u64,
+
+    pub prismxx_inital_height: i64,
+
+    pub prism_bridge_address: String,
 }
 
 impl CheckPointConfig {
@@ -132,6 +138,11 @@ impl CheckPointConfig {
                                 fix_exec_code: 0,
                                 check_signatures_num: 0,
                                 fix_deliver_tx_revert_nonce_height: 0,
+                                utxo_asset_prefix_height: 0,
+                                prismxx_inital_height: 1,
+                                prism_bridge_address:
+                                    "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
+                                        .to_owned(),
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -139,7 +150,7 @@ impl CheckPointConfig {
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
                                 tx_revert_on_error_height: 1624077,
-                                evm_first_block_height: 0,
+                                evm_first_block_height: 1424654,
                                 zero_amount_fix_height: 1200000,
                                 apy_fix_height: 1177000,
                                 overflow_fix_height: 1247000,
@@ -159,6 +170,9 @@ impl CheckPointConfig {
                                 fix_exec_code: 3401450,
                                 check_signatures_num: 5000000,
                                 fix_deliver_tx_revert_nonce_height: 40000000,
+                                utxo_asset_prefix_height: 50000000,
+                                prism_bridge_address: String::new(),
+                                prismxx_inital_height: 50000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

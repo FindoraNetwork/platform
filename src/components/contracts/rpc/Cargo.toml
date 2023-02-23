@@ -47,7 +47,7 @@ num_cpus = "1.13"
 # modules
 module-ethereum = { path = "../modules/ethereum"}
 module-evm = { path = "../modules/evm"}
-
+config = { path = "../../config"}
 # primitives
 fp-core = { path = "../primitives/core" }
 fp-evm = { path = "../primitives/evm" }

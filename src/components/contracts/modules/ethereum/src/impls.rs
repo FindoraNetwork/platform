@@ -80,12 +80,6 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        // #[cfg(feature = "debug_env")]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-        //
-        // #[cfg(not(feature = "debug_env"))]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
-
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
@@ -426,12 +420,19 @@ impl<C: Config> App<C> {
             code,
             source: Some(Address::from(source)),
             data: info
+                .as_ref()
                 .and_then(|i| serde_json::to_vec(&i).ok())
                 .unwrap_or_default(),
             log: message,
             gas_wanted: gas_limit.low_u64(),
             gas_used: used_gas.low_u64(),
             events,
+            non_confidential_outputs: info
+                .map(|i| match i {
+                    CallOrCreateInfo::Call(v) => v.non_confidential_outputs,
+                    CallOrCreateInfo::Create(v) => v.non_confidential_outputs,
+                })
+                .unwrap_or_default(),
         })
     }
 
