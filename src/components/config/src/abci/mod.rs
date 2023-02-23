@@ -92,6 +92,9 @@ pub struct CheckPointConfig {
     pub fix_exec_code: i64,
 
     pub check_signatures_num: i64,
+    // https://github.com/FindoraNetwork/platform/pull/707
+    // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
+    pub fix_deliver_tx_revert_nonce_height: i64,
 }
 
 impl CheckPointConfig {
@@ -128,6 +131,7 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 0,
                                 fix_exec_code: 0,
                                 check_signatures_num: 0,
+                                fix_deliver_tx_revert_nonce_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -154,6 +158,7 @@ impl CheckPointConfig {
                                 disable_delegate_frc20: 3401450,
                                 fix_exec_code: 3401450,
                                 check_signatures_num: 5000000,
+                                fix_deliver_tx_revert_nonce_height: 40000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
