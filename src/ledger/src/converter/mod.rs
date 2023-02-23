@@ -4,12 +4,12 @@ use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
 use config::abci::global_cfg::CFG;
-use fp_types::crypto::MultiSigner;
+use fp_types::{crypto::MultiSigner, H160};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
     sig::XfrPublicKey,
-    structs::{XfrAmount, XfrAssetType},
+    structs::{AssetType, XfrAmount, XfrAssetType},
 };
 
 /// Use this operation to transfer.
@@ -26,6 +26,14 @@ pub struct ConvertAccount {
     /// convert UTXOs value
     #[serde(with = "serde_strz")]
     pub value: u64,
+
+    /// convert asset type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_type: Option<AssetType>,
+
+    /// convert asset lowlevel data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lowlevel_data: Option<Vec<u8>>,
 }
 
 #[allow(missing_docs)]
@@ -60,10 +68,12 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 pub fn check_convert_account(
     tx: &Transaction,
     height: i64,
-) -> Result<(MultiSigner, u64)> {
+) -> Result<(XfrPublicKey, H160, u64, AssetType, Vec<u8>)> {
     let signer;
     let target;
     let expected_value;
+    let expected_asset;
+    let expected_lowlevel;
 
     if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
         if ca.nonce != tx.body.no_replay_token {
@@ -78,13 +88,22 @@ pub fn check_convert_account(
         } else if tx.check_has_signature_from_map(&ca.signer).is_err() {
             return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
         }
-        if let MultiSigner::Xfr(_pk) = ca.receiver {
-            return Err(eg!("TransferUTXOsToEVM error: invalid receiver address"));
-        }
+
+        target = H160::try_from(ca.receiver.clone())
+            .map_err(|_| eg!("TransferUTXOsToEVM error: invalid receiver address"))?;
 
         signer = ca.signer;
-        target = ca.receiver.clone();
         expected_value = ca.value;
+        if let Some(at) = ca.asset_type {
+            expected_asset = at;
+        } else {
+            expected_asset = ASSET_TYPE_FRA;
+        }
+        if let Some(l) = &ca.lowlevel_data {
+            expected_lowlevel = l.clone();
+        } else {
+            expected_lowlevel = Vec::new();
+        }
     } else {
         return Err(eg!(
             "TransferUTXOsToEVM error: invalid ConvertAccount operation"
@@ -108,7 +127,7 @@ pub fn check_convert_account(
             }
             if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                 if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
-                    && ty == ASSET_TYPE_FRA
+                    && ty == expected_asset
                 {
                     if let XfrAmount::NonConfidential(amount) = o.record.amount {
                         convert_amount += amount;
@@ -125,5 +144,11 @@ pub fn check_convert_account(
         ));
     }
 
-    Ok((target, expected_value))
+    Ok((
+        signer,
+        target,
+        expected_value,
+        expected_asset,
+        expected_lowlevel,
+    ))
 }

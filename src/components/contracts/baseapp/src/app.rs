@@ -2,7 +2,9 @@ use crate::extensions::SignedExtra;
 use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
-use fp_types::assemble::convert_unchecked_transaction;
+use fp_types::{
+    actions::xhub::NonConfidentialOutput, assemble::convert_unchecked_transaction,
+};
 use fp_utils::tx::EvmRawTxWrapper;
 use primitive_types::U256;
 use ruc::*;
@@ -174,7 +176,23 @@ impl crate::BaseApp {
         // initialize the deliver state and check state with a correct header
         Self::update_state(&mut self.deliver_state, init_header.clone(), vec![]);
         Self::update_state(&mut self.check_state, init_header, vec![]);
+        #[cfg(feature = "debug_env")]
+        {
+            use {
+                crate::BaseApp, fp_traits::account::AccountAsset,
+                fp_types::crypto::Address, primitive_types::H160, std::str::FromStr,
+            };
+            //private key: 4d05b965f821ea900ddd995dfa1b6caa834eaaa1ebe100a9760baf9331aae567
+            let test_address =
+                H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").unwrap();
 
+            // mint 1000000 FRA
+            pnk!(module_account::App::<BaseApp>::mint(
+                &self.deliver_state,
+                &Address::from(test_address),
+                U256::from(1_000_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())
+            ));
+        }
         ResponseInitChain::default()
     }
 
@@ -198,7 +216,10 @@ impl crate::BaseApp {
         ResponseBeginBlock::default()
     }
 
-    pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
+    pub fn deliver_tx(
+        &mut self,
+        req: &RequestDeliverTx,
+    ) -> (ResponseDeliverTx, Vec<NonConfidentialOutput>) {
         let mut resp = ResponseDeliverTx::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
@@ -207,7 +228,7 @@ impl crate::BaseApp {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
-            return resp;
+            return (resp, Vec::new());
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
@@ -291,19 +312,19 @@ impl crate::BaseApp {
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
                     resp.events = protobuf::RepeatedField::from_vec(ar.events);
-                    resp
+                    (resp, ar.non_confidential_outputs)
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
                     resp.code = 1;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
-                    resp
+                    (resp, Vec::new())
                 }
             }
         } else {
             resp.code = 1;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
-            resp
+            (resp, Vec::new())
         }
     }
 

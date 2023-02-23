@@ -43,18 +43,19 @@ use {
         crypto::{Address, MultiSignature, MultiSigner},
         U256,
     },
-    fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper},
+    fp_utils::{ecdsa::SecpPair, hashing::keccak_256, tx::EvmRawTxWrapper},
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
-            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
+        store::fbnc::NumKey,
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
@@ -96,6 +97,22 @@ pub fn build_id() -> String {
 /// asset type
 pub fn random_asset_type() -> String {
     AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
+pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
+    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut original_asset_code.to_bytes());
+    let derived_asset_code = AssetTypeCode {
+        val: ZeiAssetType(keccak_256(&asset_code)),
+    };
+
+    Ok(derived_asset_code.to_base64())
 }
 
 #[wasm_bindgen]
@@ -497,6 +514,8 @@ impl TransactionBuilder {
         keypair: &XfrKeyPair,
         ethereum_address: String,
         amount: u64,
+        asset: Option<String>,
+        lowlevel_data: Option<String>,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
@@ -504,8 +523,24 @@ impl TransactionBuilder {
         if let MultiSigner::Xfr(_pk) = ea {
             return Err(error_to_jsvalue("Invalid Ethereum address"));
         }
+        let asset = if let Some(asset) = asset {
+            let code =
+                AssetTypeCode::new_from_base64(&asset).map_err(error_to_jsvalue)?;
+
+            Some(code)
+        } else {
+            None
+        };
+
+        let lowlevel_data = if let Some(data) = lowlevel_data {
+            let data = hex::decode(data).c(d!()).map_err(error_to_jsvalue)?;
+            Some(data)
+        } else {
+            None
+        };
+
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea, amount)
+            .add_operation_convert_account(keypair, ea, amount, asset, lowlevel_data)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -595,6 +630,8 @@ pub fn transfer_to_utxo_from_account(
         target: recipient,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: 0,
     };
     let action = Action::XHub(XHubAction::NonConfidentialTransfer(
         NonConfidentialTransfer {
