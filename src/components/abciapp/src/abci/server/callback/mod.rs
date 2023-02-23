@@ -44,6 +44,7 @@ use {
     tracing::info,
 };
 
+use cryptohash::sha256;
 #[cfg(feature = "web3_service")]
 use enterprise_web3::{
     BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
@@ -256,7 +257,6 @@ pub fn deliver_tx(
 
     let tx_catalog = try_tx_catalog(req.get_tx(), true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
-    const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
@@ -294,7 +294,7 @@ pub fn deliver_tx(
 
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
-                    if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                    if td_height < CFG.checkpoint.evm_first_block_height {
                         info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
@@ -321,8 +321,9 @@ pub fn deliver_tx(
                             resp.log = e.to_string();
                         }
                     } else if is_convert_account(&tx) {
+                        let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
                         {
                             info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
@@ -400,7 +401,7 @@ pub fn deliver_tx(
                 resp
             } else {
                 // Log print for monitor purpose
-                if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                if td_height < CFG.checkpoint.evm_first_block_height {
                     info!(
                         target:
                         "abciapp",
@@ -409,7 +410,38 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                return s.account_base_app.write().deliver_tx(req);
+                let (mut resp, non_confidential_outputs) =
+                    s.account_base_app.write().deliver_tx(req);
+
+                if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code {
+                    for non_confidential_output in non_confidential_outputs.iter() {
+                        let mut la = s.la.write();
+                        let mut laa = la.get_committed_state().write();
+                        if let Some(tx) = staking::system_prism_mint_pay(
+                            &mut laa,
+                            non_confidential_output,
+                        ) {
+                            drop(laa);
+                            if la.cache_transaction(tx).is_ok() {
+                                return resp;
+                            }
+                            resp.code = 1;
+                            s.account_base_app
+                                .read()
+                                .deliver_state
+                                .state
+                                .write()
+                                .discard_session();
+                            s.account_base_app
+                                .read()
+                                .deliver_state
+                                .db
+                                .write()
+                                .discard_session();
+                        }
+                    }
+                }
+                resp
             }
         }
         TxCatalog::Unknown => {

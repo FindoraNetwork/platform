@@ -19,6 +19,7 @@ use {
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
+    sha2::{Digest, Sha256},
     std::collections::HashMap,
     tendermint::{PrivateKey, PublicKey},
     zei::xfr::{
@@ -42,14 +43,21 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 #[allow(missing_docs)]
 pub fn send_tx(tx: &Transaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
-    attohttpc::post(url)
+    let tx_bytes = serde_json::to_vec(tx).c(d!())?;
+
+    let ret = attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
-        .bytes(&serde_json::to_vec(tx).c(d!())?)
+        .bytes(&tx_bytes)
         .send()
         .c(d!("fail to send transaction"))?
         .error_for_status()
         .c(d!())
-        .map(|_| ())
+        .map(|_| ());
+
+    let tx_hash = Sha256::digest(tx_bytes);
+    println!("{}", hex::encode(tx_hash));
+
+    ret
 }
 
 /// Fee is needless in a `UpdateValidator` operation
@@ -414,7 +422,9 @@ pub fn get_asset_type(code: &str) -> Result<AssetType> {
 }
 
 /// Retrieve a list of assets created by the specified findora account
-pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
+pub fn get_created_assets(
+    addr: &XfrPublicKey,
+) -> Result<Vec<(AssetTypeCode, DefineAsset)>> {
     let url = format!(
         "{}:8667/get_created_assets/{}",
         get_serv_addr().c(d!())?,
@@ -428,7 +438,7 @@ pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
         .c(d!())?
         .bytes()
         .c(d!())
-        .and_then(|b| serde_json::from_slice::<Vec<DefineAsset>>(&b).c(d!()))
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
 }
 
 #[inline(always)]

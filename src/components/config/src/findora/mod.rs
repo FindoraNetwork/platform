@@ -56,8 +56,6 @@ pub mod init {
     }
 
     pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
-        let config = fs::read_to_string(path).c(d!())?;
-
         let orig_cfg = [
             "index_all_keys = false",
             "laddr = \"tcp://127.0.0.1:26657\"",
@@ -90,10 +88,17 @@ pub mod init {
             "prometheus = true",
         ];
 
-        let config = orig_cfg
-            .iter()
-            .zip(target_cfg.iter())
-            .fold(config, |acc, pair| acc.replace(pair.0, pair.1));
+        let config = fs::read_to_string(path).c(d!())?;
+
+        let config = if mode == InitMode::Dev {
+            // If local single node, use default tendermint.
+            config
+        } else {
+            orig_cfg
+                .iter()
+                .zip(target_cfg.iter())
+                .fold(config, |acc, pair| acc.replace(pair.0, pair.1))
+        };
 
         let result = match mode {
             InitMode::Mainnet => {

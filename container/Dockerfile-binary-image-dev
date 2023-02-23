@@ -19,11 +19,11 @@ RUN make lint
 RUN make test
 
 RUN mkdir -p /root/.cargo/bin/ && \
-    DBG=true make build && \
+    DBG=true make build_release && \
     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
 
 RUN mkdir -p /root/.cargo/bin/ && \
-    DBG=true make build_goleveldb && \
+    DBG=true make build_release_debug && \
     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/goleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/goleveldb ; rm -rf /platform/debug/ ;fi
 
 # Rosetta

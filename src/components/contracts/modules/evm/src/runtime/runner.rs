@@ -1,6 +1,9 @@
 use super::stack::FindoraStackState;
 // use crate::precompile::PrecompileSet;
-use crate::{App, Config};
+use crate::{
+    utils::{deposit_asset_event, parse_deposit_asset_event},
+    App, Config,
+};
 use ethereum_types::{H160, H256, U256};
 use evm::{
     executor::stack::{StackExecutor, StackSubstateMetadata},
@@ -123,6 +126,71 @@ impl<C: Config> ActionRunner<C> {
             );
             App::<C>::remove_account(ctx, &address.into())
         }
+        let mut non_confidential_outputs = Vec::new();
+        let topic = deposit_asset_event().signature();
+        for log in &state.substate.logs {
+            trace!(
+                target: "evm",
+                "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
+                log.address,
+                log.topics.len(),
+                log.topics,
+                log.data.len(),
+                log.data
+            );
+            let _ = log.topics.get(0).c(d!()).map(|val| {
+                if topic == *val {
+                    if let Ok(v) = parse_deposit_asset_event((log.data[0..]).to_vec()) {
+                        non_confidential_outputs.push(v);
+                    }
+                }
+            });
+        }
+
+        Ok(ExecutionInfo {
+            value: retv,
+            exit_reason: reason,
+            used_gas,
+            logs: state.substate.logs,
+            non_confidential_outputs,
+        })
+    }
+    pub fn execute_systemc_contract(
+        ctx: &Context,
+        input: Vec<u8>,
+        source: H160,
+        gas_limit: u64,
+        target: H160,
+        value: U256,
+    ) -> Result<(Vec<u8>, Vec<Log>, U256)> {
+        let config = evm::Config::istanbul();
+
+        let vicinity = Vicinity {
+            gas_price: U256::one(),
+            origin: source,
+        };
+        let metadata = StackSubstateMetadata::new(gas_limit, &config);
+        let state = FindoraStackState::<C>::new(ctx, &vicinity, metadata);
+
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
+        let mut executor =
+            StackExecutor::new_with_precompiles(state, &config, &precompiles);
+
+        let access_list = Vec::new();
+        let (result, data) =
+            executor.transact_call(source, target, value, input, gas_limit, access_list);
+
+        let gas_used = U256::from(executor.used_gas());
+        let state = executor.into_state();
+
+        for address in state.substate.deletes {
+            debug!(
+                target: "evm",
+                "Deleting account at {:?}",
+                address
+            );
+            App::<C>::remove_account(ctx, &address.into())
+        }
 
         for log in &state.substate.logs {
             trace!(
@@ -136,12 +204,16 @@ impl<C: Config> ActionRunner<C> {
             );
         }
 
-        Ok(ExecutionInfo {
-            value: retv,
-            exit_reason: reason,
-            used_gas,
-            logs: state.substate.logs,
-        })
+        if let ExitReason::Succeed(_) = result {
+            Ok((data, state.substate.logs, gas_used))
+        } else {
+            // TODO: store error execution on pending tx later.
+            Err(eg!(
+                "Execute system error: {:?}, data is: {}",
+                result,
+                hex::encode(data)
+            ))
+        }
     }
 }
 

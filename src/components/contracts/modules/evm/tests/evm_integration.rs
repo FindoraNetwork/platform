@@ -124,7 +124,7 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
 
     let tx = serde_json::to_vec(&tx).unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
-    let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
+    let (resp, _) = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
         "erc20 deploy deliver tx failed, code: {}, log: {}",
@@ -190,7 +190,7 @@ fn test_mint_deliver_tx(contract: ERC20) {
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
-    let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
+    let (resp, _) = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
         "erc20 mint deliver tx failed, code: {}, log: {}",
@@ -232,7 +232,7 @@ fn test_transfer_deliver_tx(contract: ERC20) {
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
-    let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
+    let (resp, _) = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
         "erc20 transfer deliver tx failed, code: {}, log: {}",
@@ -248,7 +248,7 @@ fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
         serde_json::to_vec(&build_erc20_balance_of_transaction(contract, who, 2.into()))
             .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
-    let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
+    let (resp, _) = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
         "check tx failed, code: {}, log: {}",
