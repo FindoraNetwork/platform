@@ -29,6 +29,7 @@ use {
         CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
     },
     cryptohash::sha256,
+    fbnc::NumKey,
     finutils::txn_builder::{
         FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
         TransactionBuilder as PlatformTransactionBuilder,
@@ -55,7 +56,6 @@ use {
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
-        store::fbnc::NumKey,
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
