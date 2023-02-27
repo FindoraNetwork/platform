@@ -394,7 +394,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> Result<TransactionBuilder, JsValue> {
         let asset_token = AssetTypeCode::new_from_base64(&code)
             .c(d!())
@@ -411,7 +410,7 @@ impl TransactionBuilder {
                 seq_num,
                 amount,
                 confidentiality_flags,
-                zei_params.get_ref(),
+                PublicParams::new().get_ref(),
             )
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -558,6 +557,11 @@ impl TransactionBuilder {
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
+        Ok(self)
+    }
+
+    /// Do nothing, compatible with frontend
+    pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
         Ok(self)
     }
 
