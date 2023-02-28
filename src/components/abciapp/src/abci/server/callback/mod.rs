@@ -164,6 +164,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
+                    resp.code = 1;
                 }
             }
             resp
@@ -387,7 +388,7 @@ pub fn deliver_tx(
                 }
             } else {
                 resp.code = 1;
-                resp.log = "Invalid data format".to_owned();
+                resp.log = "Invalid format".to_owned();
             }
 
             resp
