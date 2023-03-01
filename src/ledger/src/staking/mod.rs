@@ -2184,9 +2184,6 @@ impl Delegation {
             })
             .and_then(|mut n| {
 
-                //[TODO] cfg
-                n = n.saturating_mul(3) / 8;
-
                 let commission =
                     n.saturating_mul(commission_rate[0]) / commission_rate[1];
                 n = n.checked_sub(commission).c(d!())?;
