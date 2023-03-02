@@ -8,7 +8,7 @@ repository = "https://github.com/findoranetwork/platform/"
 description = "Findora primitive mock functions for testing"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6" }
 baseapp = { path = "../../baseapp" }
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 lazy_static = "1.4.0"
