@@ -10,6 +10,6 @@ lazy_static = "1.4.0"
 evm-exporter = { package = "evm-exporter", git = "https://github.com/FindoraNetwork/enterprise-web3.git", tag = "1.0.0"}
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 primitive-types = "0.11.1" 
-redis = { version = "0.21", default-features = false, features = [ "tls", "r2d2" ] }
+redis = { version = "0.22", default-features = false, features = [ "tls", "r2d2" ] }
 r2d2 = { version = "0.8.8"}
 ruc = "1.0"
