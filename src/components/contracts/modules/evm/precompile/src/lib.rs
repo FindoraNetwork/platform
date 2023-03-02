@@ -1,6 +1,5 @@
 use ethereum_types::H160;
-use evm::executor::stack::{PrecompileHandle, PrecompileSet};
-// use evm::Context;
+use evm::{executor::stack::PrecompileSet, Context};
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
@@ -33,38 +32,45 @@ impl<C> PrecompileSet for FindoraPrecompiles<C>
 where
     C: Config,
 {
-    fn execute(&self, handle: &mut impl PrecompileHandle) -> Option<PrecompileResult> {
+    fn execute(
+        &self,
+        address: H160,
+        input: &[u8],
+        target_gas: Option<u64>,
+        context: &Context,
+        _is_static: bool,
+    ) -> Option<PrecompileResult> {
         let ctx = &self.1;
 
-        match handle.code_address() {
+        match address {
             // Ethereum precompiles :
             a if a == H160::from_low_u64_be(ECRecover::contract_id()) => {
-                Some(ECRecover::execute(handle, ctx))
+                Some(ECRecover::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Sha256::contract_id()) => {
-                Some(Sha256::execute(handle, ctx))
+                Some(Sha256::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Ripemd160::contract_id()) => {
-                Some(Ripemd160::execute(handle, ctx))
+                Some(Ripemd160::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Identity::contract_id()) => {
-                Some(Identity::execute(handle, ctx))
+                Some(Identity::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Modexp::contract_id()) => {
-                Some(Modexp::execute(handle, ctx))
+                Some(Modexp::execute(input, target_gas, context, ctx))
             }
             // Non-Frontier specific nor Ethereum precompiles :
             a if a == H160::from_low_u64_be(ECRecoverPublicKey::contract_id()) => {
-                Some(ECRecoverPublicKey::execute(handle, ctx))
+                Some(ECRecoverPublicKey::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Sha3FIPS256::contract_id()) => {
-                Some(Sha3FIPS256::execute(handle, ctx))
+                Some(Sha3FIPS256::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(Sha3FIPS512::contract_id()) => {
-                Some(Sha3FIPS512::execute(handle, ctx))
+                Some(Sha3FIPS512::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
-                Some(FRC20::<C>::execute(handle, ctx))
+                Some(FRC20::<C>::execute(input, target_gas, context, ctx))
             }
             // a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
             //     Some(EthPairing::execute(handle, ctx))
