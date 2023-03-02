@@ -1,11 +1,13 @@
 use crate::extensions::SignedExtra;
 use abci::*;
+use config::abci::global_cfg::CFG;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::{
     actions::xhub::NonConfidentialOutput, assemble::convert_unchecked_transaction,
 };
 use fp_utils::tx::EvmRawTxWrapper;
+use module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event};
 use primitive_types::U256;
 use ruc::*;
 use tracing::{debug, error, info};
@@ -176,23 +178,7 @@ impl crate::BaseApp {
         // initialize the deliver state and check state with a correct header
         Self::update_state(&mut self.deliver_state, init_header.clone(), vec![]);
         Self::update_state(&mut self.check_state, init_header, vec![]);
-        #[cfg(feature = "debug_env")]
-        {
-            use {
-                crate::BaseApp, fp_traits::account::AccountAsset,
-                fp_types::crypto::Address, primitive_types::H160, std::str::FromStr,
-            };
-            //private key: 4d05b965f821ea900ddd995dfa1b6caa834eaaa1ebe100a9760baf9331aae567
-            let test_address =
-                H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").unwrap();
 
-            // mint 1000000 FRA
-            pnk!(module_account::App::<BaseApp>::mint(
-                &self.deliver_state,
-                &Address::from(test_address),
-                U256::from(1_000_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())
-            ));
-        }
         ResponseInitChain::default()
     }
 
@@ -221,6 +207,7 @@ impl crate::BaseApp {
         req: &RequestDeliverTx,
     ) -> (ResponseDeliverTx, Vec<NonConfidentialOutput>) {
         let mut resp = ResponseDeliverTx::new();
+        let mut non_confidential_outputs = Vec::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             tx
@@ -228,7 +215,7 @@ impl crate::BaseApp {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
-            return (resp, Vec::new());
+            return (resp, non_confidential_outputs);
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
@@ -312,19 +299,80 @@ impl crate::BaseApp {
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
                     resp.events = protobuf::RepeatedField::from_vec(ar.events);
-                    (resp, ar.non_confidential_outputs)
+                    let td_height = self.deliver_state.block_header().height;
+                    if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code
+                    {
+                        let deposit_asset_topic = deposit_asset_event_topic_str();
+
+                        for evt in resp.events.iter() {
+                            if evt.field_type == *"ethereum_ContractLog" {
+                                let mut bridge_contract_found = false;
+                                let mut deposit_asset_foud = false;
+
+                                for pair in evt.attributes.iter() {
+                                    let key = String::from_utf8(pair.key.clone())
+                                        .unwrap_or_default();
+                                    if key == *"address" {
+                                        let addr = String::from_utf8(pair.value.clone())
+                                            .unwrap_or_default();
+                                        if addr
+                                            == CFG
+                                                .checkpoint
+                                                .prism_bridge_address
+                                                .to_lowercase()
+                                        {
+                                            bridge_contract_found = true
+                                        }
+                                    }
+                                    if key == *"topics" {
+                                        let topic =
+                                            String::from_utf8(pair.value.clone())
+                                                .unwrap_or_default();
+                                        if topic == deposit_asset_topic {
+                                            deposit_asset_foud = true
+                                        }
+                                    }
+                                    if key == *"data"
+                                        && bridge_contract_found
+                                        && deposit_asset_foud
+                                    {
+                                        let data = String::from_utf8(pair.value.clone())
+                                            .unwrap_or_default();
+
+                                        let data_vec =
+                                            serde_json::from_str(&data).unwrap();
+
+                                        let deposit_asset =
+                                            parse_deposit_asset_event(data_vec);
+
+                                        match deposit_asset {
+                                            Ok(deposit) => {
+                                                non_confidential_outputs.push(deposit)
+                                            }
+                                            Err(e) => {
+                                                resp.code = 1;
+                                                resp.log = e.to_string();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    (resp, non_confidential_outputs)
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
                     resp.code = 1;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
-                    (resp, Vec::new())
+                    (resp, non_confidential_outputs)
                 }
             }
         } else {
             resp.code = 1;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
-            (resp, Vec::new())
+            (resp, non_confidential_outputs)
         }
     }
 

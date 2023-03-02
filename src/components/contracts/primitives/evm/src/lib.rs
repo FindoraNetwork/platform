@@ -6,10 +6,7 @@ use ethereum_types::{Bloom, H160, H256, U256};
 pub use evm::backend::Basic as Account;
 use evm::ExitReason;
 use fp_core::context::Context;
-use fp_types::actions::{
-    evm::{Call, Create, Create2},
-    xhub::NonConfidentialOutput,
-};
+use fp_types::actions::evm::{Call, Create, Create2};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +25,6 @@ pub struct ExecutionInfo<T> {
     pub value: T,
     pub used_gas: U256,
     pub logs: Vec<Log>,
-    pub non_confidential_outputs: Vec<NonConfidentialOutput>,
 }
 
 pub type CallInfo = ExecutionInfo<Vec<u8>>;
