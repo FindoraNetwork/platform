@@ -1822,7 +1822,7 @@ impl AppendOnlyMerkle {
             if flushed && entry_count != entries_at_this_level {
                 return Err(eg!(format!(
                     "check_disk:  The entry counts ({entry_count}, {entries_at_this_level}) \
-                           at level {level} didn't match.", 
+                           at level {level} didn't match.",
                 )));
             }
 

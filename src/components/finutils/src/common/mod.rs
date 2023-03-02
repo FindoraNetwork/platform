@@ -575,7 +575,7 @@ pub fn gen_key() -> (String, String, String, XfrKeyPair) {
 pub fn gen_key_and_print() {
     let (wallet_addr, mnemonic, key, _) = gen_key();
     println!(
-        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n", 
+        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n",
     );
 }
 

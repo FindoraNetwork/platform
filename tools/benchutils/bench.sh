@@ -150,6 +150,11 @@ if [[ "" == ${is_dbench} ]]; then
         sleep $block_itv
     done
 
+    blance=$(fn account --addr $(cat static/root.addr) | grep balance | grep -o '[0-9]\+')
+    if [[ "" == $balance ]]; then
+        die "deposit failed! $0 Line $LINENO"
+    fi
+
     web3_port=$(fn dev | jq '.meta.validator_or_full_nodes."1"."ports"."web3_http_service"')
     export SERV="http://localhost:${web3_port}"
 
