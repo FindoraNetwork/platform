@@ -173,7 +173,10 @@ where
                     res.log = String::from("ctx state is not good to commit");
 
                     ctx.state.write().discard_session();
-                } else if signed_tx {
+                } else if CFG.checkpoint.fix_deliver_tx_revert_nonce_height
+                    > ctx.block_header().height
+                    || signed_tx
+                {
                     if res.code == 0 {
                         Extra::post_execute(ctx, pre, &res)?;
                         ctx.state.write().commit_session();
