@@ -9,12 +9,11 @@ description = "MODEXP precompiles for EVM module."
 readme = "README.md"
 
 [dependencies]
-evm = { version = "0.37.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
 num = { version = "0.4", features = ["alloc"] }
-ethereum-types = { version = "0.14.1", default-features = false }
+ethereum-types = { version = "0.13.1", default-features = false }
 
 [dev-dependencies]
 hex = "0.4.2"
 fp-mocks = { path = "../../../../primitives/mocks" }
-pallet-evm-test-vector-support = { version = "0.1.0", path = "../../test-vector-support" }

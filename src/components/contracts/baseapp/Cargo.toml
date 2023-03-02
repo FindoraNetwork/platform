@@ -9,15 +9,15 @@ repository = "https://github.com/findoranetwork/platform/"
 version = "0.1.0"
 
 [dependencies]
-abci = {git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4"}
-ethereum = { version = "0.14.0", default-features = false, features = ["with-serde"] }
-ethereum-types = { version = "0.14.1", default-features = false }
+abci = {git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6"}
+ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
+ethereum-types = { version = "0.13.1", default-features = false }
 futures = "0.3.16"
 lazy_static = "1.4.0"
 ledger = {path = "../../../ledger"}
 tracing = "0.1"
 parking_lot = "0.12"
-primitive-types = { version = "0.12.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
+primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
 ruc = "1.0"
 serde = {version = "1.0.124", features = ["derive"]}
