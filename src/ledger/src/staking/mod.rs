@@ -171,7 +171,8 @@ lazy_static! {
         1 + env::var("FINDORA_BLOCK_ITV")
             .ok()
             .as_deref()
-            .unwrap_or("15")
+             // .unwrap_or("15")
+            .unwrap_or("5")            
             .parse::<u64>().unwrap()
     };
 }
