@@ -1,7 +1,6 @@
 use crate::*;
 use baseapp::BaseApp;
-use ethereum_types::{H160, H256};
-use evm::{ExitError, ExitReason, Transfer};
+use ethereum_types::H160;
 use fp_mocks::*;
 
 use evm_precompile_utils::{error, EvmDataWriter};
@@ -13,16 +12,17 @@ pub const FRC20_PRECOMPILE_ADDRESS: u64 = 9;
 #[test]
 fn selector_less_than_four_bytes() {
     let invalid_selector = vec![1u8, 2u8, 3u8];
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(invalid_selector, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &invalid_selector,
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Err(PrecompileFailure::Error {
             exit_status: error("tried to parse selector out of bounds")
         })
@@ -32,16 +32,18 @@ fn selector_less_than_four_bytes() {
 #[test]
 fn no_selector_exists_but_length_is_right() {
     let invalid_selector = vec![1u8, 2u8, 3u8, 4u8];
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(invalid_selector, None, context);
 
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &invalid_selector,
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Err(PrecompileFailure::Error {
             exit_status: error("unknown selector")
         })
@@ -84,24 +86,24 @@ fn frc20_works() {
 }
 
 fn total_supply_works() {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::TotalSupply)
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::TotalSupply)
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(U256::from(2000u64)).build(),
-            // cost: GAS_TOTAL_SUPPLY,
-            // logs: Default::default(),
+            cost: GAS_TOTAL_SUPPLY,
+            logs: Default::default(),
         })
     );
 }
@@ -111,57 +113,57 @@ fn balance_of_works() {
 }
 
 fn balance_of(who: H160, expected_value: U256) {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::BalanceOf)
-        .write(Address(who))
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::BalanceOf)
+                .write(Address(who))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(expected_value).build(),
-            // cost: GAS_BALANCE_OF,
-            // logs: Default::default(),
+            cost: GAS_BALANCE_OF,
+            logs: Default::default(),
         })
     );
 }
 
 fn transfer_works() {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::Transfer)
-        .write(Address(BOB_ECDSA.address))
-        .write(U256::from(400))
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::Transfer)
+                .write(Address(BOB_ECDSA.address))
+                .write(U256::from(400))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(true).build(),
-            // cost: GAS_TRANSFER + 1756,
-            // logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
-            //     .log3(
-            //         TRANSFER_EVENT_SELECTOR,
-            //         ALICE_ECDSA.address,
-            //         BOB_ECDSA.address,
-            //         EvmDataWriter::new().write(U256::from(400)).build(),
-            //     )
-            //     .build(),
+            cost: GAS_TRANSFER + 1756,
+            logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
+                .log3(
+                    TRANSFER_EVENT_SELECTOR,
+                    ALICE_ECDSA.address,
+                    BOB_ECDSA.address,
+                    EvmDataWriter::new().write(U256::from(400)).build(),
+                )
+                .build(),
         })
     );
 
@@ -171,33 +173,33 @@ fn transfer_works() {
 }
 
 fn approve_works() {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::Approve)
-        .write(Address(BOB_ECDSA.address))
-        .write(U256::from(500))
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::Approve)
+                .write(Address(BOB_ECDSA.address))
+                .write(U256::from(500))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(true).build(),
-            // cost: GAS_APPROVE + 1756,
-            // logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
-            //     .log3(
-            //         APPROVAL_EVENT_SELECTOR,
-            //         ALICE_ECDSA.address,
-            //         BOB_ECDSA.address,
-            //         EvmDataWriter::new().write(U256::from(500)).build(),
-            //     )
-            //     .build(),
+            cost: GAS_APPROVE + 1756,
+            logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
+                .log3(
+                    APPROVAL_EVENT_SELECTOR,
+                    ALICE_ECDSA.address,
+                    BOB_ECDSA.address,
+                    EvmDataWriter::new().write(U256::from(500)).build(),
+                )
+                .build(),
         })
     );
 }
@@ -207,65 +209,65 @@ fn allowance_works() {
 }
 
 fn allowance(owner: H160, spender: H160, expected_value: U256) {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::Allowance)
-        .write(Address(owner))
-        .write(Address(spender))
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: ALICE_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::Allowance)
+                .write(Address(owner))
+                .write(Address(spender))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(expected_value).build(),
-            // cost: GAS_ALLOWANCE,
-            // logs: Default::default(),
+            cost: GAS_ALLOWANCE,
+            logs: Default::default(),
         })
     );
 }
 
 fn transfer_from_works() {
-    let input = EvmDataWriter::new()
-        .write_selector(Call::TransferFrom)
-        .write(Address(ALICE_ECDSA.address))
-        .write(Address(BOB_ECDSA.address))
-        .write(U256::from(400))
-        .build();
-    let context = evm::Context {
-        address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
-        caller: BOB_ECDSA.address,
-        apparent_value: From::from(0),
-    };
-
-    let mut handle = MockHandle::new(input, None, context);
-
     assert_eq!(
-        FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::TransferFrom)
+                .write(Address(ALICE_ECDSA.address))
+                .write(Address(BOB_ECDSA.address))
+                .write(U256::from(400))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: BOB_ECDSA.address,
+                apparent_value: From::from(0),
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(true).build(),
-            // cost: GAS_TRANSFER_FROM + 1756 * 2,
-            // logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
-            //     .log3(
-            //         TRANSFER_EVENT_SELECTOR,
-            //         ALICE_ECDSA.address,
-            //         BOB_ECDSA.address,
-            //         EvmDataWriter::new().write(U256::from(400)).build(),
-            //     )
-            //     .log3(
-            //         APPROVAL_EVENT_SELECTOR,
-            //         ALICE_ECDSA.address,
-            //         BOB_ECDSA.address,
-            //         EvmDataWriter::new().write(U256::from(100)).build(),
-            //     )
-            //     .build(),
+            cost: GAS_TRANSFER_FROM + 1756 * 2,
+            logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
+                .log3(
+                    TRANSFER_EVENT_SELECTOR,
+                    ALICE_ECDSA.address,
+                    BOB_ECDSA.address,
+                    EvmDataWriter::new().write(U256::from(400)).build(),
+                )
+                .log3(
+                    APPROVAL_EVENT_SELECTOR,
+                    ALICE_ECDSA.address,
+                    BOB_ECDSA.address,
+                    EvmDataWriter::new().write(U256::from(100)).build(),
+                )
+                .build(),
         })
     );
 
@@ -274,73 +276,4 @@ fn transfer_from_works() {
     balance_of(BOB_ECDSA.address, U256::from(1800));
 
     allowance(ALICE_ECDSA.address, BOB_ECDSA.address, U256::from(100));
-}
-
-pub struct MockHandle {
-    pub input: Vec<u8>,
-    pub gas_limit: Option<u64>,
-    pub context: Context,
-    pub is_static: bool,
-    pub gas_used: u64,
-}
-
-impl MockHandle {
-    pub fn new(input: Vec<u8>, gas_limit: Option<u64>, context: Context) -> Self {
-        Self {
-            input,
-            gas_limit,
-            context,
-            is_static: false,
-            gas_used: 0,
-        }
-    }
-}
-
-impl PrecompileHandle for MockHandle {
-    /// Perform subcall in provided context.
-    /// Precompile specifies in which context the subcall is executed.
-    fn call(
-        &mut self,
-        _: H160,
-        _: Option<Transfer>,
-        _: Vec<u8>,
-        _: Option<u64>,
-        _: bool,
-        _: &Context,
-    ) -> (ExitReason, Vec<u8>) {
-        unimplemented!()
-    }
-
-    fn record_cost(&mut self, cost: u64) -> Result<(), ExitError> {
-        self.gas_used += cost;
-        Ok(())
-    }
-
-    fn log(&mut self, _: H160, _: Vec<H256>, _: Vec<u8>) -> Result<(), ExitError> {
-        unimplemented!()
-    }
-
-    fn remaining_gas(&self) -> u64 {
-        unimplemented!()
-    }
-
-    fn code_address(&self) -> H160 {
-        unimplemented!()
-    }
-
-    fn input(&self) -> &[u8] {
-        &self.input
-    }
-
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn is_static(&self) -> bool {
-        self.is_static
-    }
-
-    fn gas_limit(&self) -> Option<u64> {
-        self.gas_limit
-    }
 }
