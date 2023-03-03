@@ -22,7 +22,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 /// Represents rpc api block number param.
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Default)]
 pub enum BlockNumber {
     /// Hash
     Hash {
@@ -34,17 +34,12 @@ pub enum BlockNumber {
     /// Number
     Num(u64),
     /// Latest block
+    #[default]
     Latest,
     /// Earliest block (genesis)
     Earliest,
     /// Pending block (being mined)
     Pending,
-}
-
-impl Default for BlockNumber {
-    fn default() -> Self {
-        BlockNumber::Latest
-    }
 }
 
 impl<'a> Deserialize<'a> for BlockNumber {
