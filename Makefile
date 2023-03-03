@@ -399,3 +399,9 @@ build_musl_fn_win:
 	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
 	tar -czvf fn_windows.tar.gz fn.exe
 	rm fn.exe
+
+tmtest_nightly:
+	@./tools/regression/triple_masking/test_triple_masking.sh
+
+prismtest_nightly:
+	@./tools/regression/evm/testevm.sh
