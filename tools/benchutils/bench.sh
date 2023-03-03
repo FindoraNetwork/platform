@@ -150,8 +150,9 @@ if [[ "" == ${is_dbench} ]]; then
         sleep $block_itv
     done
 
-    blance=$(fn account --addr $(cat static/root.addr) | grep balance | grep -o '[0-9]\+')
+    balance=$(fn account --addr $(cat static/root.addr) | grep balance | grep -o '[0-9]\+')
     if [[ "" == $balance ]]; then
+        fn account --addr $(cat static/root.addr)
         die "deposit failed! $0 Line $LINENO"
     fi
 
