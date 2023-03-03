@@ -26,9 +26,9 @@ fn main() {
 
     pnk!(ctrlc::set_handler(move || {
         println!("Waiting to exit.");
-        abci::IS_EXITING.store(true, Ordering::Release);
-        while abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
-            sleep_ms!(1);
+        abci::IS_EXITING.store(true, Ordering::SeqCst);
+        while !abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
+            sleep_ms!(10);
         }
 
         pnk!(tx.send(()));
