@@ -57,6 +57,10 @@ stop_all:
 	- pkill -9 tendermint
 	- pkill -9 findorad
 
+# Release binaries for Nightly
+rls:
+	cargo build --release --features debug_env --bins -p abciapp -p finutils
+
 # Build for cleveldb
 build: tendermint_cleveldb
 	cargo build --bins -p abciapp -p finutils
