@@ -130,7 +130,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
-                    if CFG.checkpoint.check_signatures_num >= td_height {
+                    if td_height > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
                                 let mut body_signatures = op.body_signatures.clone();
@@ -262,7 +262,7 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
-                if CFG.checkpoint.check_signatures_num >= td_height {
+                if td_height > CFG.checkpoint.check_signatures_num {
                     for op in tx.body.operations.iter() {
                         if let Operation::TransferAsset(op) = op {
                             let mut body_signatures = op.body_signatures.clone();
