@@ -4,18 +4,13 @@ mod tests;
 use config::abci::global_cfg::CFG;
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
+use evm::backend::Log;
 use evm::{
     executor::stack::{PrecompileFailure, PrecompileHandle, PrecompileOutput},
     Context, ExitSucceed,
 };
 use evm_precompile_utils::{
-    error,
-    Address,
-    EvmDataReader,
-    EvmDataWriter,
-    EvmResult,
-    Gasometer,
-    // LogsBuilder,
+    error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
 use module_evm::{
@@ -115,40 +110,94 @@ impl<C: Config> Precompile for FRC20<C> {
 
         match &selector {
             Call::Name => match Self::name(input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::Symbol => match Self::symbol(input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::Decimals => match Self::decimals(input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::TotalSupply => match Self::total_supply(state, input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::BalanceOf => match Self::balance_of(state, input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::Allowance => match Self::allowance(state, input, target_gas) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::Approve => match Self::approve(state, input, target_gas, context) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::Transfer => match Self::transfer(state, input, target_gas, context) {
-                Ok(v) => Ok(v),
+                Ok(v) => {
+                    handle.record_cost(v.1)?;
+                    for log in v.2 {
+                        handle.log(log.address, log.topics, log.data)?;
+                    }
+                    Ok(v.0)
+                }
                 Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
             },
             Call::TransferFrom => {
                 match Self::transfer_from(state, input, target_gas, context) {
-                    Ok(v) => Ok(v),
+                    Ok(v) => {
+                        handle.record_cost(v.1)?;
+                        for log in v.2 {
+                            handle.log(log.address, log.topics, log.data)?;
+                        }
+                        Ok(v.0)
+                    }
                     Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
                 }
             }
@@ -161,7 +210,7 @@ impl<C: Config> FRC20<C> {
     fn name(
         input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_NAME)?;
 
@@ -169,19 +218,24 @@ impl<C: Config> FRC20<C> {
 
         debug!(target: "evm", "FRC20#name: Findora");
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write_raw_bytes(FRC20_NAME).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write_raw_bytes(FRC20_NAME).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Returns the symbol of the token, usually a shorter version of the name.
     fn symbol(
         input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_SYMBOL)?;
 
@@ -189,12 +243,17 @@ impl<C: Config> FRC20<C> {
 
         debug!(target: "evm", "FRC20#symbol: FRA");
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write_raw_bytes(FRC20_SYMBOL).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write_raw_bytes(FRC20_SYMBOL).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Returns the number of decimals used to get its user representation.
@@ -202,7 +261,7 @@ impl<C: Config> FRC20<C> {
     fn decimals(
         input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_DECIMALS)?;
 
@@ -210,12 +269,17 @@ impl<C: Config> FRC20<C> {
 
         debug!(target: "evm", "FRC20#decimals: 18");
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(18_u8).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(18_u8).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Returns the amount of tokens in existence.
@@ -223,7 +287,7 @@ impl<C: Config> FRC20<C> {
         state: &FinState,
         input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_TOTAL_SUPPLY)?;
 
@@ -232,12 +296,17 @@ impl<C: Config> FRC20<C> {
         let amount: U256 = C::AccountAsset::total_issuance(state);
         debug!(target: "evm", "FRC20#total_supply: {:?}", amount);
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(amount).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(amount).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Returns the amount of tokens owned by `owner`.
@@ -245,7 +314,7 @@ impl<C: Config> FRC20<C> {
         state: &FinState,
         mut input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_BALANCE_OF)?;
 
@@ -256,12 +325,17 @@ impl<C: Config> FRC20<C> {
         let amount: U256 = C::AccountAsset::balance(state, &owner_id);
         debug!(target: "evm", "FRC20#balance_of: owner: {:?}, amount: {:?} ", owner, amount);
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(amount).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(amount).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Returns the remaining number of tokens that `spender` will be allowed to spend on behalf
@@ -270,7 +344,7 @@ impl<C: Config> FRC20<C> {
         state: &FinState,
         mut input: EvmDataReader,
         target_gas: Option<u64>,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_ALLOWANCE)?;
 
@@ -286,12 +360,17 @@ impl<C: Config> FRC20<C> {
             owner, spender, amount
         );
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(amount).build(),
-            // logs: vec![],
-        })
+        let cost = gasometer.used_gas();
+        let logs = vec![];
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(amount).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Sets `amount` as the allowance of `spender` over the caller's tokens.
@@ -302,7 +381,7 @@ impl<C: Config> FRC20<C> {
         mut input: EvmDataReader,
         target_gas: Option<u64>,
         context: &Context,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_APPROVE)?;
         gasometer.record_log_costs_manual(3, 32)?;
@@ -324,19 +403,24 @@ impl<C: Config> FRC20<C> {
         C::AccountAsset::approve(state, &caller, &spender_id, amount)
             .map_err(|e| error(format!("{e:?}")))?;
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(true).build(),
-            // logs: LogsBuilder::new(context.address)
-            //     .log3(
-            //         APPROVAL_EVENT_SELECTOR,
-            //         context.caller,
-            //         spender,
-            //         EvmDataWriter::new().write(amount).build(),
-            //     )
-            //     .build(),
-        })
+        let cost = gasometer.used_gas();
+        let logs = LogsBuilder::new(context.address)
+            .log3(
+                APPROVAL_EVENT_SELECTOR,
+                context.caller,
+                spender,
+                EvmDataWriter::new().write(amount).build(),
+            )
+            .build();
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(true).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Moves `amount` tokens from the caller's account to `recipient`.
@@ -347,7 +431,7 @@ impl<C: Config> FRC20<C> {
         mut input: EvmDataReader,
         target_gas: Option<u64>,
         context: &Context,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_TRANSFER)?;
         gasometer.record_log_costs_manual(3, 32)?;
@@ -369,19 +453,24 @@ impl<C: Config> FRC20<C> {
         C::AccountAsset::transfer(state, &caller, &recipient_id, amount)
             .map_err(|e| error(format!("{e:?}")))?;
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(true).build(),
-            // logs: LogsBuilder::new(context.address)
-            //     .log3(
-            //         TRANSFER_EVENT_SELECTOR,
-            //         context.caller,
-            //         recipient,
-            //         EvmDataWriter::new().write(amount).build(),
-            //     )
-            //     .build(),
-        })
+        let cost = gasometer.used_gas();
+        let logs = LogsBuilder::new(context.address)
+            .log3(
+                TRANSFER_EVENT_SELECTOR,
+                context.caller,
+                recipient,
+                EvmDataWriter::new().write(amount).build(),
+            )
+            .build();
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(true).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 
     /// Moves `amount` tokens from `sender` to `recipient` using the allowance mechanism.
@@ -393,7 +482,7 @@ impl<C: Config> FRC20<C> {
         mut input: EvmDataReader,
         target_gas: Option<u64>,
         context: &Context,
-    ) -> EvmResult<PrecompileOutput> {
+    ) -> EvmResult<(PrecompileOutput, u64, Vec<Log>)> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_TRANSFER_FROM)?;
         gasometer.record_log_costs_manual(3, 32)?;
@@ -433,26 +522,31 @@ impl<C: Config> FRC20<C> {
         )
         .map_err(|e| error(format!("{e:?}")))?;
 
-        Ok(PrecompileOutput {
-            exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write(true).build(),
-            // logs: LogsBuilder::new(context.address)
-            //     .log3(
-            //         TRANSFER_EVENT_SELECTOR,
-            //         from,
-            //         recipient,
-            //         EvmDataWriter::new().write(amount).build(),
-            //     )
-            //     .log3(
-            //         APPROVAL_EVENT_SELECTOR,
-            //         from,
-            //         context.caller,
-            //         EvmDataWriter::new()
-            //             .write(allowance.saturating_sub(amount))
-            //             .build(),
-            //     )
-            //     .build(),
-        })
+        let cost = gasometer.used_gas();
+        let logs = LogsBuilder::new(context.address)
+            .log3(
+                TRANSFER_EVENT_SELECTOR,
+                from,
+                recipient,
+                EvmDataWriter::new().write(amount).build(),
+            )
+            .log3(
+                APPROVAL_EVENT_SELECTOR,
+                from,
+                context.caller,
+                EvmDataWriter::new()
+                    .write(allowance.saturating_sub(amount))
+                    .build(),
+            )
+            .build();
+
+        Ok((
+            PrecompileOutput {
+                exit_status: ExitSucceed::Returned,
+                output: EvmDataWriter::new().write(true).build(),
+            },
+            cost,
+            logs,
+        ))
     }
 }

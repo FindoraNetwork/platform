@@ -1,6 +1,7 @@
 use crate::*;
 use baseapp::BaseApp;
 use ethereum_types::{H160, H256};
+use evm::backend::Log;
 use evm::{ExitError, ExitReason, Transfer};
 use fp_mocks::*;
 
@@ -122,6 +123,7 @@ fn balance_of(who: H160, expected_value: U256) {
     };
 
     let mut handle = MockHandle::new(input, None, context);
+    handle.record_cost(GAS_BALANCE_OF).unwrap();
 
     assert_eq!(
         FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
@@ -147,6 +149,19 @@ fn transfer_works() {
     };
 
     let mut handle = MockHandle::new(input, None, context);
+    handle.record_cost(GAS_TRANSFER + 1756).unwrap();
+    // let logs = LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
+    //     .log3(
+    //         TRANSFER_EVENT_SELECTOR,
+    //         ALICE_ECDSA.address,
+    //         BOB_ECDSA.address,
+    //         EvmDataWriter::new().write(U256::from(400)).build(),
+    //     )
+    //     .build();
+
+    // for log in logs {
+    //     handle.log(log.address, log.topics, log.data).unwrap();
+    // }
 
     assert_eq!(
         FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
@@ -183,6 +198,7 @@ fn approve_works() {
     };
 
     let mut handle = MockHandle::new(input, None, context);
+    handle.record_cost(GAS_APPROVE + 1756).unwrap();
 
     assert_eq!(
         FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
@@ -219,6 +235,7 @@ fn allowance(owner: H160, spender: H160, expected_value: U256) {
     };
 
     let mut handle = MockHandle::new(input, None, context);
+    handle.record_cost(GAS_ALLOWANCE).unwrap();
 
     assert_eq!(
         FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
@@ -245,6 +262,7 @@ fn transfer_from_works() {
     };
 
     let mut handle = MockHandle::new(input, None, context);
+    handle.record_cost(GAS_TRANSFER_FROM + 1756 * 2).unwrap();
 
     assert_eq!(
         FRC20::<BaseApp>::execute(&mut handle, &BASE_APP.lock().unwrap().deliver_state,),
@@ -282,6 +300,7 @@ pub struct MockHandle {
     pub context: Context,
     pub is_static: bool,
     pub gas_used: u64,
+    pub logs: Vec<Log>,
 }
 
 impl MockHandle {
@@ -292,6 +311,7 @@ impl MockHandle {
             context,
             is_static: false,
             gas_used: 0,
+            logs: vec![],
         }
     }
 }
@@ -316,8 +336,18 @@ impl PrecompileHandle for MockHandle {
         Ok(())
     }
 
-    fn log(&mut self, _: H160, _: Vec<H256>, _: Vec<u8>) -> Result<(), ExitError> {
-        unimplemented!()
+    fn log(
+        &mut self,
+        address: H160,
+        topics: Vec<H256>,
+        data: Vec<u8>,
+    ) -> Result<(), ExitError> {
+        self.logs.push(Log {
+            address,
+            topics,
+            data,
+        });
+        Ok(())
     }
 
     fn remaining_gas(&self) -> u64 {
