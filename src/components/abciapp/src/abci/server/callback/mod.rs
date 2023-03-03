@@ -193,10 +193,10 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
-        //beacuse ResponseBeginBlock doesn't define the code,
-        //we can't tell tendermint that begin block is impossibled,
-        //we use thread::sleep to wait to exit, it's looks unsound.
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        // beacuse ResponseBeginBlock doesn't define the code,
+        // we can't tell tendermint that begin block is impossible,
+        // we use 'sleep' to wait to exit, it's looks unsound.
+        sleep_ms!(30_000);
     }
 
     IN_SAFE_ITV.store(true, Ordering::Release);

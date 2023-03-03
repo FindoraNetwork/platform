@@ -205,7 +205,7 @@ impl CheckPointConfig {
                 if error.kind() == ErrorKind::NotFound {
                     match File::create(file_path) {
                         Ok(mut file) => {
-                            let config = (&*DEFAULT_CHECKPOINT_CONFIG).clone();
+                            let config = (*DEFAULT_CHECKPOINT_CONFIG).clone();
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
                             return Some(config);
