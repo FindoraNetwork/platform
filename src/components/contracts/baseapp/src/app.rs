@@ -179,6 +179,24 @@ impl crate::BaseApp {
         Self::update_state(&mut self.deliver_state, init_header.clone(), vec![]);
         Self::update_state(&mut self.check_state, init_header, vec![]);
 
+        #[cfg(feature = "debug_env")]
+        {
+            use {
+                crate::BaseApp, fp_traits::account::AccountAsset,
+                fp_types::crypto::Address, primitive_types::H160, std::str::FromStr,
+            };
+            //private key: 4d05b965f821ea900ddd995dfa1b6caa834eaaa1ebe100a9760baf9331aae567
+            let test_address =
+                H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").unwrap();
+
+            // mint 100 FRA
+            pnk!(module_account::App::<BaseApp>::mint(
+                &self.deliver_state,
+                &Address::from(test_address),
+                U256::from(1_000_0000_0000_0000__u64).saturating_mul(1000_00.into())
+            ));
+        }
+
         ResponseInitChain::default()
     }
 
