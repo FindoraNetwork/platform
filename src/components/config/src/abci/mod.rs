@@ -158,7 +158,7 @@ lazy_static! {
         check_signatures_num: 0,
         fix_deliver_tx_revert_nonce_height: 0,
         utxo_asset_prefix_height: 0,
-        prismxx_inital_height: 1,
+        prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
     };
 }
