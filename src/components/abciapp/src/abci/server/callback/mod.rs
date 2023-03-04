@@ -192,14 +192,14 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
+    IN_SAFE_ITV.store(true, Ordering::Release);
+
     if IS_EXITING.load(Ordering::Acquire) {
         // beacuse ResponseBeginBlock doesn't define the code,
         // we can't tell tendermint that begin block is impossible,
         // we use 'sleep' to wait to exit, it's looks unsound.
-        sleep_ms!(30_000);
+        sleep_ms!(24_000);
     }
-
-    IN_SAFE_ITV.store(true, Ordering::Release);
 
     #[cfg(target_os = "linux")]
     {
