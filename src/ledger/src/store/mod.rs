@@ -999,9 +999,6 @@ pub struct LedgerStatus {
     staking: Staking,
     // tendermint commit height
     td_commit_height: u64,
-
-    // An obsolete feature, ignore it!
-    tracing_policies: HashMap<AssetTypeCode, TracingPolicy>,
 }
 
 impl LedgerStatus {
@@ -1100,7 +1097,6 @@ impl LedgerStatus {
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
-            tracing_policies: map! {},
             issuance_num: new_mapx!(issuance_num_path.as_str()),
             next_txn: TxnSID(0),
             next_txo: TxoSID(0),
