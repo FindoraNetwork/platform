@@ -37,10 +37,13 @@ zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = "1.0"
 
 finutils = { path = "../finutils", default-features = false }
-globutils = { path = "../../libs/globutils" }
-credentials = { path = "../../libs/credentials" }
-cryptohash = { path = "../../libs/cryptohash" }
+
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
+cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
+
 ledger = { path = "../../ledger" }
+
 
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
