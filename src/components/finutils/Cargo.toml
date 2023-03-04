@@ -27,8 +27,9 @@ rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
 
 ledger = { path = "../../ledger" }
-globutils = { path = "../../libs/globutils" }
-credentials = { path = "../../libs/credentials" }
+
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
 
 eth_checksum = { version = "0.1.2", optional = true }
 fp-core = { path = "../contracts/primitives/core", default-features = false }
