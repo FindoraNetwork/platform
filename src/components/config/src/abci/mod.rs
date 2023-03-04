@@ -90,6 +90,9 @@ pub struct CheckPointConfig {
     pub disable_delegate_frc20: i64,
 
     pub fix_exec_code: i64,
+
+    #[serde(default = "def_remove_fake_staking_hash")]
+    pub remove_fake_staking_hash: u64,
 }
 
 impl CheckPointConfig {

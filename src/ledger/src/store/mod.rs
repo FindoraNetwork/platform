@@ -333,6 +333,15 @@ impl LedgerState {
     }
 
     fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+        let staking_data = if self.get_tendermint_height()
+            < CFG.checkpoint.remove_fake_staking_hash
+            && self.get_staking().has_been_inited()
+        {
+            Some(HashOf::new(self.get_staking()))
+        } else {
+            None
+        };
+
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.write().compute_checksum(),
             block_merkle: self.block_merkle.read().get_root_hash(),
@@ -347,11 +356,7 @@ impl LedgerState {
             air_commitment: BitDigest::from_slice(&[0; 32][..]).unwrap(),
             txo_count: self.get_next_txo().0,
             pulse_count,
-            staking: alt!(
-                self.get_staking().has_been_inited(),
-                Some(HashOf::new(self.get_staking())),
-                None
-            ),
+            staking: staking_data,
         };
 
         self.status
