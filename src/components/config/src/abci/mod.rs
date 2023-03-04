@@ -108,6 +108,9 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_prism_bridge_address")]
     pub prism_bridge_address: String,
+
+    #[serde(default = "def_remove_fake_staking_hash")]
+    pub remove_fake_staking_hash: u64,
 }
 
 fn def_check_signatures_num() -> i64 {
@@ -128,6 +131,10 @@ fn def_prismxx_inital_height() -> i64 {
 
 fn def_prism_bridge_address() -> String {
     DEFAULT_CHECKPOINT_CONFIG.prism_bridge_address.clone()
+}
+
+fn def_remove_fake_staking_hash() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.remove_fake_staking_hash
 }
 
 #[cfg(feature = "debug_env")]
@@ -160,6 +167,7 @@ lazy_static! {
         utxo_asset_prefix_height: 0,
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
+        remove_fake_staking_hash: 0,
     };
 }
 
@@ -188,11 +196,12 @@ lazy_static! {
         evm_substate_v2_height: 3351349,
         disable_delegate_frc20: 3401450,
         fix_exec_code: 3401450,
-        check_signatures_num: 5000000,
-        fix_deliver_tx_revert_nonce_height: 40000000,
-        utxo_asset_prefix_height: 50000000,
-        prismxx_inital_height: 50000000,
+        check_signatures_num: 5000_0000,
+        fix_deliver_tx_revert_nonce_height: 4000_0000,
+        utxo_asset_prefix_height: 5000_0000,
+        prismxx_inital_height: 5000_0000,
         prism_bridge_address: String::new(),
+        remove_fake_staking_hash: 5000_0000,
     };
 }
 
