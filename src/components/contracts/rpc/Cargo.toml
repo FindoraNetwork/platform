@@ -26,7 +26,7 @@ jsonrpc-derive = { git = "https://github.com/FindoraNetwork/jsonrpc.git", packag
 jsonrpc-pubsub = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-pubsub" }
 jsonrpc-http-server = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-http-server" }
 jsonrpc-tcp-server = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-tcp-server" }
-libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
+libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
 lazy_static = "1.4.0"
 tracing = "0.1"
 rand = "0.8"
