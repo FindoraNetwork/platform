@@ -63,7 +63,7 @@ enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional =
 module-evm = { path = "../contracts/modules/evm"}
 
 [target.'cfg(target_os= "linux")'.dependencies]
-btm = "0.1.6"
+btm = "0.12.5"
 
 [dev-dependencies]
 
