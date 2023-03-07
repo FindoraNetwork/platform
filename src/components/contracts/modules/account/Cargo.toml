@@ -25,7 +25,7 @@ fp-types = { path = "../../primitives/types" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
 
 [dev-dependencies]
-rand_chacha = "0.2"
+rand_chacha = "0.3"
 parking_lot = "0.12"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
