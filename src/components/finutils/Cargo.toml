@@ -24,7 +24,7 @@ sha2 = "0.10"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = "1.0"
 rucv3 = { package = "ruc", version = "3.0" }
-nix = "0.25"
+nix = "0.26"
 
 ledger = { path = "../../ledger" }
 
