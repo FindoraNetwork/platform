@@ -62,10 +62,10 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators() -> Result<()> {
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators().c(d!())?;
+    let vs = get_inital_validators(staking_info_file).c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())
