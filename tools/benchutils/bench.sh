@@ -282,3 +282,12 @@ echo
 start_cnter
 run $contract_addr
 get_results
+
+echo
+sleep 10 # avoid data tail
+log "Transfering erc20 token **again** ..."
+echo
+
+start_cnter
+run $contract_addr
+get_results
