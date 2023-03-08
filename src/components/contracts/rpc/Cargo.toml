@@ -33,6 +33,7 @@ rand = "0.8"
 parking_lot = "0.12"
 rlp = "0.5"
 ruc = "1.0"
+rucv4 = { package = "ruc", version = "4.0" }
 rustc-hex = { version = "2.1.0" }
 rustc_version = "0.4.0"
 semver = "1.0.4"
