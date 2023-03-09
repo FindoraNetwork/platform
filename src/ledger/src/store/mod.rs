@@ -318,7 +318,7 @@ impl LedgerState {
     #[inline(always)]
     fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
         // 1. Compute the hash of transactions in the block and update txns_in_block_hash
-        let txns_in_block_hash = block.compute_txns_in_block_hash();
+        let txns_in_block_hash = block.compute_txns_in_block_hash_v1().unwrap();
         self.status.txns_in_block_hash = Some(txns_in_block_hash.clone());
 
         // 2. Append txns_in_block_hash to block_merkle

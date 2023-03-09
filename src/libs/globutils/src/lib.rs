@@ -160,6 +160,12 @@ where
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn new_from_str(val: String) -> Self {
+        Self(HashOfBytes::new(&Serialized::new_from_str(val)))
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn hex(&self) -> String {
         hex::encode(self)
     }
@@ -239,6 +245,15 @@ where
     pub fn new(to_serialize: &T) -> Self {
         Serialized {
             val: serde_json::to_string(&to_serialize).unwrap(),
+            phantom: PhantomData,
+        }
+    }
+
+    #[allow(missing_docs)]
+    #[inline(always)]
+    pub fn new_from_str(val: String) -> Self {
+        Serialized {
+            val,
             phantom: PhantomData,
         }
     }
