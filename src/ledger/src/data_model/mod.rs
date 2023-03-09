@@ -36,7 +36,7 @@ use {
     ruc::*,
     serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
     std::{
-        collections::{HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         convert::TryFrom,
         fmt,
         hash::{Hash, Hasher},
@@ -1314,6 +1314,51 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
+}
+
+/// Ensure that the field `pubkey_sign_map` in the generated transaction structure
+/// is in a uniform order across the network
+impl From<TransactionV1> for Transaction {
+    fn from(value: TransactionV1) -> Self {
+        let mut tx = Transaction::default();
+        tx.body = value.body;
+        tx.signatures = value.signatures;
+        let mut m: HashMap<XfrPublicKey, SignatureOf<TransactionBody>> = HashMap::new();
+        let mut is_same = false;
+
+        'outer: while !is_same {
+            let mut index_map = HashMap::new();
+            for (i, (k, v)) in value.pubkey_sign_map.iter().enumerate() {
+                index_map.insert(k, i);
+                m.insert(k.clone(), v.clone());
+            }
+
+            for (i, (k, _v)) in m.iter().enumerate() {
+                if let Some(index) = index_map.get(k) {
+                    if *index != i {
+                        continue 'outer;
+                    }
+                }
+            }
+
+            is_same = true;
+        }
+
+        tx.pubkey_sign_map = m;
+        tx
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransactionV1 {
+    pub body: TransactionBody,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub pubkey_sign_map: BTreeMap<XfrPublicKey, SignatureOf<TransactionBody>>,
 }
 
 #[allow(missing_docs)]

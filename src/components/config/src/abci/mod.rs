@@ -90,6 +90,10 @@ pub struct CheckPointConfig {
     pub disable_delegate_frc20: i64,
 
     pub fix_exec_code: i64,
+
+    // Fix the situation that the field `pubkey_sign_map`
+    // in the transaction structure will be disordered after deserialization
+    pub fix_tx_sign_map_disorder: i64,
 }
 
 impl CheckPointConfig {
@@ -125,6 +129,7 @@ impl CheckPointConfig {
                                 evm_substate_v2_height: 0,
                                 disable_delegate_frc20: 0,
                                 fix_exec_code: 0,
+                                fix_tx_sign_map_disorder: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -150,6 +155,7 @@ impl CheckPointConfig {
                                 evm_substate_v2_height: 3351349,
                                 disable_delegate_frc20: 3401450,
                                 fix_exec_code: 3401450,
+                                fix_tx_sign_map_disorder: 50000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
