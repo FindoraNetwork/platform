@@ -1330,7 +1330,7 @@ impl From<TransactionV1> for Transaction {
             let mut index_map = HashMap::new();
             for (i, (k, v)) in value.pubkey_sign_map.iter().enumerate() {
                 index_map.insert(k, i);
-                m.insert(k.clone(), v.clone());
+                m.insert(*k, v.clone());
             }
 
             for (i, (k, _v)) in m.iter().enumerate() {
