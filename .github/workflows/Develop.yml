@@ -26,7 +26,13 @@ jobs:
         override: true
         components: rustfmt
 
-        
+    - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+      shell: bash
+      run: |
+        docker login -u AWS -p $(aws ecr-public get-login-password --region us-east-1) ${PUBLIC_ECR_URL}
+               
     - name: Prepare key
       shell: bash
       run: |
@@ -77,12 +83,7 @@ jobs:
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
-    - name: Login ECR
-      env:
-        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-      shell: bash
-      run: |
-        docker login -u AWS -p $(aws ecr-public get-login-password --region us-east-1) public.ecr.aws/k6m5b6e2
+ 
 
         
     - name: Push images
