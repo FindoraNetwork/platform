@@ -3,13 +3,13 @@
 use {
     super::*,
     curve25519_dalek::ristretto::CompressedRistretto,
-    rand_core::SeedableRng,
-    std::cmp::min,
-    zei::{
+    noah::{
         ristretto,
         xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
     },
-    zeiutils::msg_eq,
+    noah_algebra::prelude::msg_eq,
+    rand_core::SeedableRng,
+    std::cmp::min,
 };
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
@@ -260,7 +260,7 @@ fn test_add_operation() {
 
 fn gen_fee_operation(
     amount: Option<u64>,
-    asset_type: Option<ZeiAssetType>,
+    asset_type: Option<NoahAssetType>,
     dest_pubkey: XfrPublicKey,
 ) -> Operation {
     Operation::TransferAsset(TransferAsset {
@@ -311,33 +311,33 @@ fn test_check_fee() {
         gen_fee_operation(Some(TX_FEE_MIN), None, *BLACK_HOLE_PUBKEY);
     let invalid_confidential_amount = gen_fee_operation(
         None,
-        Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+        Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_nonconfidential_not_fra_code = gen_fee_operation(
         Some(TX_FEE_MIN),
-        Some(ZeiAssetType([9; ASSET_TYPE_LENGTH])),
+        Some(NoahAssetType([9; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_nonconfidential_fee_too_little = gen_fee_operation(
         Some(TX_FEE_MIN - 1),
-        Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+        Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_destination_not_black_hole = gen_fee_operation(
         Some(TX_FEE_MIN),
-        Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::zei_from_bytes(&[9; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
+        Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
+        XfrPublicKey::noah_from_bytes(&[9; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
             .unwrap(),
     );
     let valid = gen_fee_operation(
         Some(TX_FEE_MIN),
-        Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+        Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let valid2 = gen_fee_operation(
         Some(TX_FEE_MIN + 999),
-        Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+        Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
 

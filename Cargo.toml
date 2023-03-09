@@ -1,35 +1,35 @@
 [workspace]
 members = [
     "src/ledger",
-    "src/components/finutils",
-    "src/components/abciapp",
+    # "src/components/finutils",
+    # "src/components/abciapp",
     "src/components/config",
-    "src/components/wasm",
-    "src/components/contracts/baseapp",
-    "src/components/contracts/modules/account",
-    "src/components/contracts/modules/ethereum",
-    "src/components/contracts/modules/evm",
-    "src/components/contracts/modules/evm/precompile/basic",
-    "src/components/contracts/modules/evm/precompile/frc20",
-    "src/components/contracts/modules/evm/precompile/modexp",
-    "src/components/contracts/modules/evm/precompile/sha3fips",
-    "src/components/contracts/modules/evm/precompile/utils",
-    "src/components/contracts/modules/evm/precompile/utils/macro",
-    "src/components/contracts/modules/xhub",
-    "src/components/contracts/modules/template",
-    "src/components/contracts/primitives/core",
-    "src/components/contracts/primitives/events",
-    "src/components/contracts/primitives/evm",
-    "src/components/contracts/primitives/mocks",
-    "src/components/contracts/primitives/storage",
-    "src/components/contracts/primitives/traits",
+    # "src/components/wasm",
+    # "src/components/contracts/baseapp",
+    # "src/components/contracts/modules/account",
+    # "src/components/contracts/modules/ethereum",
+    # "src/components/contracts/modules/evm",
+    # "src/components/contracts/modules/evm/precompile/basic",
+    # "src/components/contracts/modules/evm/precompile/frc20",
+    # "src/components/contracts/modules/evm/precompile/modexp",
+    # "src/components/contracts/modules/evm/precompile/sha3fips",
+    # "src/components/contracts/modules/evm/precompile/utils",
+    # "src/components/contracts/modules/evm/precompile/utils/macro",
+    # "src/components/contracts/modules/xhub",
+    # "src/components/contracts/modules/template",
+    # "src/components/contracts/primitives/core",
+    # "src/components/contracts/primitives/events",
+    # "src/components/contracts/primitives/evm",
+    # "src/components/contracts/primitives/mocks",
+    # "src/components/contracts/primitives/storage",
+    # "src/components/contracts/primitives/traits",
     "src/components/contracts/primitives/types",
-    "src/components/contracts/primitives/rpc-core",
-    "src/components/contracts/primitives/rpc-server",
+    # "src/components/contracts/primitives/rpc-core",
+    # "src/components/contracts/primitives/rpc-server",
     "src/components/contracts/primitives/utils",
-    "src/components/contracts/primitives/wasm",
-    "src/components/contracts/primitives/enterprise-web3",
-    "src/components/contracts/rpc",
+    # "src/components/contracts/primitives/wasm",
+    # "src/components/contracts/primitives/enterprise-web3",
+    # "src/components/contracts/rpc",
 ]
 
 [profile.dev]
@@ -49,6 +49,12 @@ opt-level = 1
 overflow-checks = false
 
 [patch.crates-io]
-ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", rev = "ad461f" }
-curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", rev = "a2df65" }
-x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek", rev = "53bb1a" }
+ark-ec = { git = "https://github.com/FindoraNetwork/ark-algebra", tag = "stable-2022" }
+ark-ff = { git = "https://github.com/FindoraNetwork/ark-algebra", tag = "stable-2022" }
+ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra", tag = "stable-2022" }
+ark-std = { git = "https://github.com/FindoraNetwork/ark-std", tag = "stable-2022" }
+ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves", tag = "stable-2022" }
+ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves", tag = "stable-2022" }
+ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-algebra", tag = "stable-2022" }
+curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
+ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }

@@ -12,7 +12,7 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
@@ -33,6 +33,7 @@ use {
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ops::{
         fra_distribution::FraDistributionOps,
         mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
@@ -50,7 +51,6 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 // height, reward rate
@@ -1608,7 +1608,7 @@ impl Staking {
         &self.coinbase.distribution_plan
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     /// set_proposer_rewards sets the rewards for the block proposer
     /// All rewards are allocated to the proposer only
     pub(crate) fn set_proposer_rewards(
@@ -1650,7 +1650,7 @@ impl Staking {
             .map(|_| ())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         // p[0] = Validator power which voted for this block
@@ -2103,7 +2103,7 @@ impl Delegation {
     }
 
     #[inline(always)]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.delegations.contains_key(validator)
     }
@@ -2123,7 +2123,7 @@ impl Delegation {
     // > **NOTE:**
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_delegation_rewards(
         &mut self,
@@ -2212,7 +2212,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,

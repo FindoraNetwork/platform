@@ -9,9 +9,9 @@ use {
         data_model::{NoReplayToken, Operation, Transaction},
         staking::{PartialUnDelegation, Staking},
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `UnDelegation Operation`.
@@ -68,7 +68,7 @@ impl UnDelegationOps {
         pu: Option<PartialUnDelegation>,
     ) -> Self {
         let body = Data::new(nonce, pu);
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         UnDelegationOps {
             body,
             pubkey: keypair.get_pk(),

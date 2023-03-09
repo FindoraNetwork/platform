@@ -4,63 +4,28 @@
 
 use {
     super::{
-        IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
-        TransferType, XfrNotePolicies,
+        IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy, XfrNotePolicies,
     },
     crate::data_model::{
         Asset, AssetRules, AssetTypeCode, AssetTypePrefix, ConfidentialMemo,
-        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation,
-        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID,
-        TxoRef, TxoSID, ASSET_TYPE_FRA,
+        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
+        Operation, Transaction, TransferAsset, TransferAssetBody, TransferType,
+        TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
     },
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
+    noah::xfr::{
+        asset_record::AssetRecordType,
+        asset_record::{build_blind_asset_record, open_blind_asset_record},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecord, AssetRecordTemplate, AssetType},
+    },
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::fmt::Debug,
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::AssetRecordType,
-            asset_record::{build_blind_asset_record, open_blind_asset_record},
-            sig::{XfrKeyPair, XfrPublicKey},
-            structs::{AssetRecord, AssetRecordTemplate, AssetType},
-        },
-    },
 };
-
-/// Create a transaction to define a custom asset
-pub fn create_definition_transaction(
-    code: &AssetTypeCode,
-    keypair: &XfrKeyPair,
-    asset_rules: AssetRules,
-    memo: Option<Memo>,
-    seq_id: u64,
-) -> Result<(Transaction, AssetTypeCode)> {
-    let issuer_key = IssuerPublicKey {
-        key: *keypair.get_pk_ref(),
-    };
-    let asset_body =
-        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
-    let asset_create =
-        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
-
-    let code = if code.val == ASSET_TYPE_FRA {
-        *code
-    } else {
-        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-        asset_code.append(&mut code.to_bytes());
-        AssetTypeCode {
-            val: AssetType(keccak_256(&asset_code)),
-        }
-    };
-
-    Ok((
-        Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id),
-        code,
-    ))
-}
 
 #[inline(always)]
 #[allow(missing_docs)]
@@ -152,7 +117,6 @@ pub fn apply_transaction(
 #[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     issuer_keys: &XfrKeyPair,
@@ -166,12 +130,10 @@ pub fn create_issue_and_transfer_txn(
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         issuer_keys.get_pk(),
     );
-    let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &ar_template,
-        vec![],
-    );
+
+    let pc_gens = PedersenCommitmentRistretto::default();
+    let (ba, _tracer_memo, owner_memo) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(
         &code,
@@ -231,7 +193,6 @@ pub fn create_issue_and_transfer_txn(
 #[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn_with_asset_tracing(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     issuer_keys: &XfrKeyPair,
@@ -254,9 +215,10 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         issuer_keys.get_pk(),
         tracing_policies.clone(),
     );
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
         &mut ledger.get_prng(),
-        &params.pc_gens,
+        &pc_gens,
         &ar_template,
         vec![vec![]],
     );
@@ -328,7 +290,6 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
 #[allow(missing_docs)]
 pub fn create_issuance_txn(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     seq_num: u64,
@@ -342,12 +303,9 @@ pub fn create_issuance_txn(
         record_type,
         issuer_keys.get_pk(),
     );
-    let (ba, _tracer_memo, _owner_memo) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &ar_template,
-        vec![],
-    );
+    let pc_gens = PedersenCommitmentRistretto::default();
+    let (ba, _tracer_memo, _owner_memo) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(
         &code,

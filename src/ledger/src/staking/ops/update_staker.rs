@@ -10,10 +10,10 @@ use {
         staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
     },
     ed25519_dalek::Signer,
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Staker Update Operation`.
@@ -89,7 +89,7 @@ impl UpdateStakerOps {
         nonce: NoReplayToken,
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, nonce));
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         let v_signature: Option<Ed25519Signature> = vltor_key
             .ed25519_keypair()
             .map(|k| k.sign(&body.to_bytes()));

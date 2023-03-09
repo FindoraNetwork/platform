@@ -6,9 +6,9 @@
 use {
     crate::data_model::{NoReplayToken, Transaction},
     crate::staking::Staking,
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used for `Staker Replace Operation`.
@@ -38,7 +38,7 @@ impl ReplaceStakerOps {
             nonce,
         };
 
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
 
         ReplaceStakerOps {
             body,

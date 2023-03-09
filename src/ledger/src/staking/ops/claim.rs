@@ -6,9 +6,9 @@
 
 use {
     crate::{data_model::NoReplayToken, staking::Staking},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Claim Operation`.
@@ -57,7 +57,7 @@ impl ClaimOps {
     #[allow(missing_docs)]
     pub fn new(keypair: &XfrKeyPair, amount: Option<u64>, nonce: NoReplayToken) -> Self {
         let body = Data::new(amount, nonce);
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         ClaimOps {
             body,
             pubkey: keypair.get_pk(),

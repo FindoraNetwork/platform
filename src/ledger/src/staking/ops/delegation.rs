@@ -16,14 +16,14 @@ use {
         },
     },
     ed25519_dalek::Signer,
+    noah::xfr::{
+        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+        structs::{XfrAmount, XfrAssetType},
+    },
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::xfr::{
-        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-        structs::{XfrAmount, XfrAssetType},
-    },
 };
 
 /// Used as the inner object of a `Delegation Operation`.
@@ -125,7 +125,7 @@ impl DelegationOps {
         nonce: NoReplayToken,
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, amount, nonce));
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         let v_signature: Option<Ed25519Signature> = vltor_key
             .and_then(|pk| pk.ed25519_keypair().map(|k| k.sign(&body.to_bytes())));
         DelegationOps {
