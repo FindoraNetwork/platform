@@ -9,6 +9,7 @@ pub mod utils;
 
 pub use fbnc;
 
+use crate::data_model::TransactionV1;
 use {
     crate::{
         data_model::{
@@ -190,25 +191,32 @@ impl LedgerState {
         // Update the transaction Merkle tree
         // Store the location of each utxo so we can create authenticated utxo proofs
         let mut txn_merkle = self.txn_merkle.write();
-        for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
+        for (tmp_sid, tx) in block.temp_sids.iter().zip(block.txns.iter()) {
             let txo_sid_map = tsm.get(&tmp_sid).c(d!())?;
             let txn_sid = txo_sid_map.0;
             let txo_sids = &txo_sid_map.1;
 
             let merkle_id = {
-                let mut txn = txn.clone();
+                let mut txn = tx.clone();
 
                 if (CFG.checkpoint.utxo_checktx_height as u64) > height {
                     txn.pubkey_sign_map = Default::default();
                 }
 
-                let hash = HashOf::new(&(txn_sid, txn)).0.hash;
+                // Rules to control hash based on checkpoint
+                let hash = if (CFG.checkpoint.fix_tx_sign_map_disorder as u64) > height {
+                    HashOf::new(&(txn_sid, txn))
+                } else {
+                    let tx_v1: TransactionV1 = tx.into();
+                    let json = serde_json::to_string(&(txn_sid, tx_v1)).c(d!())?;
+                    HashOf::new_from_str(json)
+                };
 
-                txn_merkle.append_hash(&hash.into()).c(d!())?
+                txn_merkle.append_hash(&hash.0.hash.into()).c(d!())?
             };
 
             tx_block.push(FinalizedTransaction {
-                txn: txn.clone(),
+                txn: tx.clone(),
                 tx_id: txn_sid,
                 txo_ids: txo_sids.clone(),
                 merkle_id,
@@ -316,9 +324,9 @@ impl LedgerState {
     //  1. Compute the hash of transactions in the block and update txns_in_block_hash
     //  2. Append txns_in_block_hash to block_merkle
     #[inline(always)]
-    fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
+    fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> Result<u64> {
         // 1. Compute the hash of transactions in the block and update txns_in_block_hash
-        let txns_in_block_hash = block.compute_txns_in_block_hash_v1().unwrap();
+        let txns_in_block_hash = block.compute_txns_in_block_hash_v1().c(d!())?;
         self.status.txns_in_block_hash = Some(txns_in_block_hash.clone());
 
         // 2. Append txns_in_block_hash to block_merkle
@@ -329,7 +337,7 @@ impl LedgerState {
             .append_hash(&txns_in_block_hash.0.hash.into())
             .unwrap();
 
-        ret
+        Ok(ret)
     }
 
     fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
@@ -445,7 +453,7 @@ impl LedgerState {
 
     /// Perform checkpoint of current ledger state
     pub fn checkpoint(&mut self, block: &BlockEffect) -> Result<u64> {
-        let merkle_id = self.compute_and_append_txns_hash(&block);
+        let merkle_id = self.compute_and_append_txns_hash(&block).c(d!())?;
         let pulse_count = block
             .staking_simulator
             .cur_height()

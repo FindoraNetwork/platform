@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
+extern crate core;
+
 #[macro_use]
 pub mod data_model;
 pub mod converter;

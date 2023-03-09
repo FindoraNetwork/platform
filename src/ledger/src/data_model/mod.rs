@@ -1316,39 +1316,6 @@ pub struct Transaction {
     pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
 }
 
-/// Ensure that the field `pubkey_sign_map` in the generated transaction structure
-/// is in a uniform order across the network
-impl From<TransactionV1> for Transaction {
-    fn from(value: TransactionV1) -> Self {
-        let mut tx = Transaction::default();
-        tx.body = value.body;
-        tx.signatures = value.signatures;
-        let mut m: HashMap<XfrPublicKey, SignatureOf<TransactionBody>> = HashMap::new();
-        let mut is_same = false;
-
-        'outer: while !is_same {
-            let mut index_map = HashMap::new();
-            for (i, (k, v)) in value.pubkey_sign_map.iter().enumerate() {
-                index_map.insert(k, i);
-                m.insert(*k, v.clone());
-            }
-
-            for (i, (k, _v)) in m.iter().enumerate() {
-                if let Some(index) = index_map.get(k) {
-                    if *index != i {
-                        continue 'outer;
-                    }
-                }
-            }
-
-            is_same = true;
-        }
-
-        tx.pubkey_sign_map = m;
-        tx
-    }
-}
-
 /// Here there is no need to determine whether the order is consistent,
 /// because in the previous TransactionV1 to Transaction has ensured
 /// that the order of the hashmap is the same as the BTreeMap has been

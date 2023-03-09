@@ -753,8 +753,8 @@ impl BlockEffect {
                 })
                 .collect();
             let json = serde_json::to_string(&tx_v1_list).c(d!())?;
-
-            Ok(HashOf::new_from_str(json))
+            let h = HashOf::new_from_str(json);
+            Ok(h)
         } else {
             Ok(self.compute_txns_in_block_hash())
         }

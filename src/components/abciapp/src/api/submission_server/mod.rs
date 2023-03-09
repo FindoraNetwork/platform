@@ -7,10 +7,7 @@ pub mod submission_api;
 use {
     fp_utils::tx::EVM_TX_TAG,
     ledger::{
-        data_model::{
-            BlockEffect, Transaction, TransactionV1, TxnEffect, TxnSID, TxnTempSID,
-            TxoSID,
-        },
+        data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
         store::LedgerState,
     },
     parking_lot::RwLock,
@@ -256,21 +253,6 @@ where
 #[inline(always)]
 pub fn convert_tx(tx: &[u8]) -> Result<Transaction> {
     serde_json::from_slice(tx).c(d!())
-}
-
-/// Conversion of transaction data to V1 or original version based on height comparison
-#[inline(always)]
-pub fn convert_tx_v1(
-    tx: &[u8],
-    cur_height: i64,
-    target_height: i64,
-) -> Result<Transaction> {
-    if cur_height > target_height {
-        let tx_fix = serde_json::from_slice::<TransactionV1>(tx).c(d!())?;
-        Ok(tx_fix.into())
-    } else {
-        convert_tx(tx)
-    }
 }
 
 /// Tx Catalog

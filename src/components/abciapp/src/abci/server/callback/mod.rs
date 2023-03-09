@@ -9,7 +9,7 @@ use {
         abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
         api::{
             query_server::BLOCK_CREATED,
-            submission_server::{convert_tx_v1, try_tx_catalog, TxCatalog},
+            submission_server::{convert_tx, try_tx_catalog, TxCatalog},
         },
     },
     abci::{
@@ -127,11 +127,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
-                if let Ok(tx) = convert_tx_v1(
-                    req.get_tx(),
-                    td_height,
-                    CFG.checkpoint.disable_evm_block_height,
-                ) {
+                if let Ok(tx) = convert_tx(req.get_tx()) {
                     if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
@@ -238,11 +234,7 @@ pub fn deliver_tx(
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if let Ok(tx) = convert_tx_v1(
-                req.get_tx(),
-                td_height,
-                CFG.checkpoint.fix_tx_sign_map_disorder,
-            ) {
+            if let Ok(tx) = convert_tx(req.get_tx()) {
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
