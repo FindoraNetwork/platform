@@ -30,6 +30,16 @@ jobs:
       run: |
         tar -C ~/.ssh -zcf key.tar.gz ./
 
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2 
+      with:
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+      with:
+          registry-type: public
+
     - name: Clean garbage containers and images
       shell: bash
       run: |
@@ -66,12 +76,6 @@ jobs:
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image_web3
 
-    - name: Login ECR
-      env:
-        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-      shell: bash
-      run: |
-        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
     - name: Push images
       env:
         PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
