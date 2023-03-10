@@ -2,6 +2,7 @@
 //! # Access Ledger Data
 //!
 
+ 
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -10,22 +11,22 @@ use {
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
     },
-    globutils::HashOf,
+    globutils::{wallet,HashOf},
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-            TxoSID, UnAuthenticatedUtxo, Utxo,
+            ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
+            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo, ABARData
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
             TendermintAddrRef,
         },
     },
+    noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
 /// Ping route to check for liveness of API
@@ -199,8 +200,7 @@ pub async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    let (hash, seq_id) = ledger.get_state_commitment();
+    let (hash, seq_id) = qs.get_state_commitment_from_api_cache();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
@@ -686,7 +686,30 @@ pub async fn query_owned_utxos(
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.to_string()))
-        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
+        .and_then(|pk| {
+            ledger
+                .get_owned_utxos(&pk)
+                .map_err(|e| error::ErrorBadRequest(e.to_string()))
+        })
+        .map(web::Json)
+}
+
+// query utxos according `commitment`
+pub(super) async fn query_owned_abar(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<(ATxoSID, ABARData)>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    globutils::wallet::commitment_from_base58(com.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|com| {
+            web::Json(ledger.get_owned_abar(&com).map(|a| {
+                let c = wallet::commitment_to_base58(&com);
+                (a, ABARData { commitment: c })
+            }))
+        })
 }
 
 #[allow(missing_docs)]
@@ -701,6 +724,7 @@ pub enum ApiRoutes {
     TxnSidLight,
     GlobalStateVersion,
     OwnedUtxos,
+    OwnedAbars,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -724,6 +748,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
+            ApiRoutes::OwnedAbars => "owned_abars",
         };
         "/".to_owned() + endpoint
     }

@@ -1,5 +1,6 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
+#![allow(clippy::too_many_arguments)]
 
 extern crate core;
 
@@ -15,8 +16,7 @@ use ethabi::Token;
 use ethereum::{
     Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
 };
-use ethereum_types::U256;
-use ethereum_types::{Bloom, BloomInput, H160, H256};
+use ethereum_types::{Bloom, BloomInput, H160, H256, U256};
 use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 use fp_core::{
     context::Context,
@@ -31,18 +31,21 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
+
 use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
 };
+use noah::xfr::sig::XfrPublicKey;
+use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
 use ruc::*;
 use runtime::runner::ActionRunner;
-pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
-use zei::xfr::sig::XfrPublicKey;
+
+pub use runtime::*;
 
 pub const MODULE_NAME: &str = "evm";
 
@@ -110,7 +113,7 @@ impl<C: Config> App<C> {
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
-        let from = Token::Bytes(from.as_bytes().to_vec());
+        let from = Token::Bytes(from.noah_to_bytes());
 
         let to = Token::Address(*to);
 
@@ -287,6 +290,8 @@ impl<C: Config> AppModule for App<C> {
             _ => resp,
         }
     }
+
+    fn begin_block(&mut self, _ctx: &mut Context, _req: &abci::RequestBeginBlock) {}
 }
 
 impl<C: Config> Executable for App<C> {

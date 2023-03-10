@@ -4,10 +4,6 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
-};
-
 mod whoami;
 
 #[cfg(test)]
@@ -21,7 +17,10 @@ use {
     fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
     ledger::{
-        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        data_model::{
+            AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+        },
         staking::{
             ops::{
                 governance::{governance_penalty_tendermint_auto, ByzantineKind},

@@ -2,12 +2,8 @@
 mod tests;
 
 use eth_pairings::public_interface::{perform_operation, ApiError, OperationType};
-use evm::executor::stack::{PrecompileFailure,  PrecompileOutput};
-use evm::{
-    // Context,
-    ExitError,
-    ExitSucceed,
-};
+use evm::executor::stack::{PrecompileFailure, PrecompileOutput};
+use evm::{Context, ExitError, ExitSucceed};
 use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 use tracing::debug;
@@ -29,12 +25,11 @@ pub enum Call {
 
 impl Precompile for EthPairing {
     fn execute(
-        handle: &mut impl PrecompileHandle,
+        input: &[u8],
+        target_gas: Option<u64>,
+        _context: &Context,
         _state: &FinState,
     ) -> PrecompileResult {
-        let input = handle.input();
-        let target_gas = handle.gas_limit();
-
         let mut input = EvmDataReader::new(input);
         let selector = match input.read_selector::<Call>() {
             Ok(v) => v,
@@ -91,11 +86,11 @@ impl EthPairing {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            // cost: gasometer.used_gas(),
+            cost: gasometer.used_gas(),
             output: EvmDataWriter::new()
                 .write_raw_bytes(result.as_slice())
                 .build(),
-            // logs: vec![],
+            logs: vec![],
         })
     }
 }

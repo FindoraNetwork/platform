@@ -13,14 +13,14 @@ use ledger::{
         AssetTypeCode, StateCommitmentData, Transaction, BLACK_HOLE_PUBKEY_STAKING,
     },
     staking::{td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA},
-    store::utils::fra_gen_initial_tx,
+    utils::fra_gen_initial_tx,
 };
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use zei::xfr::{
+use noah::xfr::{
     asset_record::AssetRecordType,
     sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use ruc::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 struct TmValidators {
@@ -59,7 +59,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         .and_then(|b| serde_json::from_slice::<TmValidators>(&b).c(d!()))?;
 
     tm_validators.result.validators.into_iter().for_each(|v| {
-        let xfr_key = common::gen_key();
+        let xfr_key = common::gen_key(false);
         let iv = InitialValidator {
             tendermint_addr: v.address,
             tendermint_pubkey: v.pub_key.value,
@@ -134,9 +134,13 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
                 v.tendermint_addr.clone(),
             );
         })?;
-        let mut tx = builder.take_transaction();
-        tx.sign(&v.xfr_keypair);
-        send_tx(env, &tx).c(d!())?;
+        builder
+            .build_and_take_transaction()
+            .c(d!())
+            .and_then(|mut tx| {
+                tx.sign(&v.xfr_keypair);
+                send_tx(env, &tx).c(d!())
+            })?;
     }
 
     println!("[ {} ] >>> Init work done !", &env.name);
@@ -154,7 +158,10 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
         .collect::<Vec<_>>();
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(env, &builder.take_transaction()).c(d!())
+    builder
+        .build_and_take_transaction()
+        .c(d!())
+        .and_then(|tx| send_tx(env, &tx).c(d!()))
 }
 
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
@@ -193,10 +200,13 @@ fn transfer_batch(
     .c(d!())?;
     builder.add_operation(op);
 
-    let mut tx = builder.take_transaction();
-    tx.sign(owner_kp);
-
-    send_tx(env, &tx).c(d!())
+    builder
+        .build_and_take_transaction()
+        .c(d!())
+        .and_then(|mut tx| {
+            tx.sign(owner_kp);
+            send_tx(env, &tx).c(d!())
+        })
 }
 
 fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
