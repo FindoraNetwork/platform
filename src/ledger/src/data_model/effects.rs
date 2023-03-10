@@ -2,8 +2,8 @@ use {
     crate::{
         data_model::{
             AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
-            NoReplayToken, Operation, Transaction, TransferAsset, TransferType,
-            TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+            NoReplayToken, Operation, Transaction, TransactionV1, TransferAsset,
+            TransferType, TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -717,8 +717,6 @@ impl BlockEffect {
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
         let height = self.staking_simulator.cur_height();
 
-        println!("Current height is: {height}");
-
         if (CFG.checkpoint.utxo_checktx_height as u64) < height {
             HashOf::new(&self.txns)
         } else {
@@ -733,6 +731,28 @@ impl BlockEffect {
                 .collect();
 
             HashOf::new(&txns)
+        }
+    }
+
+    #[inline(always)]
+    /// After the current height is greater than the height specified by the `checkpoint.fix_tx_sign_map_disorder`,
+    /// the new hash calculated by `TransactionV1` is used.
+    pub fn compute_txns_in_block_hash_v1(&self) -> Result<HashOf<Vec<Transaction>>> {
+        let height = self.staking_simulator.cur_height();
+        if (CFG.checkpoint.fix_tx_sign_map_disorder as u64) < height {
+            let tx_v1_list: Vec<TransactionV1> = self
+                .txns
+                .iter()
+                .map(|tx| {
+                    let tx_v1: TransactionV1 = tx.into();
+                    tx_v1
+                })
+                .collect();
+            let json = serde_json::to_string(&tx_v1_list).c(d!())?;
+            let h = HashOf::new_from_str(json);
+            Ok(h)
+        } else {
+            Ok(self.compute_txns_in_block_hash())
         }
     }
 

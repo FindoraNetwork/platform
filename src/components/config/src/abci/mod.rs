@@ -111,6 +111,11 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_remove_fake_staking_hash")]
     pub remove_fake_staking_hash: u64,
+
+    // Fix the situation that the field `pubkey_sign_map`
+    // in the transaction structure will be disordered after deserialization
+    #[serde(default = "def_fix_tx_sign_map_disorder")]
+    pub fix_tx_sign_map_disorder: i64,
 }
 
 fn def_check_signatures_num() -> i64 {
@@ -135,6 +140,10 @@ fn def_prism_bridge_address() -> String {
 
 fn def_remove_fake_staking_hash() -> u64 {
     DEFAULT_CHECKPOINT_CONFIG.remove_fake_staking_hash
+}
+
+fn def_fix_tx_sign_map_disorder() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.fix_tx_sign_map_disorder
 }
 
 #[cfg(feature = "debug_env")]
@@ -168,6 +177,7 @@ lazy_static! {
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
+        fix_tx_sign_map_disorder: 0,
     };
 }
 
@@ -202,6 +212,7 @@ lazy_static! {
         prismxx_inital_height: 5000_0000,
         prism_bridge_address: String::new(),
         remove_fake_staking_hash: 5000_0000,
+        fix_tx_sign_map_disorder: 5000_0000,
     };
 }
 
