@@ -28,7 +28,7 @@ nix = "0.25"
 
 ledger = { path = "../../ledger" }
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", rev = "1d9166312186cb16b86e66f62a0d1bbee44a3c2c" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
 
 eth_checksum = { version = "0.1.2", optional = true }

@@ -36,7 +36,7 @@ use {
     ruc::*,
     serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
     std::{
-        collections::{HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         convert::TryFrom,
         fmt,
         hash::{Hash, Hasher},
@@ -1335,6 +1335,38 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransactionV1 {
+    pub body: TransactionBody,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub pubkey_sign_map: BTreeMap<XfrPublicKey, SignatureOf<TransactionBody>>,
+}
+
+/// Here there is no need to determine whether the order is consistent,
+/// because in the previous TransactionV1 to Transaction has ensured
+/// that the order of the hashmap is the same as the BTreeMap has been
+impl From<&Transaction> for TransactionV1 {
+    fn from(value: &Transaction) -> Self {
+        let mut tx_v1 = TransactionV1::default();
+        tx_v1.body = value.body.clone();
+        tx_v1.signatures = value.signatures.clone();
+        let mut m: BTreeMap<XfrPublicKey, SignatureOf<TransactionBody>> =
+            BTreeMap::new();
+
+        for (k, v) in value.pubkey_sign_map.iter() {
+            m.insert(*k, v.clone());
+        }
+        tx_v1.pubkey_sign_map = m;
+
+        tx_v1
+    }
 }
 
 #[allow(missing_docs)]

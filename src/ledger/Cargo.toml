@@ -37,7 +37,7 @@ fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", rev = "1d9166312186cb16b86e66f62a0d1bbee44a3c2c" }
 bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "main" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }

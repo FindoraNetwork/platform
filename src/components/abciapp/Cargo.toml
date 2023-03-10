@@ -47,7 +47,7 @@ abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", rev = "1d9166312186cb16b86e66f62a0d1bbee44a3c2c" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
 
 finutils = { path = "../finutils" }

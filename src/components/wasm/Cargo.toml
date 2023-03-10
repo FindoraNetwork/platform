@@ -38,7 +38,7 @@ ruc = "1.0"
 
 finutils = { path = "../finutils", default-features = false }
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", rev = "1d9166312186cb16b86e66f62a0d1bbee44a3c2c" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
 
