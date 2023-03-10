@@ -31,8 +31,8 @@ jobs:
         PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
-        docker login -u AWS -p $(aws ecr-public get-login-password --region us-east-1) ${PUBLIC_ECR_URL}
-               
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
+
     - name: Prepare key
       shell: bash
       run: |
