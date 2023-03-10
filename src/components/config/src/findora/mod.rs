@@ -13,20 +13,15 @@ pub mod init {
         "https://prod-mainnet.prod.findora.org:26657/genesis";
 
     #[allow(dead_code)]
-    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
     pub enum InitMode {
         Dev,
         Testnet,
+        #[default]
         Mainnet,
         Qa01,
         Qa02,
         Qa03,
-    }
-
-    impl Default for InitMode {
-        fn default() -> Self {
-            InitMode::Mainnet
-        }
     }
 
     pub fn save_genesis(url: &str, path: &str) -> Result<()> {
