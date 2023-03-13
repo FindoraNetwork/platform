@@ -90,7 +90,6 @@ impl<C: Config> Precompile for FRC20<C> {
     ) -> PrecompileResult {
         if CFG.checkpoint.disable_delegate_frc20 < state.header.height {
             let addr = context.address;
-
             if addr != H160::from_low_u64_be(Self::contract_id()) {
                 return Err(PrecompileFailure::Error {
                     exit_status: error("No delegatecall support"),

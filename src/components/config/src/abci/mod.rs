@@ -1,5 +1,6 @@
 use {
     global_cfg::CFG,
+    lazy_static::lazy_static,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
@@ -90,6 +91,118 @@ pub struct CheckPointConfig {
     pub disable_delegate_frc20: i64,
 
     pub fix_exec_code: i64,
+
+    #[serde(default = "def_check_signatures_num")]
+    pub check_signatures_num: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/707
+    // FO-1370: V0.3.30 EVM bug: receipt missing when error code === 1
+    #[serde(default = "def_fix_deliver_tx_revert_nonce_height")]
+    pub fix_deliver_tx_revert_nonce_height: i64,
+
+    #[serde(default = "def_utxo_asset_prefix_height")]
+    pub utxo_asset_prefix_height: u64,
+
+    #[serde(default = "def_prismxx_inital_height")]
+    pub prismxx_inital_height: i64,
+
+    #[serde(default = "def_prism_bridge_address")]
+    pub prism_bridge_address: String,
+
+    #[serde(default = "def_remove_fake_staking_hash")]
+    pub remove_fake_staking_hash: u64,
+}
+
+fn def_check_signatures_num() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.check_signatures_num
+}
+
+fn def_fix_deliver_tx_revert_nonce_height() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.fix_deliver_tx_revert_nonce_height
+}
+
+fn def_utxo_asset_prefix_height() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.utxo_asset_prefix_height
+}
+
+fn def_prismxx_inital_height() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.prismxx_inital_height
+}
+
+fn def_prism_bridge_address() -> String {
+    DEFAULT_CHECKPOINT_CONFIG.prism_bridge_address.clone()
+}
+
+fn def_remove_fake_staking_hash() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.remove_fake_staking_hash
+}
+
+#[cfg(feature = "debug_env")]
+lazy_static! {
+    static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
+        evm_substate_height: 0,
+        disable_evm_block_height: 0,
+        enable_frc20_height: 0,
+        tx_revert_on_error_height: 0,
+        evm_first_block_height: 0,
+        zero_amount_fix_height: 0,
+        apy_fix_height: 0,
+        overflow_fix_height: 0,
+        second_fix_height: 0,
+        apy_v7_upgrade_height: 0,
+        ff_addr_extra_fix_height: 0,
+        nonconfidential_balance_fix_height: 0,
+        unbond_block_cnt: 3600 * 24 * 21 / 16,
+        fix_unpaid_delegation_height: 0,
+        fix_undelegation_missing_reward_height: 0,
+        evm_checktx_nonce: 0,
+        utxo_checktx_height: 0,
+        fix_delegators_am_height: 0,
+        validators_limit_v2_height: 0,
+        evm_substate_v2_height: 0,
+        disable_delegate_frc20: 0,
+        fix_exec_code: 0,
+        check_signatures_num: 0,
+        fix_deliver_tx_revert_nonce_height: 0,
+        utxo_asset_prefix_height: 0,
+        prismxx_inital_height: 128,
+        prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
+        remove_fake_staking_hash: 0,
+    };
+}
+
+#[cfg(not(feature = "debug_env"))]
+lazy_static! {
+    static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
+        evm_substate_height: 1802500,
+        disable_evm_block_height: 1483286,
+        enable_frc20_height: 1501000,
+        tx_revert_on_error_height: 1624077,
+        evm_first_block_height: 1424654,
+        zero_amount_fix_height: 1200000,
+        apy_fix_height: 1177000,
+        overflow_fix_height: 1247000,
+        second_fix_height: 1429000,
+        apy_v7_upgrade_height: 1429000,
+        ff_addr_extra_fix_height: 1200000,
+        nonconfidential_balance_fix_height: 1210000,
+        unbond_block_cnt: 3600 * 24 * 21 / 16,
+        fix_unpaid_delegation_height: 2261885,
+        fix_undelegation_missing_reward_height: 3351349,
+        evm_checktx_nonce: 3351349,
+        utxo_checktx_height: 3351349,
+        fix_delegators_am_height: 3351349,
+        validators_limit_v2_height: 3351349,
+        evm_substate_v2_height: 3351349,
+        disable_delegate_frc20: 3401450,
+        fix_exec_code: 3401450,
+        check_signatures_num: 5000_0000,
+        fix_deliver_tx_revert_nonce_height: 4000_0000,
+        utxo_asset_prefix_height: 5000_0000,
+        prismxx_inital_height: 5000_0000,
+        prism_bridge_address: String::new(),
+        remove_fake_staking_hash: 5000_0000,
+    };
 }
 
 impl CheckPointConfig {
@@ -101,56 +214,7 @@ impl CheckPointConfig {
                 if error.kind() == ErrorKind::NotFound {
                     match File::create(file_path) {
                         Ok(mut file) => {
-                            #[cfg(feature = "debug_env")]
-                            let config = CheckPointConfig {
-                                evm_substate_height: 0,
-                                disable_evm_block_height: 0,
-                                enable_frc20_height: 0,
-                                tx_revert_on_error_height: 0,
-                                evm_first_block_height: 0,
-                                zero_amount_fix_height: 0,
-                                apy_fix_height: 0,
-                                overflow_fix_height: 0,
-                                second_fix_height: 0,
-                                apy_v7_upgrade_height: 0,
-                                ff_addr_extra_fix_height: 0,
-                                nonconfidential_balance_fix_height: 0,
-                                unbond_block_cnt: 3600 * 24 * 21 / 16,
-                                fix_unpaid_delegation_height: 0,
-                                fix_undelegation_missing_reward_height: 0,
-                                evm_checktx_nonce: 0,
-                                utxo_checktx_height: 0,
-                                fix_delegators_am_height: 0,
-                                validators_limit_v2_height: 0,
-                                evm_substate_v2_height: 0,
-                                disable_delegate_frc20: 0,
-                                fix_exec_code: 0,
-                            };
-                            #[cfg(not(feature = "debug_env"))]
-                            let config = CheckPointConfig {
-                                evm_substate_height: 1802500,
-                                disable_evm_block_height: 1483286,
-                                enable_frc20_height: 1501000,
-                                tx_revert_on_error_height: 1624077,
-                                evm_first_block_height: 0,
-                                zero_amount_fix_height: 1200000,
-                                apy_fix_height: 1177000,
-                                overflow_fix_height: 1247000,
-                                second_fix_height: 1429000,
-                                apy_v7_upgrade_height: 1429000,
-                                ff_addr_extra_fix_height: 1200000,
-                                nonconfidential_balance_fix_height: 1210000,
-                                unbond_block_cnt: 3600 * 24 * 21 / 16,
-                                fix_unpaid_delegation_height: 2261885,
-                                fix_undelegation_missing_reward_height: 3351349,
-                                evm_checktx_nonce: 3351349,
-                                utxo_checktx_height: 3351349,
-                                fix_delegators_am_height: 3351349,
-                                validators_limit_v2_height: 3351349,
-                                evm_substate_v2_height: 3351349,
-                                disable_delegate_frc20: 3401450,
-                                fix_exec_code: 3401450,
-                            };
+                            let config = (*DEFAULT_CHECKPOINT_CONFIG).clone();
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
                             return Some(config);

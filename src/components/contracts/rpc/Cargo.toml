@@ -9,10 +9,10 @@ description = "Ethereum RPC (web3) compatibility layer for Findora."
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6" }
 async-std = "1.9.0"
 baseapp = { path = "../baseapp" }
-base64 = "0.12"
+base64 = "0.13"
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.13.1", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
@@ -33,6 +33,7 @@ rand = "0.8"
 parking_lot = "0.12"
 rlp = "0.5"
 ruc = "1.0"
+rucv4 = { package = "ruc", version = "4.0" }
 rustc-hex = { version = "2.1.0" }
 rustc_version = "0.4.0"
 semver = "1.0.4"
@@ -41,13 +42,13 @@ sha3 = "0.8"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], tag = "v0.19.0a-fk" }
 tokio = { version = "1.10.1", features = ["full"] }
-lru = "0.7.0"
+lru = "0.7"
 num_cpus = "1.13"
 
 # modules
 module-ethereum = { path = "../modules/ethereum"}
 module-evm = { path = "../modules/evm"}
-
+config = { path = "../../config"}
 # primitives
 fp-core = { path = "../primitives/core" }
 fp-evm = { path = "../primitives/evm" }

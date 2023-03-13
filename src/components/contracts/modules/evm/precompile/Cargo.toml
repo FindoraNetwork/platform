@@ -9,8 +9,8 @@ repository = "https://github.com/findoranetwork/platform/"
 version = "0.1.0"
 
 [dependencies]
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 ethereum-types = "0.13.1"
-evm = {version = "0.35.0", default-features = false, features = ["with-serde"]}
 evm-precompile-basic = {path = "./basic"}
 evm-precompile-frc20 = {path = "./frc20"}
 evm-precompile-modexp = {path = "./modexp"}

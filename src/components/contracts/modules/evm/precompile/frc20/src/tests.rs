@@ -1,8 +1,9 @@
 use crate::*;
 use baseapp::BaseApp;
+use ethereum_types::H160;
 use fp_mocks::*;
 
-use evm_precompile_utils::{error, EvmDataWriter, LogsBuilder};
+use evm_precompile_utils::{error, EvmDataWriter};
 use module_evm::precompile::Precompile;
 use sha3::{Digest, Keccak256};
 
@@ -11,7 +12,6 @@ pub const FRC20_PRECOMPILE_ADDRESS: u64 = 9;
 #[test]
 fn selector_less_than_four_bytes() {
     let invalid_selector = vec![1u8, 2u8, 3u8];
-
     assert_eq!(
         FRC20::<BaseApp>::execute(
             &invalid_selector,

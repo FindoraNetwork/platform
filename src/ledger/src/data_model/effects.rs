@@ -1,5 +1,3 @@
-use config::abci::global_cfg::CFG;
-
 use {
     crate::{
         data_model::{
@@ -17,6 +15,7 @@ use {
             },
         },
     },
+    config::abci::global_cfg::CFG,
     globutils::HashOf,
     lazy_static::lazy_static,
     parking_lot::Mutex,
@@ -215,6 +214,7 @@ impl TxnEffect {
         def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
         let code = def.body.asset.code;
+
         let token = AssetType {
             properties: *def.body.asset.clone(),
             ..Default::default()

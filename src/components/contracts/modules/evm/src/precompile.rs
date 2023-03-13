@@ -2,7 +2,10 @@ use crate::runtime::stack::FindoraStackState;
 use ethereum_types::H160;
 use evm::{
     executor::stack::{PrecompileFailure, PrecompileOutput},
-    Context, ExitError, ExitSucceed,
+    Context,
+    // Context,
+    ExitError,
+    ExitSucceed,
 };
 use impl_trait_for_tuples::impl_for_tuples;
 
@@ -59,7 +62,7 @@ impl PrecompileSet for Tuple {
         target_gas: Option<u64>,
         context: &Context,
         state: &mut FindoraStackState<'_, '_, '_, T>,
-        _is_static: bool,
+        is_static: bool,
     ) -> Option<PrecompileResult> {
         for_tuples!( #(
             if address == H160::from_low_u64_be(Tuple::contract_id()) {
@@ -85,11 +88,10 @@ impl<T: LinearCostPrecompile> Precompile for T {
     fn execute(
         input: &[u8],
         target_gas: Option<u64>,
-        _: &Context,
-        _: &FinState,
+        _context: &Context,
+        _state: &FinState,
     ) -> PrecompileResult {
         let cost = ensure_linear_cost(target_gas, input.len() as u64, T::BASE, T::WORD)?;
-
         let (exit_status, output) = T::execute(input, cost)?;
         Ok(PrecompileOutput {
             exit_status,

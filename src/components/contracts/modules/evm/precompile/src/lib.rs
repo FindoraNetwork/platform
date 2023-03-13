@@ -1,6 +1,5 @@
 use ethereum_types::H160;
-use evm::executor::stack::PrecompileSet;
-use evm::Context;
+use evm::{executor::stack::PrecompileSet, Context};
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
@@ -73,6 +72,9 @@ where
             a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
                 Some(FRC20::<C>::execute(input, target_gas, context, ctx))
             }
+            // a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
+            //     Some(EthPairing::execute(handle, ctx))
+            // }
             _ => None,
         }
     }

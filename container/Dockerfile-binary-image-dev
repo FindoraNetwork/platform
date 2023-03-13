@@ -19,11 +19,33 @@ RUN make lint
 RUN make test
 
 RUN mkdir -p /root/.cargo/bin/ && \
-    DBG=true make build && \
+    DBG=true make build_release && \
     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
 
 RUN mkdir -p /root/.cargo/bin/ && \
-    DBG=true make build_goleveldb && \
+    DBG=true make build_release_debug && \
     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/goleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/goleveldb ; rm -rf /platform/debug/ ;fi
 
+# Rosetta
+ENV GOLANG_VERSION 1.16.8
+ENV GOLANG_DOWNLOAD_SHA256 f32501aeb8b7b723bc7215f6c373abb6981bbc7e1c7b44e9f07317e1a300dce2
+ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
+
+RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
+  && echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - \
+  && tar -C /usr/local -xzf golang.tar.gz \
+  && rm golang.tar.gz
+
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+
+RUN update-ca-certificates
+
+RUN git clone https://github.com/FindoraNetwork/findora-rosetta.git \
+  && cd findora-rosetta \
+  && go get \
+  && go build \
+  && cp findora-rosetta /binary/
+  
 CMD ["sleep", "999999"]

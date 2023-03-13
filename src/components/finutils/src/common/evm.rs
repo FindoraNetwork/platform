@@ -20,6 +20,7 @@ use fp_types::{
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
+use ledger::data_model::AssetTypeCode;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
 use ruc::*;
@@ -31,7 +32,12 @@ use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
-pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
+pub fn transfer_to_account(
+    amount: u64,
+    address: Option<&str>,
+    asset: Option<&str>,
+    lowlevel_data: Option<&str>,
+) -> Result<()> {
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     let kp = get_keypair().c(d!())?;
@@ -49,9 +55,23 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         None => MultiSigner::Xfr(kp.get_pk()),
     };
 
+    let asset = if let Some(asset) = asset {
+        let asset = AssetTypeCode::new_from_base64(asset)?;
+        Some(asset)
+    } else {
+        None
+    };
+
+    let lowlevel_data = if let Some(data) = lowlevel_data {
+        let data = hex::decode(data).c(d!())?;
+        Some(data)
+    } else {
+        None
+    };
+
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(&kp, target_address, amount)
+        .add_operation_convert_account(&kp, target_address, amount, asset, lowlevel_data)
         .c(d!())?
         .sign(&kp);
 
@@ -102,6 +122,8 @@ pub fn transfer_from_account(
         target,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: 0,
     };
 
     let (signer, kp) = if let Some(key_path) = eth_phrase {

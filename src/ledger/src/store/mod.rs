@@ -12,12 +12,12 @@ pub use fbnc;
 use {
     crate::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
-            AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-            FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
-            OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-            TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
-            BLACK_HOLE_PUBKEY,
+            AssetType, AssetTypeCode, AssetTypePrefix, AuthenticatedBlock,
+            AuthenticatedTransaction, AuthenticatedUtxo, AuthenticatedUtxoStatus,
+            BlockEffect, BlockSID, FinalizedBlock, FinalizedTransaction, IssuerKeyPair,
+            IssuerPublicKey, OutputPosition, StateCommitmentData, Transaction,
+            TransferType, TxnEffect, TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo,
+            Utxo, UtxoStatus, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
@@ -29,7 +29,8 @@ use {
     bitmap::{BitMap, SparseMap},
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
-    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, NumKey, Vecx},
+    fp_utils::hashing::keccak_256,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
@@ -333,6 +334,15 @@ impl LedgerState {
     }
 
     fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+        let staking_data = if self.get_tendermint_height()
+            < CFG.checkpoint.remove_fake_staking_hash
+            && self.get_staking().has_been_inited()
+        {
+            Some(HashOf::new(self.get_staking()))
+        } else {
+            None
+        };
+
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.write().compute_checksum(),
             block_merkle: self.block_merkle.read().get_root_hash(),
@@ -347,11 +357,7 @@ impl LedgerState {
             air_commitment: BitDigest::from_slice(&[0; 32][..]).unwrap(),
             txo_count: self.get_next_txo().0,
             pulse_count,
-            staking: alt!(
-                self.get_staking().has_been_inited(),
-                Some(HashOf::new(self.get_staking())),
-                None
-            ),
+            staking: staking_data,
         };
 
         self.status
@@ -827,6 +833,12 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn insert_asset_type(&mut self, code: AssetTypeCode, at: AssetType) {
+        self.status.asset_types.insert(code, at);
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_block_commit_count(&self) -> u64 {
         self.status.block_commit_count
     }
@@ -992,9 +1004,6 @@ pub struct LedgerStatus {
     staking: Staking,
     // tendermint commit height
     td_commit_height: u64,
-
-    // An obsolete feature, ignore it!
-    tracing_policies: HashMap<AssetTypeCode, TracingPolicy>,
 }
 
 impl LedgerStatus {
@@ -1093,7 +1102,6 @@ impl LedgerStatus {
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
-            tracing_policies: map! {},
             issuance_num: new_mapx!(issuance_num_path.as_str()),
             next_txn: TxnSID(0),
             next_txo: TxoSID(0),
@@ -1320,7 +1328,22 @@ impl LedgerStatus {
     // This drains every field of `block` except `txns` and `temp_sids`.
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
-
+        let handle_asset_type_code = |code: AssetTypeCode| -> AssetTypeCode {
+            if CFG.checkpoint.utxo_asset_prefix_height > self.td_commit_height {
+                code
+            } else {
+                let code = if code.val == ASSET_TYPE_FRA {
+                    code
+                } else {
+                    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+                    asset_code.append(&mut code.to_bytes());
+                    AssetTypeCode::new_from_vec(
+                        keccak_256(asset_code.as_slice()).to_vec(),
+                    )
+                };
+                code
+            }
+        };
         for no_replay_token in block.no_replay_tokens.iter() {
             let (rand, seq_id) = (
                 no_replay_token.get_rand(),
@@ -1356,6 +1379,7 @@ impl LedgerStatus {
         }
 
         for (code, amount) in block.issuance_amounts.drain() {
+            let code = handle_asset_type_code(code);
             let mut amt = self.issuance_amounts.entry(code).or_insert(0);
             *amt.deref_mut() += amount;
         }
@@ -1403,6 +1427,7 @@ impl LedgerStatus {
 
         // Update issuance sequence number limits
         for (code, seq_nums) in block.new_issuance_nums.drain() {
+            let code = handle_asset_type_code(code);
             // One more than the greatest sequence number, or 0
             let new_max_seq_num = seq_nums.last().map(|x| x + 1).unwrap_or(0);
             self.issuance_num.insert(code, new_max_seq_num);
@@ -1410,6 +1435,7 @@ impl LedgerStatus {
 
         // Register new asset types
         for (code, asset_type) in block.new_asset_codes.drain() {
+            let code = handle_asset_type_code(code);
             self.asset_types.insert(code, asset_type.clone());
         }
 
