@@ -76,8 +76,7 @@ use {
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
             structs::{
-                AssetRecordTemplate, AssetType as NoahAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
+                AssetRecordTemplate, AssetType as NoahAssetType, ASSET_TYPE_LENGTH,
             },
             trace_assets as noah_trace_assets,
         },
@@ -93,7 +92,7 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
-    zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    zei::{XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -1816,9 +1815,12 @@ pub fn trace_assets(
     //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
 
-    let record_data = noah_trace_assets(&xfr_body, tracer_keypair.get_keys())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
+    let record_data = noah_trace_assets(
+        &xfr_body.into_noah().map_err(error_to_jsvalue)?,
+        tracer_keypair.get_keys(),
+    )
+    .c(d!())
+    .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
         .map(|(amt, asset_type, _, _)| {

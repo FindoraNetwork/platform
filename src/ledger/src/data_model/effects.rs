@@ -40,7 +40,7 @@ use {
         collections::{HashMap, HashSet},
         sync::Arc,
     },
-    zei::{BlindAssetRecord, XfrPublicKey},
+    zei::XfrPublicKey,
 };
 
 lazy_static! {
@@ -436,7 +436,7 @@ impl TxnEffect {
             .iter()
             .zip(trn.body.transfer.outputs.iter())
         {
-            if output.record != BlindAssetRecord::from_noah(&record)? {
+            if output.record != record.clone() {
                 return Err(eg!());
             }
         }
@@ -499,7 +499,7 @@ impl TxnEffect {
                 verify_xfr_body(
                     prng,
                     params,
-                    &trn.body.transfer,
+                    &trn.body.transfer.into_noah()?,
                     &trn.body.policies.to_ref(),
                 )
                 .c(d!())?;
@@ -536,8 +536,7 @@ impl TxnEffect {
                         }
                         Some(txo) => {
                             // (2).(b)
-                            if txo.record != BlindAssetRecord::from_noah(record)?
-                                || txo.lien != lien.cloned()
+                            if txo.record != record.clone() || txo.lien != lien.cloned()
                             {
                                 return Err(eg!());
                             }
@@ -556,7 +555,7 @@ impl TxnEffect {
                         txo_sid,
                         TxOutput {
                             id: None,
-                            record: BlindAssetRecord::from_noah(record)?,
+                            record: record.clone(),
                             lien: lien.cloned(),
                         },
                     );
@@ -576,7 +575,7 @@ impl TxnEffect {
             }
             self.txos.push(Some(TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(out)?,
+                record: out.clone(),
                 lien: lien.cloned(),
             }));
             *txo_count += 1;

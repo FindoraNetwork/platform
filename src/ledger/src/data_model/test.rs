@@ -5,11 +5,12 @@ use {
     curve25519_dalek::ristretto::CompressedRistretto,
     noah::{
         ristretto,
-        xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
+        xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
     },
     noah_algebra::prelude::msg_eq,
     rand_core::SeedableRng,
     std::cmp::min,
+    zei::XfrBody,
 };
 
 const UTF8_ASSET_TYPES_WORK: bool = false;

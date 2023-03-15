@@ -1026,7 +1026,7 @@ impl LedgerState {
                             .txn
                             .get_owner_memos_ref()
                             .get(au.utxo_location.0)
-                            .and_then(|i| i.cloned()),
+                            .and_then(|i| i.clone()),
                     ),
                 )
             })

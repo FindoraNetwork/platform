@@ -250,9 +250,7 @@ fn check_delegation_context_principal(
                 //
                 // - all inputs are owned by a same address
                 // - the owner of all inputs is same as the delegator
-                if 1 == keynum
-                    && owner.0.into_noah()? == x.body.transfer.inputs[0].public_key
-                {
+                if 1 == keynum && owner.0 == x.body.transfer.inputs[0].public_key {
                     let am = x
                         .body
                         .outputs

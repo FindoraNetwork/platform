@@ -50,7 +50,7 @@ use {
             sig::XfrPublicKey as NoahXfrPublicKey,
             structs::{
                 AssetRecord, AssetType as NoahAssetType, OwnerMemo, TracingPolicies,
-                TracingPolicy, XfrAmount, XfrAssetType, XfrBody, ASSET_TYPE_LENGTH,
+                TracingPolicy, XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
             },
             XfrNotePolicies,
         },
@@ -71,7 +71,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
+    zei::{BlindAssetRecord, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -943,14 +943,17 @@ impl TransferAssetBody {
             return Err(eg!());
         }
 
-        let transfer =
-            Box::new(gen_xfr_body(prng, input_records, output_records).c(d!())?);
+        let transfer = Box::new(
+            gen_xfr_body(prng, input_records, output_records)
+                .and_then(|xb| XfrBody::from_noah(&xb))
+                .c(d!())?,
+        );
         let outputs = transfer
             .outputs
             .iter()
             .map(|rec| TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(rec).unwrap(),
+                record: rec.clone(),
                 lien: None,
             })
             .collect();
@@ -1160,12 +1163,12 @@ impl TransferAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         self.body
             .transfer
             .owners_memos
             .iter()
-            .map(|mem| mem.as_ref())
+            .map(|mem| mem.clone().map(|om| om.into_noah()))
             .collect()
     }
 
@@ -1176,9 +1179,7 @@ impl TransferAsset {
             .transfer
             .inputs
             .iter()
-            .map(|record| {
-                XfrPublicKey::from_noah(&record.public_key).unwrap_or_default()
-            })
+            .map(|record| record.public_key)
             .collect()
     }
 
@@ -1216,11 +1217,11 @@ impl IssueAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         self.body
             .records
             .iter()
-            .map(|(_, memo)| memo.as_ref())
+            .map(|(_, memo)| memo.clone())
             .collect()
     }
 
@@ -1468,13 +1469,13 @@ impl AbarConvNote {
     }
 
     /// gets address of owner memo in the note body
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         match self {
             AbarConvNote::AbarToBar(note) => {
-                vec![note.body.memo.as_ref()]
+                vec![note.body.memo.clone()]
             }
             AbarConvNote::AbarToAr(note) => {
-                vec![note.body.memo.as_ref()]
+                vec![note.body.memo.clone()]
             }
         }
     }
@@ -2154,7 +2155,7 @@ impl Transaction {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         let mut memos = Vec::new();
         for op in self.body.operations.iter() {
             match op {

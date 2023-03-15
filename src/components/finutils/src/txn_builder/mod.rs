@@ -165,9 +165,7 @@ impl TransactionBuilder {
                     .outputs
                     .iter()
                     .zip($d.body.transfer.owners_memos.iter())
-                    .map(|(r, om)| {
-                        (BlindAssetRecord::from_noah(&r).unwrap(), om.clone())
-                    })
+                    .map(|(r, om)| (r.clone(), om.clone().map(|it| it.into_noah())))
                     .collect()
             };
         }
@@ -317,8 +315,8 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn get_owner_memo_ref(&self, idx: usize) -> Option<&OwnerMemo> {
-        self.txn.get_owner_memos_ref()[idx]
+    pub fn get_owner_memo_ref(&self, idx: usize) -> Option<OwnerMemo> {
+        self.txn.get_owner_memos_ref()[idx].clone()
     }
 
     #[allow(missing_docs)]
@@ -1480,7 +1478,6 @@ impl TransferOperationBuilder {
             .outputs
             .get(idx)
             .cloned()
-            .map(|val| BlindAssetRecord::from_noah(&val).unwrap())
     }
 
     /// All input owners must sign eventually for the transaction to be valid.
@@ -2281,7 +2278,7 @@ mod tests {
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].clone(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
@@ -2314,7 +2311,7 @@ mod tests {
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].clone(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);

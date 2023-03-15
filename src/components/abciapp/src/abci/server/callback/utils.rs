@@ -1,7 +1,5 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use zei::XfrPublicKey;
-
 use {
     abci::{Event, Pair},
     ledger::data_model::{Operation, Transaction, TxnSID},
@@ -102,9 +100,8 @@ fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
                 ($data: expr, $direction: tt, $idx: tt) => {
                     $data.body.transfer.$direction.iter().for_each(|i| {
                         let mut attr = TagAttr::default();
-                        attr.addr = globutils::wallet::public_key_to_bech32(
-                            &XfrPublicKey::from_noah(&i.public_key).unwrap(),
-                        );
+                        attr.addr =
+                            globutils::wallet::public_key_to_bech32(&i.public_key);
                         if let XfrAssetType::NonConfidential(ty) = i.asset_type {
                             attr.asset_type = Some(hex::encode(&ty.0[..]));
                         }
