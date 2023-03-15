@@ -17,7 +17,7 @@ use {
     lazy_static::lazy_static,
     ruc::*,
     std::{
-        env, fs, mem,
+        env, fs,
         net::SocketAddr,
         sync::{atomic::AtomicBool, Arc},
         thread,
@@ -55,9 +55,9 @@ pub fn run() -> Result<()> {
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
     )?;
 
-    if CFG.enable_query_service {
-        let submission_service_hdr = Arc::clone(&app.la);
+    let submission_service_hdr = Arc::clone(&app.la);
 
+    if CFG.enable_query_service {
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             Arc::clone(&query_service_hdr),
@@ -80,6 +80,7 @@ pub fn run() -> Result<()> {
         });
     }
 
+    let mut web3_rpc: Box<dyn std::any::Any + Send> = Box::new(());
     if CFG.enable_eth_api_service {
         let base_app = app.account_base_app.clone();
         let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
@@ -88,21 +89,16 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-
-        // keep them running in the background,
-        // avoid being dropped by the jsonrpc crate.
-        mem::forget(fc_rpc::start_web3_service(
-            evm_http,
-            evm_ws,
-            tendermint_rpc,
-            base_app,
-        ));
+        web3_rpc =
+            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
     let addr = addr_str.parse::<SocketAddr>().c(d!())?;
 
     abci::run(addr, app);
+
+    drop(web3_rpc);
 
     Ok(())
 }

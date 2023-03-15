@@ -2332,15 +2332,20 @@ fn calculate_delegation_rewards(
 }
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum DelegationState {
     /// during delegation, include extra 21 days
-    #[default]
     Bond,
     /// it's time to pay principals and rewards
     Free,
     /// principals and rewards have been paid successfully
     Paid,
+}
+
+impl Default for DelegationState {
+    fn default() -> Self {
+        DelegationState::Bond
+    }
 }
 
 #[allow(missing_docs)]

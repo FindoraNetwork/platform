@@ -78,13 +78,18 @@ pub enum Kind {
 }
 
 /// Subscription kind.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Params {
     /// No parameters passed.
-    #[default]
     None,
     /// Log parameters.
     Logs(Filter),
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Params::None
+    }
 }
 
 impl<'a> Deserialize<'a> for Params {

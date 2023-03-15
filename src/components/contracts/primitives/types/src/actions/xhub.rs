@@ -20,8 +20,4 @@ pub struct NonConfidentialOutput {
     pub asset: AssetType,
     pub amount: u64,
     pub target: XfrPublicKey,
-    #[serde(skip)]
-    pub decimal: u8,
-    #[serde(skip)]
-    pub max_supply: u64,
 }

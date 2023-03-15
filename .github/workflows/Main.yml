@@ -26,16 +26,6 @@ jobs:
         override: true
         components: rustfmt
         
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2 
-      with:
-        aws-region: us-east-1
-
-    - name: Login to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v1
-      with:
-          registry-type: public
-
     - name: Prepare key
       shell: bash
       run: |
@@ -85,7 +75,12 @@ jobs:
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
-
+    - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+      shell: bash
+      run: |
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
     - name: Push images
       env:
         PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}

@@ -16,7 +16,7 @@ serde_json = "1.0"
 serde-strz = "1.1.1"
 toml = "0.5.8"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { path = "../../libs/globutils" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"

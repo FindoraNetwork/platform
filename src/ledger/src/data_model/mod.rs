@@ -401,7 +401,7 @@ impl XfrAddress {
     // }
 }
 
-#[allow(clippy::derived_hash_with_manual_eq)]
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -428,7 +428,7 @@ impl IssuerPublicKey {
     // }
 }
 
-#[allow(clippy::derived_hash_with_manual_eq)]
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -1019,27 +1019,6 @@ pub struct UpdateMemoBody {
     #[serde(skip_serializing_if = "is_default")]
     pub asset_type: AssetTypeCode,
     pub no_replay_token: NoReplayToken,
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Debug, Deserialize)]
-pub enum AssetTypePrefix {
-    UserDefined,
-    ERC20,
-    NFT,
-}
-
-impl AssetTypePrefix {
-    #[allow(missing_docs)]
-    pub fn bytes(&self) -> Vec<u8> {
-        let code = match self {
-            AssetTypePrefix::UserDefined => "56",
-            AssetTypePrefix::ERC20 => "77",
-            AssetTypePrefix::NFT => "02",
-        };
-
-        hex::decode(format!("{code:0>64}",)).unwrap()
-    }
 }
 
 /// Enum indicating whether an Transfer is standard type

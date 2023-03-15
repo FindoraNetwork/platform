@@ -17,12 +17,11 @@ pub mod utils;
 
 use {
     crate::api::DelegationInfo,
-    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            gen_random_keypair, AssetRules, AssetTypeCode, AssetTypePrefix, Transaction,
+            gen_random_keypair, AssetRules, AssetTypeCode, Transaction,
             BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
@@ -30,7 +29,6 @@ use {
             td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
             TendermintAddrRef,
         },
-        store::fbnc::NumKey,
     },
     ruc::*,
     std::{env, fs},
@@ -44,7 +42,6 @@ use {
         xfr::{
             asset_record::AssetRecordType,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::AssetType,
         },
     },
 };
@@ -575,7 +572,7 @@ pub fn gen_key() -> (String, String, String, XfrKeyPair) {
 pub fn gen_key_and_print() {
     let (wallet_addr, mnemonic, key, _) = gen_key();
     println!(
-        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n",
+        "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n", 
     );
 }
 
@@ -738,9 +735,6 @@ pub fn create_asset_x(
 ) -> Result<AssetTypeCode> {
     let code = code.unwrap_or_else(AssetTypeCode::gen_random);
 
-    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-    asset_code.append(&mut code.to_bytes());
-
     let mut rules = AssetRules::default();
     rules.set_decimals(decimal).c(d!())?;
     rules.set_max_units(max_units);
@@ -757,9 +751,7 @@ pub fn create_asset_x(
     let mut tx = builder.take_transaction();
     tx.sign_to_map(kp);
 
-    utils::send_tx(&tx).map(|_| AssetTypeCode {
-        val: AssetType(keccak_256(&asset_code)),
-    })
+    utils::send_tx(&tx).map(|_| code)
 }
 
 /// Issue a custom asset with specified amount
@@ -808,11 +800,9 @@ pub fn issue_asset_x(
 pub fn show_asset(addr: &str) -> Result<()> {
     let pk = wallet::public_key_from_bech32(addr).c(d!())?;
     let assets = utils::get_created_assets(&pk).c(d!())?;
-    for (code, _asset) in assets {
-        let base64 = code.to_base64();
-        let h = hex::encode(code.val.0);
-        println!("Base64: {base64}, Hex: {h}");
-    }
+    assets
+        .iter()
+        .for_each(|asset| println!("{}", asset.body.asset.code.to_base64()));
     Ok(())
 }
 

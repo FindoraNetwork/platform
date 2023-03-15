@@ -440,20 +440,6 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
             required: true
-        - asset:
-            help: deposit asset type.
-            short: s
-            long: asset
-            takes_value: true
-            value_name: ASSET
-            required: false
-        - lowlevel-data:
-            help: deposit with evm lowlevel call.
-            short: l
-            long: lowlevel
-            takes_value: true
-            value_name: LOWLEVEL
-            required: false
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:

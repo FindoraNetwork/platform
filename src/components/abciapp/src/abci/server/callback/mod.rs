@@ -23,7 +23,6 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        data_model::Operation,
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -44,7 +43,6 @@ use {
     tracing::info,
 };
 
-use cryptohash::sha256;
 #[cfg(feature = "web3_service")]
 use enterprise_web3::{
     BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
@@ -130,32 +128,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
-                    if td_height > CFG.checkpoint.check_signatures_num {
-                        for op in tx.body.operations.iter() {
-                            if let Operation::TransferAsset(op) = op {
-                                let mut body_signatures = op.body_signatures.clone();
-                                body_signatures.dedup();
-                                if body_signatures.len() > 1 {
-                                    resp.log = "too many body_signatures".to_owned();
-                                    resp.code = 1;
-                                    return resp;
-                                }
-                            }
-                        }
-                        let mut signatures = tx.signatures.clone();
-                        signatures.dedup();
-                        if signatures.len() > 1 {
-                            resp.log = "Too many signatures".to_owned();
-                            resp.code = 1;
-                            return resp;
-                        }
-
-                        if tx.pubkey_sign_map.len() > 1 {
-                            resp.log = "too many pubkey_sign_map".to_owned();
-                            resp.code = 1;
-                            return resp;
-                        }
-                    } else if !tx.valid_in_abci() {
+                    if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
@@ -164,7 +137,6 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
-                    resp.code = 1;
                 }
             }
             resp
@@ -192,14 +164,14 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    IN_SAFE_ITV.store(true, Ordering::Release);
-
     if IS_EXITING.load(Ordering::Acquire) {
-        // beacuse ResponseBeginBlock doesn't define the code,
-        // we can't tell tendermint that begin block is impossible,
-        // we use 'sleep' to wait to exit, it's looks unsound.
-        sleep_ms!(24_000);
+        //beacuse ResponseBeginBlock doesn't define the code,
+        //we can't tell tendermint that begin block is impossibled,
+        //we use thread::sleep to wait to exit, it's looks unsound.
+        std::thread::sleep(std::time::Duration::from_secs(10));
     }
+
+    IN_SAFE_ITV.store(true, Ordering::Release);
 
     #[cfg(target_os = "linux")]
     {
@@ -258,36 +230,11 @@ pub fn deliver_tx(
 
     let tx_catalog = try_tx_catalog(req.get_tx(), true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
-                if td_height > CFG.checkpoint.check_signatures_num {
-                    for op in tx.body.operations.iter() {
-                        if let Operation::TransferAsset(op) = op {
-                            let mut body_signatures = op.body_signatures.clone();
-                            body_signatures.dedup();
-                            if body_signatures.len() > 1 {
-                                resp.log = "too many body_signatures".to_owned();
-                                resp.code = 1;
-                                return resp;
-                            }
-                        }
-                    }
-                    let mut signatures = tx.signatures.clone();
-                    signatures.dedup();
-                    if signatures.len() > 1 {
-                        resp.log = "Too many signatures".to_owned();
-                        resp.code = 1;
-                        return resp;
-                    }
-
-                    if tx.pubkey_sign_map.len() > 1 {
-                        resp.log = "too many pubkey_sign_map".to_owned();
-                        resp.code = 1;
-                        return resp;
-                    }
-                }
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
@@ -295,7 +242,7 @@ pub fn deliver_tx(
 
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
-                    if td_height < CFG.checkpoint.evm_first_block_height {
+                    if td_height < EVM_FIRST_BLOCK_HEIGHT {
                         info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
@@ -322,9 +269,8 @@ pub fn deliver_tx(
                             resp.log = e.to_string();
                         }
                     } else if is_convert_account(&tx) {
-                        let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
+                            s.account_base_app.write().deliver_findora_tx(&tx)
                         {
                             info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
@@ -388,7 +334,7 @@ pub fn deliver_tx(
                 }
             } else {
                 resp.code = 1;
-                resp.log = "Invalid format".to_owned();
+                resp.log = "Invalid data format".to_owned();
             }
 
             resp
@@ -402,7 +348,7 @@ pub fn deliver_tx(
                 resp
             } else {
                 // Log print for monitor purpose
-                if td_height < CFG.checkpoint.evm_first_block_height {
+                if td_height < EVM_FIRST_BLOCK_HEIGHT {
                     info!(
                         target:
                         "abciapp",
@@ -411,38 +357,7 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                let (mut resp, non_confidential_outputs) =
-                    s.account_base_app.write().deliver_tx(req);
-
-                if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code {
-                    for non_confidential_output in non_confidential_outputs.iter() {
-                        let mut la = s.la.write();
-                        let mut laa = la.get_committed_state().write();
-                        if let Some(tx) = staking::system_prism_mint_pay(
-                            &mut laa,
-                            non_confidential_output,
-                        ) {
-                            drop(laa);
-                            if la.cache_transaction(tx).is_ok() {
-                                return resp;
-                            }
-                            resp.code = 1;
-                            s.account_base_app
-                                .read()
-                                .deliver_state
-                                .state
-                                .write()
-                                .discard_session();
-                            s.account_base_app
-                                .read()
-                                .deliver_state
-                                .db
-                                .write()
-                                .discard_session();
-                        }
-                    }
-                }
-                resp
+                return s.account_base_app.write().deliver_tx(req);
             }
         }
         TxCatalog::Unknown => {

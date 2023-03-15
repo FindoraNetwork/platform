@@ -1,13 +1,9 @@
 use crate::extensions::SignedExtra;
 use abci::*;
-use config::abci::global_cfg::CFG;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
-use fp_types::{
-    actions::xhub::NonConfidentialOutput, assemble::convert_unchecked_transaction,
-};
+use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event};
 use primitive_types::U256;
 use ruc::*;
 use tracing::{debug, error, info};
@@ -202,12 +198,8 @@ impl crate::BaseApp {
         ResponseBeginBlock::default()
     }
 
-    pub fn deliver_tx(
-        &mut self,
-        req: &RequestDeliverTx,
-    ) -> (ResponseDeliverTx, Vec<NonConfidentialOutput>) {
+    pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         let mut resp = ResponseDeliverTx::new();
-        let mut non_confidential_outputs = Vec::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             tx
@@ -215,7 +207,7 @@ impl crate::BaseApp {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
-            return (resp, non_confidential_outputs);
+            return resp;
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
@@ -299,80 +291,19 @@ impl crate::BaseApp {
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
                     resp.events = protobuf::RepeatedField::from_vec(ar.events);
-                    let td_height = self.deliver_state.block_header().height;
-                    if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code
-                    {
-                        let deposit_asset_topic = deposit_asset_event_topic_str();
-
-                        for evt in resp.events.iter() {
-                            if evt.field_type == *"ethereum_ContractLog" {
-                                let mut bridge_contract_found = false;
-                                let mut deposit_asset_foud = false;
-
-                                for pair in evt.attributes.iter() {
-                                    let key = String::from_utf8(pair.key.clone())
-                                        .unwrap_or_default();
-                                    if key == *"address" {
-                                        let addr = String::from_utf8(pair.value.clone())
-                                            .unwrap_or_default();
-                                        if addr
-                                            == CFG
-                                                .checkpoint
-                                                .prism_bridge_address
-                                                .to_lowercase()
-                                        {
-                                            bridge_contract_found = true
-                                        }
-                                    }
-                                    if key == *"topics" {
-                                        let topic =
-                                            String::from_utf8(pair.value.clone())
-                                                .unwrap_or_default();
-                                        if topic == deposit_asset_topic {
-                                            deposit_asset_foud = true
-                                        }
-                                    }
-                                    if key == *"data"
-                                        && bridge_contract_found
-                                        && deposit_asset_foud
-                                    {
-                                        let data = String::from_utf8(pair.value.clone())
-                                            .unwrap_or_default();
-
-                                        let data_vec =
-                                            serde_json::from_str(&data).unwrap();
-
-                                        let deposit_asset =
-                                            parse_deposit_asset_event(data_vec);
-
-                                        match deposit_asset {
-                                            Ok(deposit) => {
-                                                non_confidential_outputs.push(deposit)
-                                            }
-                                            Err(e) => {
-                                                resp.code = 1;
-                                                resp.log = e.to_string();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    (resp, non_confidential_outputs)
+                    resp
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
                     resp.code = 1;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
-                    (resp, non_confidential_outputs)
+                    resp
                 }
             }
         } else {
             resp.code = 1;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
-            (resp, non_confidential_outputs)
+            resp
         }
     }
 

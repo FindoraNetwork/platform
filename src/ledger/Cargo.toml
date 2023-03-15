@@ -28,7 +28,7 @@ tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v
 indexmap = { version = "1.6.2", features = ["serde"] }
 config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
-fp-utils = { path = "../components/contracts/primitives/utils" }
+
 ruc = "1.0"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
@@ -37,12 +37,12 @@ fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
-bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "main" }
-cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
-merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "main" }
-sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "main" }
+globutils = { path = "../libs/globutils" }
+bitmap = { path = "../libs/bitmap" }
+cryptohash = { path = "../libs/cryptohash" }
+credentials = { path = "../libs/credentials"}
+merkle_tree = { path = "../libs/merkle_tree" }
+sliding_set = { path = "../libs/sliding_set" }
 
 [features]
 default = []
