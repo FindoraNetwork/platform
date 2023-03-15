@@ -57,10 +57,6 @@ stop_all:
 	- pkill -9 tendermint
 	- pkill -9 findorad
 
-# Release binaries for Nightly
-rls:
-	cargo build --release --features debug_env --bins -p abciapp -p finutils
-
 # Build for cleveldb
 build: tendermint_cleveldb
 	cargo build --bins -p abciapp -p finutils
@@ -128,30 +124,30 @@ staking_cfg_debug:
 bench:
 	cargo bench --workspace
 
-bench_50k: stop_all checkpoint_cleanup build_bench_release
+bench_50k: checkpoint_cleanup build_bench_release
 	bash tools/benchutils/bench.sh 50000
 
-bench_100k: stop_all checkpoint_cleanup build_bench_release
+bench_100k: checkpoint_cleanup build_bench_release
 	bash tools/benchutils/bench.sh 100000
 
-bench_200k: stop_all checkpoint_cleanup build_bench_release
+bench_200k: checkpoint_cleanup build_bench_release
 	bash tools/benchutils/bench.sh 200000
 
-dbench_50k: stop_all checkpoint_cleanup build_bench_release
+dbench_50k: checkpoint_cleanup build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1
 endif
 	bash tools/benchutils/bench.sh 50000 y
 
-dbench_100k: stop_all checkpoint_cleanup build_bench_release
+dbench_100k: checkpoint_cleanup build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1
 endif
 	bash tools/benchutils/bench.sh 100000 y
 
-dbench_200k: stop_all checkpoint_cleanup build_bench_release
+dbench_200k: checkpoint_cleanup build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1

@@ -1,7 +1,7 @@
 use crate::context::{Context, RunTxMode};
 use abci::Event;
 use config::abci::global_cfg::CFG;
-use fp_types::{crypto::Address, transaction::CheckedTransaction};
+use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
 use std::fmt::Debug;
@@ -117,12 +117,6 @@ pub trait ValidateUnsigned {
     ///
     /// Changes made to storage should be discarded by caller.
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()>;
-
-    /// Do any post-flight stuff for an transaction.
-    ///
-    fn post_execute(_ctx: &Context, _result: &ActionResult) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl<Address, Call, Extra> Applyable for CheckedTransaction<Address, Call, Extra>
@@ -149,12 +143,12 @@ where
         U: ValidateUnsigned<Call = Self::Call>,
         U: Executable<Origin = Self::Origin, Call = Self::Call>,
     {
-        let (signed_tx, maybe_who, pre) = if let Some((sender, extra)) = self.signed {
+        let (maybe_who, pre) = if let Some((sender, extra)) = self.signed {
             let pre = Extra::pre_execute(extra, ctx, &sender)?;
-            (true, Some(sender), pre)
+            (Some(sender), pre)
         } else {
             U::pre_execute(ctx, &self.function)?;
-            (false, None, Default::default())
+            (None, Default::default())
         };
 
         ctx.state.write().commit_session();
@@ -173,19 +167,12 @@ where
                     res.log = String::from("ctx state is not good to commit");
 
                     ctx.state.write().discard_session();
-                } else if CFG.checkpoint.fix_deliver_tx_revert_nonce_height
-                    > ctx.block_header().height
-                    || signed_tx
-                {
-                    if res.code == 0 {
-                        Extra::post_execute(ctx, pre, &res)?;
-                        ctx.state.write().commit_session();
-                    } else {
-                        ctx.state.write().discard_session();
-                    }
-                } else {
-                    U::post_execute(ctx, &res)?;
+                } else if res.code == 0 {
+                    Extra::post_execute(ctx, pre, &res)?;
+
                     ctx.state.write().commit_session();
+                } else {
+                    ctx.state.write().discard_session();
                 }
 
                 ctx.db.write().commit_session();
@@ -211,8 +198,6 @@ pub struct ActionResult {
     /// 4 - EVM ExitReason::Fatal
     /// 0xff - context state maybe messed up
     pub code: u32,
-    /// Record the source address
-    pub source: Option<Address>,
     /// Data is any data returned from message or handler execution.
     pub data: Vec<u8>,
     /// Log contains the log information from message or handler execution.

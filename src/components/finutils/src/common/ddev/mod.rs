@@ -55,11 +55,10 @@ impl From<EnvCfg> for tm_ddev::EnvCfg<(), CustomData, Ports, InitOps> {
                     .into(),
                     block_itv_secs: block_itv_secs.into(),
                     initial_validator_num,
-                    app_bin_path: abcid_bin
-                        .unwrap_or_else(|| "~/.cargo/bin/abcid".to_owned()),
+                    app_bin_path: abcid_bin.unwrap_or_else(|| "abcid".to_owned()),
                     app_extra_opts: abcid_extra_flags.unwrap_or_default(),
                     tendermint_bin_path: tendermint_bin
-                        .unwrap_or_else(|| "~/.cargo/bin/tendermint".to_owned()),
+                        .unwrap_or_else(|| "tendermint".to_owned()),
                     tendermint_extra_opts: tendermint_extra_flags.unwrap_or_default(),
                     force_create,
                     app_state: (),

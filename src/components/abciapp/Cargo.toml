@@ -43,13 +43,11 @@ nix = "0.22.1"
 
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
-
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
-cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
-
+cryptohash = { path = "../../libs/cryptohash" }
+globutils = { path = "../../libs/globutils" }
 finutils = { path = "../finutils" }
 
 tempfile = "3.1.0"
@@ -57,10 +55,10 @@ baseapp = { path = "../contracts/baseapp" }
 fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
-fp-types = {path = "../contracts/primitives/types"}
+
 
 enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
-module-evm = { path = "../contracts/modules/evm"}
+
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
@@ -73,6 +71,6 @@ vergen = "=3.1.0"
 [features]
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
-debug_env = ["ledger/debug_env", "config/debug_env", "baseapp/debug_env"]
+debug_env = ["ledger/debug_env", "config/debug_env"]
 web3_service = ["enterprise-web3", "baseapp/web3_service"]
 benchmark = ["baseapp/benchmark"]

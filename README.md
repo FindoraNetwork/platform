@@ -5,6 +5,7 @@
 ![GitHub issues](https://img.shields.io/github/issues-raw/FindoraNetwork/platform)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/FindoraNetwork/platform)
 
+
 # Findora Platform
 
 - [**Wiki**](https://wiki.findora.org/)
@@ -13,12 +14,6 @@
   - [**EVM Benchmarks**](docs/benchmarks/evm.md)
   - [**UTXO Benchmarks**](docs/benchmarks/utxo.md)
   - ...
-
-Thanks to all the people who already contributed!
-
-<a href="https://github.com/FindoraNetwork/platform/graphs/contributors">
-  <img src="https://contributors-img.web.app/image?repo=FindoraNetwork/platform" />
-</a>
 
 ### Licensing
 

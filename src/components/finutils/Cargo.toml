@@ -19,7 +19,6 @@ rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
-sha2 = "0.10"
 
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = "1.0"
@@ -27,9 +26,8 @@ rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
 
 ledger = { path = "../../ledger" }
-
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
+globutils = { path = "../../libs/globutils" }
+credentials = { path = "../../libs/credentials" }
 
 eth_checksum = { version = "0.1.2", optional = true }
 fp-core = { path = "../contracts/primitives/core", default-features = false }
@@ -41,7 +39,7 @@ tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", feat
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
-chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "tm33v13" }
+chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "tm33v7" }
 
 [dev-dependencies]
 

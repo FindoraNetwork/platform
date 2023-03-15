@@ -390,15 +390,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        let asset = m.value_of("asset");
-        let lowlevel_data = m.value_of("lowlevel-data");
-        transfer_to_account(
-            amount.parse::<u64>().c(d!())?,
-            address,
-            asset,
-            lowlevel_data,
-        )
-        .c(d!())?
+        transfer_to_account(amount.parse::<u64>().c(d!())?, address).c(d!())?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");

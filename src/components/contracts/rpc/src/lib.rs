@@ -64,7 +64,7 @@ pub fn start_web3_service(
         )
     };
 
-    let logical_cpus = rucv4::max!(num_cpus::get(), 8);
+    let logical_cpus = num_cpus::get();
     let thread_pool_size =
         std::env::var("WEB3_MAX_HTTP_THREADS").map_or(Some(logical_cpus), |id| {
             Some(

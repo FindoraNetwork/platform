@@ -9,7 +9,7 @@ description = "Findora Primitive core types"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6", optional = true }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4", optional = true }
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 impl-trait-for-tuples = "0.2"
 parking_lot = "0.12"

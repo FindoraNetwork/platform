@@ -109,7 +109,7 @@ fn test_abci_deliver_tx() {
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
-    let (resp, _) = BASE_APP.lock().unwrap().deliver_tx(&req);
+    let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
         "deliver tx failed, code: {}, log: {}",

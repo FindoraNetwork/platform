@@ -76,7 +76,7 @@ fn gen() -> Result<()> {
         .and_then(|m| fs::write(&secret_info_path, m).c(d!()))
         .map(|_| {
             println!(
-                "\x1b[01mSecret info has been writed to \x1b[31m{secret_info_path}\x1b[00m",
+                "\x1b[01mSecret info has been writed to \x1b[31m{secret_info_path}\x1b[00m",               
             );
         })
 }

@@ -3,14 +3,8 @@
 env=$1
 
 th="${HOME}/.tendermint"
-if [[ "" != ${TENDERMINT_HOME} ]]; then
-    th=${TENDERMINT_HOME}
-fi
-echo -e "\n====\033[31;01m DATA PATH: ${TENDERMINT_HOME} \033[00m====\n"
-
 tc="${th}/config/config.toml"
 h="${th}/__findora__"
-checkpoint=${th}/${env}.checkpoint
 
 check_env() {
     for i in wget curl perl; do
@@ -56,10 +50,9 @@ set_env() {
         exit 1
     fi
 
-    mkdir -p $h || exit 1
-    rm -rf $th || exit 1
-    mkdir -p $h || exit 1
-    tendermint init --home $th || exit 1
+    rm -rf $h $th
+    mkdir -p $h $th
+    tendermint init
 
     if [[ "" != ${sentry_peers} ]]; then
         perl -pi -e "s/^(persistent_peers = ).*/\$1 \"${sentry_peers}\"/" $tc
@@ -79,13 +72,13 @@ set_env() {
 
     curl ${serv_url}:26657/genesis \
         | jq -c '.result.genesis' \
-        | jq > ${th}/config/genesis.json || exit 1
+        | jq > ~/.tendermint/config/genesis.json || exit 1
 
     EVM_CHAIN_ID=$(curl -H 'Content-Type: application/json' --data '{"id":1, "method": "eth_chainId", "jsonrpc": "2.0"}' "${serv_url}:8545" | jq -c '.result' | sed 's/"//g')
     export EVM_CHAIN_ID=$(printf '%d' $EVM_CHAIN_ID)
 
-    curl ${serv_url}:8667/display_checkpoint | jq > ${checkpoint}
-    if [[ 0 != $? || 0 == $(wc -l ${checkpoint} | perl -pe 's/^\s+//g' | grep -o '^[0-9]') ]]; then
+    curl ${serv_url}:8667/display_checkpoint | jq > /tmp/${env}.checkpoint
+    if [[ 0 != $? || 0 == $(wc -l /tmp/${env}.checkpoint | perl -pe 's/^\s+//g' | grep -o '^[0-9]') ]]; then
         printf "\nfail to get checkpoint file!\n"
         exit 1
     fi
@@ -101,15 +94,15 @@ fi
 ###################
 
 cd /tmp || exit 1
-echo -e "\n====\033[31;1m EVM_CHAIN_ID: $EVM_CHAIN_ID \033[0m====\n"
-abcid -q -d ${h} \
-    --checkpoint-file ${checkpoint} \
+echo -e "\033[31;1m==== EVM_CHAIN_ID: $EVM_CHAIN_ID ====\033[0m"
+abcid -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
-    >${th}/log.abcid 2>&1 &
-tendermint node --home ${th} >${th}/log.tendermint 2>&1 &
+    --checkpoint-file /tmp/${env}.checkpoint \
+    >abcid.log 2>&1 &
+tendermint node >tendermint.log 2>&1 &
 
-echo "**** ABCId log path: ${th}/log.abcid"
-echo "**** Tendermint log path: ${th}/log.tendermint"
+echo "**** ABCId log path: /tmp/abcid.log"
+echo "**** Tendermint log path: /tmp/tendermint.log"
 
-sleep 1
+sleep 0.5
 curl localhost:8669/version

@@ -15,7 +15,7 @@ bip0039 = "0.8.0"
 blake2-rfc = "0.2.18"
 byteorder = "1.4.3"
 hex = "0.4.2"
-libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
+libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
 rand = "0.8"
