@@ -10,6 +10,13 @@
 
 ## Change log
 
+#### v0.3.38-release 
+- Features:
+  - Prism++: Support any type of FRC20 and nft to UTXO
+- Bugfix:
+  - Fix transaction serialization error
+  - Fix evm nonce increase when tx error.
+
 #### v0.3.30-release
 
 - EVM upgrading and optimization in TPS.
