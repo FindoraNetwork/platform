@@ -436,7 +436,7 @@ impl TxnEffect {
             .iter()
             .zip(trn.body.transfer.outputs.iter())
         {
-            if output.record != BlindAssetRecord::from_noah(&*record)? {
+            if output.record != BlindAssetRecord::from_noah(&record)? {
                 return Err(eg!());
             }
         }
@@ -536,7 +536,7 @@ impl TxnEffect {
                         }
                         Some(txo) => {
                             // (2).(b)
-                            if &txo.record != &BlindAssetRecord::from_noah(record)?
+                            if txo.record != BlindAssetRecord::from_noah(record)?
                                 || txo.lien != lien.cloned()
                             {
                                 return Err(eg!());

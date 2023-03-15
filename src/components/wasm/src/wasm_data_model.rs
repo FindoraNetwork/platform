@@ -18,9 +18,9 @@ use {
     },
     noah::xfr::structs::{
         AssetTracerDecKeys, AssetTracerEncKeys,
-        AssetTracerKeyPair as NoahAssetTracerKeyPair, BlindAssetRecord,
-        IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
-        TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
+        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
+        TracingPolicy as NoahTracingPolicy,
     },
     noah_algebra::bls12_381::BLSScalar,
     rand_chacha::ChaChaRng,
@@ -28,7 +28,7 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::XfrPublicKey,
+    zei::{BlindAssetRecord, XfrPublicKey},
 };
 
 #[wasm_bindgen]

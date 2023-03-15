@@ -105,7 +105,7 @@ pub fn transfer(
     }
     transfer_batch(
         owner_kp,
-        vec![(target_pk.clone(), am)],
+        vec![(*target_pk, am)],
         token_code,
         confidential_am,
         confidential_ty,

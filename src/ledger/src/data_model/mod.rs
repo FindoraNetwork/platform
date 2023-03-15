@@ -2027,7 +2027,7 @@ impl Transaction {
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
-                                && XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY).unwrap()
+                                && XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap()
                                     == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {

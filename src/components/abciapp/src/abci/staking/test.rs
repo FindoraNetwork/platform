@@ -100,10 +100,8 @@ fn gen_transfer_tx(
 ) -> Result<Transaction> {
     let mut tx_builder = TransactionBuilder::from_seq_id(seq_id);
 
-    let target_list = vec![
-        (target_pk, am),
-        (&XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY)?, TX_FEE_MIN),
-    ];
+    let binding = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)?;
+    let target_list = vec![(target_pk, am), (&binding, TX_FEE_MIN)];
 
     let mut trans_builder = TransferOperationBuilder::new();
 
@@ -122,13 +120,17 @@ fn gen_transfer_tx(
             continue;
         }
 
-        open_blind_asset_record(&utxo.0.record, &owner_memo, &owner_kp.into_noah()?)
-            .c(d!())
-            .and_then(|ob| {
-                trans_builder
-                    .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
-                    .c(d!())
-            })?;
+        open_blind_asset_record(
+            &utxo.0.record.into_noah()?,
+            &owner_memo,
+            &owner_kp.into_noah()?,
+        )
+        .c(d!())
+        .and_then(|ob| {
+            trans_builder
+                .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
+                .c(d!())
+        })?;
 
         alt!(0 == am, break);
     }

@@ -514,9 +514,12 @@ impl TransactionBuilder {
         use hex::FromHex;
 
         let oar = open_bar(
-            input_record.get_bar_ref(),
+            &input_record
+                .get_bar_ref()
+                .into_noah()
+                .map_err(error_to_jsvalue)?,
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &auth_key_pair.clone(),
+            &auth_key_pair.into_noah().map_err(error_to_jsvalue)?,
         )
         .c(d!())
         .map_err(|e| {
@@ -1078,9 +1081,12 @@ impl TransferOperationBuilder {
         amount: u64,
     ) -> Result<TransferOperationBuilder, JsValue> {
         let oar = open_bar(
-            asset_record.get_bar_ref(),
+            &asset_record
+                .get_bar_ref()
+                .into_noah()
+                .map_err(error_to_jsvalue)?,
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &key,
+            &key.into_noah().map_err(error_to_jsvalue)?,
         )
         .c(d!())
         .map_err(|e| {
@@ -1120,7 +1126,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah().map_err(error_to_jsvalue)?,
                 policies.get_policies_ref().clone(),
             )
         } else {
@@ -1128,7 +1134,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah().map_err(error_to_jsvalue)?,
             )
         };
         self.get_builder_mut()
@@ -1491,9 +1497,9 @@ pub fn open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<JsValue, JsValue> {
     open_bar(
-        record.get_bar_ref(),
+        &record.get_bar_ref().into_noah().map_err(error_to_jsvalue)?,
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        &keypair,
+        &keypair.into_noah().map_err(error_to_jsvalue)?,
     )
     .c(d!())
     .map_err(|e| JsValue::from_str(&format!("Could not open asset record: {}", e)))
@@ -1525,62 +1531,9 @@ pub fn get_priv_key_hex_str_by_mnemonic(
 }
 
 #[wasm_bindgen]
-///
-pub fn get_keypair_by_pri_key(hex_priv_key: &str) -> Result<XfrKeyPair, JsValue> {
-    let data = if hex_priv_key.starts_with("0x") {
-        hex::decode(&hex_priv_key[2..]).map_err(error_to_jsvalue)?
-    } else {
-        hex::decode(hex_priv_key).map_err(error_to_jsvalue)?
-    };
-    XfrKeyPair::generate_secp256k1_from_bytes(&data).map_err(error_to_jsvalue)
-}
-#[wasm_bindgen]
-///
-pub fn get_pub_key_hex_str_by_priv_key(hex_priv_key: &str) -> Result<String, JsValue> {
-    let key_pair = get_keypair_by_pri_key(hex_priv_key)?;
-    let data = key_pair.get_pk_ref().to_bytes();
-    Ok(format!("0x{}", hex::encode(&data[1..])))
-}
-
-#[wasm_bindgen]
-///
-pub fn get_address_by_public_key(hex_pub_key: &str) -> Result<String, JsValue> {
-    let byte = if hex_pub_key.starts_with("0x") {
-        hex::decode(&hex_pub_key[2..]).map_err(error_to_jsvalue)?
-    } else {
-        hex::decode(hex_pub_key).map_err(error_to_jsvalue)?
-    };
-    let mut data = vec![KeyType::Secp256k1 as u8];
-    data.extend_from_slice(&byte);
-    let pub_key = XfrPublicKey::from_bytes(&data).map_err(error_to_jsvalue)?;
-    if let XfrPublicKeyInner::Secp256k1(pub_key) = pub_key.inner() {
-        Ok(format!(
-            "{:?}",
-            H160::from(convert_libsecp256k1_public_key_to_address(&pub_key))
-        ))
-    } else {
-        Ok(String::new())
-    }
-}
-
-#[wasm_bindgen]
-/// Extracts the public key as a string from a transfer key pair.
-pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
-    if let XfrPublicKeyInner::Ed25519(pk) = key_pair.get_pk().inner() {
-        base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
-    } else {
-        String::from("key type error")
-    }
-}
-
-#[wasm_bindgen]
 /// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str_old(key_pair: &XfrKeyPair) -> String {
-    if let XfrSecretKey::Ed25519(sk) = key_pair.get_sk_ref() {
-        base64::encode_config(&sk.to_bytes(), base64::URL_SAFE)
-    } else {
-        String::from("key type error")
-    }
+    base64::encode_config(&key_pair.get_sk_ref().to_bytes(), base64::URL_SAFE)
 }
 
 #[wasm_bindgen]
@@ -1592,7 +1545,7 @@ pub fn new_keypair() -> XfrKeyPair {
 #[wasm_bindgen]
 /// Creates a new transfer key pair.
 pub fn new_keypair_old() -> XfrKeyPair {
-    XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy())
+    XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
 }
 #[wasm_bindgen]
 /// Generates a new keypair deterministically from a seed string and an optional name.
@@ -1614,7 +1567,6 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_base64(pk)
         .c(d!())
-        .and_then(|pk| XfrPublicKey::from_noah(&pk))
         .map_err(error_to_jsvalue)
 }
 
@@ -1914,7 +1866,6 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_bech32(addr)
         .c(d!())
-        .and_then(|pk| XfrPublicKey::from_noah(&pk))
         .map_err(error_to_jsvalue)
 }
 
@@ -1928,13 +1879,8 @@ pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn bech32_to_base64_old(pk: &str) -> Result<String, JsValue> {
-    let pub_key = public_key_from_bech32(pk)?;
-    let ret = if let XfrPublicKeyInner::Ed25519(pk) = pub_key.inner() {
-        base64::encode_config(&pk.to_bytes(), base64::URL_SAFE)
-    } else {
-        String::from("key type error")
-    };
-    Ok(ret)
+    public_key_from_bech32(pk)
+        .map(|pk| base64::encode_config(&pk.to_bytes(), base64::URL_SAFE))
 }
 
 #[wasm_bindgen]
@@ -2161,7 +2107,7 @@ pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
 /// The destination for fee to be transfered to.
 #[wasm_bindgen]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
-    *BLACK_HOLE_PUBKEY
+    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap()
 }
 
 #[wasm_bindgen]
@@ -2173,13 +2119,17 @@ pub fn get_delegation_target_address() -> String {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(
+        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
+    )
 }
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(
+        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
+    )
 }
 
 #[wasm_bindgen]

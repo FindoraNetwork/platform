@@ -23,7 +23,7 @@ use {
     noah_algebra::prelude::{One, Zero},
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_core::SeedableRng,
-    zei::XfrKeyPair,
+    zei::{BlindAssetRecord, XfrKeyPair},
 };
 
 #[cfg(test)]
@@ -194,7 +194,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
                     lien: None,
                 },
                 None,
@@ -202,7 +202,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: second_ba,
+                    record: BlindAssetRecord::from_noah(&second_ba).unwrap(),
                     lien: None,
                 },
                 None,
@@ -247,9 +247,12 @@ fn test_asset_transfer() {
     // Construct transfer operation
     let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
     let input_bar = (input_bar_proof.clone().utxo.0).record;
-    let input_oar =
-        open_blind_asset_record(&input_bar, &None, &key_pair.into_noah().unwrap())
-            .unwrap();
+    let input_oar = open_blind_asset_record(
+        &input_bar.into_noah().unwrap(),
+        &None,
+        &key_pair.into_noah().unwrap(),
+    )
+    .unwrap();
     assert!(input_bar_proof.is_valid(state_commitment));
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
@@ -390,7 +393,7 @@ fn asset_issued() {
         &[(
             TxOutput {
                 id: None,
-                record: ba,
+                record: BlindAssetRecord::from_noah(&ba).unwrap(),
                 lien: None,
             },
             None,
@@ -536,8 +539,12 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice.into_noah().unwrap())
-                    .unwrap(),
+                open_blind_asset_record(
+                    &bar.into_noah().unwrap(),
+                    &None,
+                    &alice.into_noah().unwrap(),
+                )
+                .unwrap(),
             )],
             &[record],
             None,
@@ -574,8 +581,12 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice.into_noah().unwrap())
-                    .unwrap(),
+                open_blind_asset_record(
+                    &bar.into_noah().unwrap(),
+                    &None,
+                    &alice.into_noah().unwrap(),
+                )
+                .unwrap(),
             )],
             &[record],
             None,
@@ -722,9 +733,12 @@ fn gen_fee_operation(
 
     let input_bar_proof = l.get_utxo_light(txo_sid).unwrap();
     let input_bar = (input_bar_proof.utxo.0).record;
-    let input_oar =
-        open_blind_asset_record(&input_bar, &None, &fra_owner_kp.into_noah().unwrap())
-            .unwrap();
+    let input_oar = open_blind_asset_record(
+        &input_bar.into_noah().unwrap(),
+        &None,
+        &fra_owner_kp.into_noah().unwrap(),
+    )
+    .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         input_oar.amount - TX_FEE_MIN,
