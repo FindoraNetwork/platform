@@ -17,13 +17,13 @@ use {
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
             },
-            sig::XfrKeyPair,
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
     noah_algebra::prelude::{One, Zero},
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_core::SeedableRng,
+    zei::XfrKeyPair,
 };
 
 #[cfg(test)]
@@ -180,7 +180,7 @@ fn test_asset_transfer() {
         100,
         new_code.val,
         art,
-        key_pair.get_pk(),
+        key_pair.get_pk().into_noah().unwrap(),
     );
     let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
@@ -247,14 +247,16 @@ fn test_asset_transfer() {
     // Construct transfer operation
     let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
     let input_bar = (input_bar_proof.clone().utxo.0).record;
-    let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair).unwrap();
+    let input_oar =
+        open_blind_asset_record(&input_bar, &None, &key_pair.into_noah().unwrap())
+            .unwrap();
     assert!(input_bar_proof.is_valid(state_commitment));
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         100,
         new_code.val,
         art,
-        key_pair_adversary.get_pk(),
+        key_pair_adversary.get_pk().into_noah().unwrap(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -376,7 +378,7 @@ fn asset_issued() {
         100,
         new_token_code.val,
         art,
-        *keypair.get_pk_ref(),
+        keypair.get_pk_ref().into_noah().unwrap(),
     );
 
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -520,7 +522,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah().unwrap(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -534,7 +536,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice).unwrap(),
+                open_blind_asset_record(&bar, &None, &alice.into_noah().unwrap())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -557,7 +560,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah().unwrap(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -571,7 +574,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice).unwrap(),
+                open_blind_asset_record(&bar, &None, &alice.into_noah().unwrap())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -595,7 +599,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah().unwrap(),
     );
     let second_record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -718,13 +722,15 @@ fn gen_fee_operation(
 
     let input_bar_proof = l.get_utxo_light(txo_sid).unwrap();
     let input_bar = (input_bar_proof.utxo.0).record;
-    let input_oar = open_blind_asset_record(&input_bar, &None, &fra_owner_kp).unwrap();
+    let input_oar =
+        open_blind_asset_record(&input_bar, &None, &fra_owner_kp.into_noah().unwrap())
+            .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         input_oar.amount - TX_FEE_MIN,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk(),
+        fra_owner_kp.get_pk().into_noah().unwrap(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut l.get_prng(),

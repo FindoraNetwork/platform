@@ -26,7 +26,7 @@ use {
     ledger_api::*,
     noah::{
         anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+        xfr::structs::OwnerMemo,
     },
     noah_algebra::serialization::NoahFromToBytes,
     parking_lot::RwLock,
@@ -38,6 +38,7 @@ use {
         sync::Arc,
     },
     tracing::info,
+    zei::XfrPublicKey,
 };
 
 /// Returns the git commit hash and commit date of this build
@@ -553,8 +554,10 @@ pub async fn get_total_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
     let l = data.read();
-    let burn_pubkey = *BLACK_HOLE_PUBKEY;
-    let extra_pubkey = *FF_PK_EXTRA_120_0000;
+    let burn_pubkey = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+    let extra_pubkey = XfrPublicKey::from_noah(&FF_PK_EXTRA_120_0000)
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let burn_balance = l
         .ledger_cloned

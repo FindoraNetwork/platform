@@ -2,7 +2,6 @@
 //! # Access Ledger Data
 //!
 
- 
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -11,22 +10,23 @@ use {
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
     },
-    globutils::{wallet,HashOf},
+    globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
-            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo, ABARData
+            ABARData, ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo,
+            StateCommitmentData, TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
             TendermintAddrRef,
         },
     },
-    noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    noah::xfr::structs::OwnerMemo,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
+    zei::XfrPublicKey,
 };
 
 /// Ping route to check for liveness of API

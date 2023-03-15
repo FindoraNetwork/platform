@@ -48,7 +48,6 @@ use {
                 AssetRecordType,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{AssetType, XfrAmount, XfrAssetType},
         },
     },
@@ -61,6 +60,7 @@ use {
         get_block_height, get_local_block_height, get_validator_detail,
         parse_td_validator_keys,
     },
+    zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 lazy_static! {
@@ -168,7 +168,7 @@ pub fn stake(
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, am)],
         None,
         false,
         false,
@@ -209,7 +209,7 @@ pub fn stake_append(
     builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, am)],
         None,
         false,
         false,
@@ -514,7 +514,7 @@ pub fn transfer_asset_batch_x(
 ) -> Result<()> {
     utils::transfer_batch(
         kp,
-        target_addr.iter().map(|addr| (addr, am)).collect(),
+        target_addr.iter().map(|addr| (*addr, am)).collect(),
         token_code,
         confidential_am,
         confidential_ty,
@@ -606,7 +606,7 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 pub fn gen_key(is_address_fra: bool) -> (String, String, String, XfrKeyPair) {
     let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        let kp: XfrKeyPair = if is_address_fra {
+        let kp = if is_address_fra {
             pnk!(wallet::restore_keypair_from_mnemonic_ed25519(&mnemonic))
         } else {
             pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic))
@@ -755,7 +755,7 @@ fn gen_delegate_tx(
 
     utils::gen_transfer_op(
         owner_kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
         None,
         false,
         false,

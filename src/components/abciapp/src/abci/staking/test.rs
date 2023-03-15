@@ -13,13 +13,13 @@ use {
     },
     noah::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, XfrAmount},
     },
     rand::random,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
+    zei::{XfrKeyPair, XfrPublicKey},
 };
 
 #[test]
@@ -52,7 +52,7 @@ fn check_block_rewards_rate() -> Result<()> {
         let tx = gen_transfer_tx(
             &ledger,
             &root_kp,
-            &FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()],
+            &XfrPublicKey::from_noah(&FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()])?,
             FRA_PRE_ISSUE_AMOUNT / 200,
             seq_id,
         )
@@ -100,7 +100,10 @@ fn gen_transfer_tx(
 ) -> Result<Transaction> {
     let mut tx_builder = TransactionBuilder::from_seq_id(seq_id);
 
-    let target_list = vec![(target_pk, am), (&*BLACK_HOLE_PUBKEY, TX_FEE_MIN)];
+    let target_list = vec![
+        (target_pk, am),
+        (&XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY)?, TX_FEE_MIN),
+    ];
 
     let mut trans_builder = TransferOperationBuilder::new();
 
@@ -119,7 +122,7 @@ fn gen_transfer_tx(
             continue;
         }
 
-        open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp)
+        open_blind_asset_record(&utxo.0.record, &owner_memo, &owner_kp.into_noah()?)
             .c(d!())
             .and_then(|ob| {
                 trans_builder
@@ -139,7 +142,7 @@ fn gen_transfer_tx(
             n,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            *pk,
+            pk.into_noah().unwrap(),
         )
     });
 

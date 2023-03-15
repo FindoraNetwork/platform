@@ -17,22 +17,25 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    noah::anon_xfr::{
-        keys::{AXfrKeyPair, AXfrPubKey},
-        structs::{
-            AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
+    noah::{
+        anon_xfr::{
+            keys::{AXfrKeyPair, AXfrPubKey},
+            structs::{
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo,
+                OpenAnonAssetRecord,
+            },
         },
-    },
-    noah::xfr::{
-        asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
+        xfr::{
+            asset_record::{open_blind_asset_record, AssetRecordType},
+            structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
+        },
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
     sha2::Digest,
     std::collections::HashMap,
     tendermint::{PrivateKey, PublicKey},
+    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 ///////////////////////////////////////
@@ -102,7 +105,7 @@ pub fn transfer(
     }
     transfer_batch(
         owner_kp,
-        vec![(target_pk, am)],
+        vec![(target_pk.clone(), am)],
         token_code,
         confidential_am,
         confidential_ty,
@@ -114,7 +117,7 @@ pub fn transfer(
 #[allow(missing_docs)]
 pub fn transfer_batch(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
@@ -143,7 +146,7 @@ pub fn transfer_batch(
 #[inline(always)]
 pub fn gen_transfer_op(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
@@ -164,7 +167,7 @@ pub fn gen_transfer_op(
 #[allow(missing_docs)]
 pub fn gen_transfer_op_x(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
     confidential_am: bool,
@@ -189,7 +192,7 @@ pub fn gen_transfer_op_x(
 pub fn gen_transfer_op_xx(
     rpc_endpoint: Option<&str>,
     owner_kp: &XfrKeyPair,
-    mut target_list: Vec<(&XfrPublicKey, u64)>,
+    mut target_list: Vec<(XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
     confidential_am: bool,
@@ -198,7 +201,7 @@ pub fn gen_transfer_op_xx(
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN));
+        target_list.push((XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)?, TX_FEE_MIN));
         op_fee += TX_FEE_MIN;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
@@ -218,8 +221,12 @@ pub fn gen_transfer_op_xx(
         .into_iter();
 
     for (sid, (utxo, owner_memo)) in utxos {
-        let oar =
-            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+        let oar = open_blind_asset_record(
+            &utxo.0.record.into_noah()?,
+            &owner_memo,
+            &owner_kp.into_noah()?,
+        )
+        .c(d!())?;
 
         if oar.asset_type != asset_type && oar.asset_type != ASSET_TYPE_FRA {
             continue;
@@ -279,7 +286,7 @@ pub fn gen_transfer_op_xx(
             n,
             token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA),
             art,
-            *pk,
+            pk.into_noah().unwrap(),
         )
     });
 
@@ -331,8 +338,12 @@ pub fn gen_fee_bar_to_abar(
 
     let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
     for (sid, (utxo, owner_memo)) in utxos {
-        let oar =
-            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+        let oar = open_blind_asset_record(
+            &utxo.0.record.into_noah()?,
+            &owner_memo,
+            &owner_kp.into_noah()?,
+        )
+        .c(d!())?;
 
         if op_fee == 0 {
             break;
@@ -361,7 +372,7 @@ pub fn gen_fee_bar_to_abar(
                             i_am - op_fee,
                             ASSET_TYPE_FRA,
                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                            owner_kp.pub_key,
+                            owner_kp.pub_key.into_noah()?,
                         ),
                         None,
                         None,
@@ -551,9 +562,13 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
         .c(d!())?
         .values()
         .map(|(utxo, owner_memo)| {
-            open_blind_asset_record(&utxo.0.record, owner_memo, kp)
-                .c(d!())
-                .map(|obr| alt!(obr.asset_type == asset_type, obr.amount, 0))
+            open_blind_asset_record(
+                &utxo.0.record.into_noah()?,
+                owner_memo,
+                &kp.into_noah()?,
+            )
+            .c(d!())
+            .map(|obr| alt!(obr.asset_type == asset_type, obr.amount, 0))
         })
         .collect::<Result<Vec<_>>>()
         .c(d!())?
@@ -859,8 +874,12 @@ pub fn get_oar(
             continue;
         }
 
-        let oar =
-            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+        let oar = open_blind_asset_record(
+            &utxo.0.record.into_noah()?,
+            &owner_memo,
+            &owner_kp.into_noah()?,
+        )
+        .c(d!())?;
 
         return Ok((oar, utxo.0.record));
     }

@@ -75,7 +75,6 @@ use {
                 open_blind_asset_record as open_bar, AssetRecordType,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as NoahAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
@@ -94,6 +93,7 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
+    zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -1614,6 +1614,7 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_base64(pk)
         .c(d!())
+        .and_then(|pk| XfrPublicKey::from_noah(&pk))
         .map_err(error_to_jsvalue)
 }
 
@@ -1913,6 +1914,7 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_bech32(addr)
         .c(d!())
+        .and_then(|pk| XfrPublicKey::from_noah(&pk))
         .map_err(error_to_jsvalue)
 }
 

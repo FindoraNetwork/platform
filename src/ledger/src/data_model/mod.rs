@@ -47,11 +47,10 @@ use {
         setup::VerifierParams,
         xfr::{
             gen_xfr_body,
-            sig::{XfrKeyPair, XfrPublicKey},
+            sig::XfrPublicKey as NoahXfrPublicKey,
             structs::{
-                AssetRecord, AssetType as NoahAssetType, BlindAssetRecord, OwnerMemo,
-                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
+                AssetRecord, AssetType as NoahAssetType, OwnerMemo, TracingPolicies,
+                TracingPolicy, XfrAmount, XfrAssetType, XfrBody, ASSET_TYPE_LENGTH,
             },
             XfrNotePolicies,
         },
@@ -72,6 +71,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
+    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -950,7 +950,7 @@ impl TransferAssetBody {
             .iter()
             .map(|rec| TxOutput {
                 id: None,
-                record: rec.clone(),
+                record: BlindAssetRecord::from_noah(rec).unwrap(),
                 lien: None,
             })
             .collect();
@@ -972,10 +972,10 @@ impl TransferAssetBody {
         keypair: &XfrKeyPair,
         input_idx: Option<usize>,
     ) -> IndexedSignature<TransferAssetBody> {
-        let public_key = keypair.get_pk_ref();
+        let public_key = keypair.get_pk();
         IndexedSignature {
-            signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
-            address: XfrAddress { key: *public_key },
+            signature: SignatureOf::new(&keypair, &(self.clone(), input_idx)),
+            address: XfrAddress { key: public_key },
             input_idx,
         }
     }
@@ -1176,7 +1176,9 @@ impl TransferAsset {
             .transfer
             .inputs
             .iter()
-            .map(|record| record.public_key)
+            .map(|record| {
+                XfrPublicKey::from_noah(&record.public_key).unwrap_or_default()
+            })
             .collect()
     }
 
@@ -1274,7 +1276,7 @@ impl UpdateMemo {
         update_memo_body: UpdateMemoBody,
         signing_key: &XfrKeyPair,
     ) -> UpdateMemo {
-        let signature = SignatureOf::new(signing_key, &update_memo_body);
+        let signature = SignatureOf::new(&signing_key, &update_memo_body);
         UpdateMemo {
             body: update_memo_body,
             pubkey: *signing_key.get_pk_ref(),
@@ -1343,8 +1345,12 @@ impl BarToAbarOps {
     /// provides a copy of the input record in the note
     pub fn input_record(&self) -> BlindAssetRecord {
         match &self.note {
-            BarAnonConvNote::BarNote(n) => n.body.input.clone(),
-            BarAnonConvNote::ArNote(n) => n.body.input.clone(),
+            BarAnonConvNote::BarNote(n) => {
+                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+            }
+            BarAnonConvNote::ArNote(n) => {
+                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+            }
         }
     }
 
@@ -1440,16 +1446,24 @@ impl AbarConvNote {
     /// public key of the note body
     pub fn get_public_key(&self) -> XfrPublicKey {
         match self {
-            AbarConvNote::AbarToBar(note) => note.body.output.public_key,
-            AbarConvNote::AbarToAr(note) => note.body.output.public_key,
+            AbarConvNote::AbarToBar(note) => {
+                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+            }
         }
     }
 
     /// output BAR of the note body
     pub fn get_output(&self) -> BlindAssetRecord {
         match self {
-            AbarConvNote::AbarToBar(note) => note.body.output.clone(),
-            AbarConvNote::AbarToAr(note) => note.body.output.clone(),
+            AbarConvNote::AbarToBar(note) => {
+                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+            }
         }
     }
 
@@ -1951,9 +1965,9 @@ pub const FRA_DECIMALS: u8 = 6;
 lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
-    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey = pnk!(XfrPublicKey::noah_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
     /// BlackHole of Staking
-    pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::noah_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY_STAKING: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
@@ -2013,7 +2027,8 @@ impl Transaction {
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
-                                && *BLACK_HOLE_PUBKEY == o.record.public_key
+                                && XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY).unwrap()
+                                    == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
                                     if am > (min_fee - 1) {
@@ -2191,7 +2206,7 @@ impl Transaction {
     pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
         let serialized = Serialized::new(&self.body);
         for sig in self.signatures.iter() {
-            match sig.0.verify(public_key, &serialized) {
+            match sig.0.verify(&public_key, &serialized) {
                 Err(_) => {}
                 Ok(_) => {
                     return Ok(());

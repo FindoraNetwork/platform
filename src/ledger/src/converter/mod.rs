@@ -5,12 +5,10 @@ use crate::data_model::{
 };
 use config::abci::global_cfg::CFG;
 use fp_types::{crypto::MultiSigner, H160};
-use noah::xfr::{
-    sig::XfrPublicKey,
-    structs::{AssetType, XfrAmount, XfrAssetType},
-};
+use noah::xfr::structs::{AssetType, XfrAmount, XfrAssetType};
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use zei::XfrPublicKey;
 
 /// Use this operation to transfer.
 ///
@@ -126,7 +124,8 @@ pub fn check_convert_account(
                     ));
             }
             if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
+                if o.record.public_key
+                    == XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY_STAKING)?
                     && ty == expected_asset
                 {
                     if let XfrAmount::NonConfidential(amount) = o.record.amount {

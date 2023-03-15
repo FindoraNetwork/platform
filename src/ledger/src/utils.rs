@@ -17,13 +17,13 @@ use {
     fp_utils::hashing::keccak_256,
     noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
-        sig::XfrKeyPair,
         structs::AssetRecordTemplate,
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
+    zei::{BlindAssetRecord, XfrKeyPair},
 };
 
 /// Create a transaction to define a custom asset
@@ -90,7 +90,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         FRA_PRE_ISSUE_AMOUNT / 2,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk(),
+        fra_owner_kp.get_pk().into_noah().unwrap(),
     );
 
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -105,7 +105,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
             (
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
                     lien: None,
                 },
                 None,

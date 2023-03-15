@@ -12,13 +12,13 @@ use {
     },
     noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
-        sig::XfrPublicKey,
         structs::{AssetRecordTemplate, AssetType, OwnerMemo},
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
+    zei::{BlindAssetRecord, XfrPublicKey},
 };
 
 /// 420 million FRAs
@@ -76,14 +76,14 @@ impl MintEntry {
             amount,
             asset_type,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            receiver_pk.unwrap_or(target_pk),
+            receiver_pk.unwrap_or(target_pk).into_noah().unwrap(),
         );
         let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {
             id: None,
-            record: ba,
+            record: BlindAssetRecord::from_noah(&ba).unwrap(),
             lien: None,
         };
 

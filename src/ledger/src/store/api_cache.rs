@@ -21,14 +21,12 @@ use {
     globutils::{wallet, HashOf},
     noah::{
         anon_xfr::structs::AxfrOwnerMemo,
-        xfr::{
-            sig::XfrPublicKey,
-            structs::{AssetType, OwnerMemo},
-        },
+        xfr::structs::{AssetType, OwnerMemo},
     },
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
+    zei::XfrPublicKey,
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -307,13 +305,13 @@ where
             Operation::TransferAsset(transfer) => {
                 for input in transfer.body.transfer.inputs.iter() {
                     related_addresses.insert(XfrAddress {
-                        key: input.public_key,
+                        key: XfrPublicKey::from_noah(&input.public_key).unwrap(),
                     });
                 }
 
                 for output in transfer.body.transfer.outputs.iter() {
                     related_addresses.insert(XfrAddress {
-                        key: output.public_key,
+                        key: XfrPublicKey::from_noah(&output.public_key).unwrap(),
                     });
                 }
             }

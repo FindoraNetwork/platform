@@ -44,7 +44,6 @@ use {
         },
         setup::VerifierParams,
         xfr::{
-            sig::XfrPublicKey,
             structs::{OwnerMemo, TracingPolicies, TracingPolicy},
             XfrNotePolicies,
         },
@@ -74,6 +73,7 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
+    zei::XfrPublicKey,
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -830,7 +830,11 @@ impl LedgerState {
             - FF_PK_LIST
                 .iter()
                 .chain(extras.iter())
-                .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
+                .map(|pk| {
+                    XfrPublicKey::from_noah(&pk)
+                        .and_then(|pk| self.staking_get_nonconfidential_balance(&pk))
+                        .unwrap_or(0)
+                })
                 .sum::<Amount>()
             - s.coinbase_balance()
     }

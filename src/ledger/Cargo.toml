@@ -49,6 +49,7 @@ credentials = { git = "https://github.com/shaorongqiang/platform-lib-credentials
 merkle_tree = { git = "https://github.com/shaorongqiang/platform-lib-merkle", branch = "main" }
 sliding_set = { git = "https://github.com/shaorongqiang/platform-lib-slidingset", branch = "main" }
 
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 [features]
 default = ["fin_storage"]
 diskcache = ["fbnc/diskcache"]

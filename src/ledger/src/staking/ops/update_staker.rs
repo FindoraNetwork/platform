@@ -10,10 +10,10 @@ use {
         staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
     },
     ed25519_dalek::Signer,
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Staker Update Operation`.

@@ -24,10 +24,10 @@ use {
         },
         utils::fra_gen_initial_tx,
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
+    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -233,7 +233,7 @@ mod issue {
             FRA_PRE_ISSUE_AMOUNT / 2,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            root_kp.get_pk(),
+            root_kp.get_pk().into_noah()?,
         );
         let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
@@ -247,7 +247,7 @@ mod issue {
                 (
                     TxOutput {
                         id: None,
-                        record: ba,
+                        record: BlindAssetRecord::from_noah(&ba).unwrap(),
                         lien: None,
                     },
                     None,
@@ -291,7 +291,7 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
             None,
             false,
             false,

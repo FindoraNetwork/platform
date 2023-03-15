@@ -23,6 +23,7 @@ serde-big-array = "0.4"
 sha3 = "0.10"
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 # primitives
 fp-utils = { path = "../utils" }

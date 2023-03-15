@@ -16,14 +16,12 @@ use {
         },
     },
     ed25519_dalek::Signer,
-    noah::xfr::{
-        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-        structs::{XfrAmount, XfrAssetType},
-    },
+    noah::xfr::structs::{XfrAmount, XfrAssetType},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Delegation Operation`.
@@ -220,7 +218,7 @@ fn check_delegation_context_principal(
     tx: &Transaction,
     owner: (XfrPublicKey, Amount),
 ) -> Result<Amount> {
-    let target_pk = *BLACK_HOLE_PUBKEY_STAKING;
+    let target_pk = XfrPublicKey::from_noah(&*BLACK_HOLE_PUBKEY_STAKING)?;
 
     let am = tx
         .body
@@ -252,7 +250,9 @@ fn check_delegation_context_principal(
                 //
                 // - all inputs are owned by a same address
                 // - the owner of all inputs is same as the delegator
-                if 1 == keynum && owner.0 == x.body.transfer.inputs[0].public_key {
+                if 1 == keynum
+                    && owner.0.into_noah()? == x.body.transfer.inputs[0].public_key
+                {
                     let am = x
                         .body
                         .outputs
