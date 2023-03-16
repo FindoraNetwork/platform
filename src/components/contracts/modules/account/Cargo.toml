@@ -30,7 +30,7 @@ parking_lot = "0.12"
 rand_chacha = "0.3"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
 
 [features]
 web3_service = ["enterprise-web3"]

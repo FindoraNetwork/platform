@@ -12,9 +12,9 @@ serde_json = "1.0"
 time = "0.3"
 rand = "0.8"
 cryptohash = { path = "../cryptohash" }
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
 hex = "0.4.2"
 bip32 = "0.3.0"
 
