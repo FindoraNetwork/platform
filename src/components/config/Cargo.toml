@@ -19,7 +19,7 @@ toml = "0.5.8"
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
-btm = "0.1.6"
+btm = "0.13.0"
 
 [build-dependencies]
 vergen = "=3.1.0"
