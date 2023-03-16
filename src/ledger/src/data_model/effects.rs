@@ -234,7 +234,7 @@ impl TxnEffect {
     //         - Partially checked here
     fn add_define_asset(&mut self, def: &DefineAsset) -> Result<()> {
         // (1)
-        //def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
+        def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
         let code = def.body.asset.code;
 
@@ -295,7 +295,7 @@ impl TxnEffect {
         iss_nums.push(seq_num);
 
         // (2)
-        //iss.signature.verify(&iss.pubkey.key, &iss.body).c(d!())?;
+        iss.signature.verify(&iss.pubkey.key, &iss.body).c(d!())?;
 
         // (3)
         if let Some(prior_key) = self.issuance_keys.get(&code) {
