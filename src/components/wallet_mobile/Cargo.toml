@@ -32,8 +32,8 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
 
-noah = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", branch = "msm_wasm" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
