@@ -85,7 +85,7 @@ jobs:
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
+        export IMAGE_TAG="RPCNode-${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
 
