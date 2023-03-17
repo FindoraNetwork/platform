@@ -21,12 +21,11 @@ use {
             TendermintAddrRef,
         },
     },
-    noah::xfr::structs::OwnerMemo,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    zei::XfrPublicKey,
+    zei::{OwnerMemo, XfrPublicKey},
 };
 
 /// Ping route to check for liveness of API

@@ -64,7 +64,7 @@ use {
                 open_blind_asset_record, AssetRecordType,
             },
             structs::{
-                AssetRecord, AssetRecordTemplate, AssetType, OpenAssetRecord, OwnerMemo,
+                AssetRecord, AssetRecordTemplate, AssetType, OpenAssetRecord,
                 TracingPolicies, TracingPolicy,
             },
             XfrNotePolicies,
@@ -81,7 +81,7 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
+    zei::{BlindAssetRecord, OwnerMemo, XfrKeyPair, XfrPublicKey},
 };
 
 macro_rules! no_transfer_err {
@@ -165,7 +165,7 @@ impl TransactionBuilder {
                     .outputs
                     .iter()
                     .zip($d.body.transfer.owners_memos.iter())
-                    .map(|(r, om)| (r.clone(), om.clone().map(|it| it.into_noah())))
+                    .map(|(r, om)| (r.clone(), om.clone().map(|it| it)))
                     .collect()
             };
         }
@@ -202,9 +202,11 @@ impl TransactionBuilder {
         let mut am = TX_FEE_MIN;
         for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
-                if let Ok(oar) =
-                    open_blind_asset_record(&o.into_noah()?, &om, &kp.into_noah()?)
-                {
+                if let Ok(oar) = open_blind_asset_record(
+                    &o.into_noah()?,
+                    &om.map(|o| o.into_noah()),
+                    &kp.into_noah()?,
+                ) {
                     if ASSET_TYPE_FRA == oar.asset_type
                         && kp.get_pk_ref().to_bytes() == o.public_key.to_bytes()
                     {
@@ -263,7 +265,7 @@ impl TransactionBuilder {
 
         let mut am = fee;
         for i in inputs.inner.into_iter() {
-            open_blind_asset_record(&i.ar.record.into_noah()?, &i.om, &i.kp.into_noah()?)
+            open_blind_asset_record(&i.ar.record.into_noah()?, &i.om.map(|o| o.into_noah()), &i.kp.into_noah()?)
                 .c(d!())
                 .and_then(|oar| {
                     if oar.asset_type != ASSET_TYPE_FRA {
@@ -375,7 +377,7 @@ impl TransactionBuilder {
                     record: BlindAssetRecord::from_noah(&ba)?,
                     lien: None,
                 },
-                owner_memo,
+                owner_memo.map(|om| OwnerMemo::from_noah(&om).unwrap()),
             )],
         )
         .c(d!())

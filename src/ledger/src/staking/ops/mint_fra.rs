@@ -12,13 +12,13 @@ use {
     },
     noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
-        structs::{AssetRecordTemplate, AssetType, OwnerMemo},
+        structs::{AssetRecordTemplate, AssetType},
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
-    zei::{BlindAssetRecord, XfrPublicKey},
+    zei::{BlindAssetRecord, OwnerMemo, XfrPublicKey},
 };
 
 /// 420 million FRAs

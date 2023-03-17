@@ -44,7 +44,7 @@ use {
         },
         setup::VerifierParams,
         xfr::{
-            structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+            structs::{TracingPolicies, TracingPolicy},
             XfrNotePolicies,
         },
     },
@@ -73,7 +73,7 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
-    zei::XfrPublicKey,
+    zei::{OwnerMemo, XfrPublicKey},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;

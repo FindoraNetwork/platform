@@ -92,7 +92,7 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
-    zei::{XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -222,7 +222,7 @@ impl From<FeeInput> for PlatformFeeInput {
             am: fi.am,
             tr: fi.tr.txo_ref,
             ar: fi.ar.txo,
-            om: fi.om.map(|om| om.memo),
+            om: fi.om.map(|om| ZeiOwnerMemo::from_noah(&om.memo).unwrap()),
             kp: fi.kp,
         }
     }
@@ -868,7 +868,9 @@ impl TransactionBuilder {
     pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
         self.get_builder()
             .get_owner_memo_ref(idx)
-            .map(|memo| OwnerMemo { memo: memo.clone() })
+            .map(|memo| OwnerMemo {
+                memo: memo.into_noah(),
+            })
     }
 }
 

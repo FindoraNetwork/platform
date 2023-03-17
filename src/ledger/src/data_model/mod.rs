@@ -49,8 +49,8 @@ use {
             gen_xfr_body,
             sig::XfrPublicKey as NoahXfrPublicKey,
             structs::{
-                AssetRecord, AssetType as NoahAssetType, OwnerMemo, TracingPolicies,
-                TracingPolicy, XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
+                AssetRecord, AssetType as NoahAssetType, TracingPolicies, TracingPolicy,
+                XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
             },
             XfrNotePolicies,
         },
@@ -71,7 +71,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::{BlindAssetRecord, XfrBody, XfrKeyPair, XfrPublicKey},
+    zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -1168,7 +1168,7 @@ impl TransferAsset {
             .transfer
             .owners_memos
             .iter()
-            .map(|mem| mem.clone().map(|om| om.into_noah()))
+            .map(|mem| mem.clone().map(|om| om))
             .collect()
     }
 
@@ -1472,10 +1472,18 @@ impl AbarConvNote {
     pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         match self {
             AbarConvNote::AbarToBar(note) => {
-                vec![note.body.memo.clone()]
+                vec![note
+                    .body
+                    .memo
+                    .as_ref()
+                    .map(|om| OwnerMemo::from_noah(om).unwrap())]
             }
             AbarConvNote::AbarToAr(note) => {
-                vec![note.body.memo.clone()]
+                vec![note
+                    .body
+                    .memo
+                    .as_ref()
+                    .map(|om| OwnerMemo::from_noah(om).unwrap())]
             }
         }
     }

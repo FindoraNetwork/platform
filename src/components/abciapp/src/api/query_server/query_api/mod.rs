@@ -24,10 +24,7 @@ use {
         },
     },
     ledger_api::*,
-    noah::{
-        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        xfr::structs::OwnerMemo,
-    },
+    noah::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
     noah_algebra::serialization::NoahFromToBytes,
     parking_lot::RwLock,
     ruc::*,
@@ -38,7 +35,7 @@ use {
         sync::Arc,
     },
     tracing::info,
-    zei::XfrPublicKey,
+    zei::{OwnerMemo, XfrPublicKey},
 };
 
 /// Returns the git commit hash and commit date of this build
