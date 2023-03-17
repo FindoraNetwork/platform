@@ -122,7 +122,7 @@ fn gen_transfer_tx(
 
         open_blind_asset_record(
             &utxo.0.record.into_noah()?,
-            &owner_memo,
+            &owner_memo.map(|o| o.into_noah()),
             &owner_kp.into_noah()?,
         )
         .c(d!())
