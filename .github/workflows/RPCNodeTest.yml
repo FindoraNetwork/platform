@@ -2,7 +2,7 @@ name: RpcNodeTest
 on:
   push:
     tags:
-      - '*-RPCNode'
+      - '*-manual'
 env:
   CARGO_TERM_COLOR: always
 jobs:
