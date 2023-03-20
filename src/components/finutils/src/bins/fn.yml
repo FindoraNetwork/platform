@@ -399,24 +399,6 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
-  #- history
-  #    about: query operating history
-  #    args:
-  #      - coinbase:
-  #          help: show coinbase history
-  #          long: coinbase
-  #          conflicts_with:
-  #            - transaction
-  #      - transaction:
-  #          help: show transaction history
-  #          conflicts_with:
-  #            - coinbase
-  #      - wallet:
-  #          help: wallet nick name
-  #          long: wallet
-  #          takes_value: true
-  #          value_name: WALLET
-  #          required: true
   - account:
       about: Return user contract account information or fra balance if secret key is provided
       args:
@@ -494,15 +476,6 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
-  - gen-anon-keys:
-      about: Generate Anon keys
-      args:
-        - file-path:
-            help: Path of file to save the anon keys json
-            short: f
-            long: file-path
-            takes_value: true
-            value_name: File Path
   - owned-abars:
       about: Get Anon UTXOs for a keypair use commitment
       args:
@@ -514,13 +487,12 @@ subcommands:
             value_name: COMMITMENT
             required: true
             allow_hyphen_values: true
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of receiver
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
-            required: true
+            value_name: SECRET KEY PATH
         - asset:
             help: code of asset, such as `fra`
             long: asset
@@ -538,12 +510,12 @@ subcommands:
             value_name: COMMITMENT
             required: true
             allow_hyphen_values: true
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
+            value_name: SECRET KEY PATH
             required: true
         - asset:
             help: code of asset, such as `fra`
@@ -562,12 +534,12 @@ subcommands:
             value_name: COMMITMENT
             required: true
             allow_hyphen_values: true
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
+            value_name: SECRET KEY PATH
             required: true
   - owned-utxos:
       about: List owned UTXOs for a public key
@@ -584,15 +556,15 @@ subcommands:
         - from-seckey:
             help: Xfr secret key file path of converter
             short: s
-            long: xfr-secretkey
+            long: from-seckey
             takes_value: true
             value_name: SECRET KEY PATH
-        - anon-keys:
-            help: Anon keys file path of converter
+        - to-address:
+            help: bech32 address of receiver keys
             short: a
-            long: anon-keys
+            long: to-address
             takes_value: true
-            value_name: ANON KEYS PATH
+            value_name: TO ADDRESS
             required: true
         - txo-sid:
             help: Txo Sid of input to convert
@@ -604,13 +576,12 @@ subcommands:
   - convert-abar-to-bar:
       about: Convert a ABAR to BAR
       args:
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
-            required: true
+            value_name: SECRET KEY PATH
         - commitment:
             help: Commitment for the input Anon BAR
             short: c
@@ -643,13 +614,12 @@ subcommands:
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
-            required: true
+            value_name: SECRET KEY PATH
         - commitment:
             help: Commitment for the input Anon BAR
             short: c
@@ -664,11 +634,11 @@ subcommands:
             takes_value: true
             value_name: FRA COMMITMENT
             allow_hyphen_values: true
-        - to-axfr-public-key:
-            help: Axfr public key of the receiver
-            long: to-axfr-public-key
+        - to-address:
+            help: Address of the receiver
+            long: to-address
             takes_value: true
-            value_name: PUBLIC KEY
+            value_name: ADDRESS
             required: true
             allow_hyphen_values: true
         - amount:
@@ -681,12 +651,12 @@ subcommands:
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
-        - anon-keys:
-            help: Anon keys file path of the sender
+        - from-seckey:
+            help: Xfr secret key file path of sender
             short: s
-            long: anon-keys
+            long: from-seckey
             takes_value: true
-            value_name: SECRET KEY
+            value_name: SECRET KEY PATH
             required: true
         - commitment-file:
             help: Commitments for the input Anon BARs
@@ -695,9 +665,9 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
-        - to-axfr-public-key-file:
-            help: Axfr public keys of the receivers
-            long: to-axfr-public-key-file
+        - to-address-file:
+            help: Xfr public keys of the receivers
+            long: to-address-file
             takes_value: true
             value_name: PUBLIC KEY
             required: true
@@ -736,12 +706,12 @@ subcommands:
             value_name: COMMITMENT
             required: true
             allow_hyphen_values: true
-        - anon-keys:
-            help: Anon keys file path of the sender
-            short: a
-            long: anon-keys
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
             takes_value: true
-            value_name: ANON KEYS PATH
+            value_name: SECRET KEY PATH
             required: true
   - replace_staker:
       about: Replace the staker of the validator with target address

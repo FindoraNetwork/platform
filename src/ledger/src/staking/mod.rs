@@ -33,7 +33,7 @@ use {
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
-    noah::xfr::sig::XfrPublicKey as NoahXfrPublicKey,
+    noah::keys::PublicKey as NoahXfrPublicKey,
     ops::{
         fra_distribution::FraDistributionOps,
         mint_fra::{MintKind, MINT_AMOUNT_LIMIT},

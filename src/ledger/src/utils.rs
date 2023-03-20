@@ -19,7 +19,7 @@ use {
         asset_record::{build_blind_asset_record, AssetRecordType},
         structs::AssetRecordTemplate,
     },
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,

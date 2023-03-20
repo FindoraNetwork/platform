@@ -570,7 +570,6 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         };
         use std::collections::HashMap;
         use std::mem::replace;
-        use tracing::error;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {

@@ -20,7 +20,7 @@ use {
         asset_record::{build_blind_asset_record, open_blind_asset_record},
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::fmt::Debug,

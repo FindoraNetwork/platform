@@ -53,7 +53,6 @@ use {
             },
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
-            keys::{AXfrKeyPair, AXfrPubKey},
             structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
             TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
@@ -71,7 +70,7 @@ use {
         },
     },
     noah_algebra::prelude::*,
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::{CryptoRng, RngCore, SeedableRng},
     serde::{Deserialize, Serialize},
@@ -643,7 +642,7 @@ impl TransactionBuilder {
         &mut self,
         seed: [u8; 32],
         auth_key_pair: &XfrKeyPair,
-        abar_pub_key: &AXfrPubKey,
+        abar_pub_key: &XfrPublicKey,
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
         is_bar_transparent: bool,
@@ -676,7 +675,7 @@ impl TransactionBuilder {
     pub fn add_operation_abar_to_bar(
         &mut self,
         input: &OpenAnonAssetRecord,
-        input_keypair: &AXfrKeyPair,
+        input_keypair: &XfrKeyPair,
         bar_pub_key: &XfrPublicKey,
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
@@ -686,7 +685,7 @@ impl TransactionBuilder {
                 let note = init_abar_to_ar_note(
                     &mut prng,
                     input,
-                    input_keypair,
+                    &input_keypair.into_noah()?,
                     &bar_pub_key.into_noah()?,
                 )?;
                 self.abar_ar_cache.push(note);
@@ -695,7 +694,7 @@ impl TransactionBuilder {
                 let note = init_abar_to_bar_note(
                     &mut prng,
                     input,
-                    input_keypair,
+                    &input_keypair.into_noah()?,
                     &bar_pub_key.into_noah()?,
                     asset_record_type,
                 )?;
@@ -718,12 +717,13 @@ impl TransactionBuilder {
         &mut self,
         inputs: &[OpenAnonAssetRecord],
         outputs: &[OpenAnonAssetRecord],
-        input_keypair: &AXfrKeyPair,
+        input_keypair: &XfrKeyPair,
     ) -> Result<(&mut Self, AXfrPreNote)> {
         let fee = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32);
 
         // generate anon transfer note
-        let note = init_anon_xfr_note(inputs, outputs, fee, input_keypair).c(d!())?;
+        let note = init_anon_xfr_note(inputs, outputs, fee, &input_keypair.into_noah()?)
+            .c(d!())?;
         self.abar_abar_cache.push(note.clone());
 
         Ok((self, note))
@@ -739,14 +739,14 @@ impl TransactionBuilder {
         &mut self,
         inputs: &[OpenAnonAssetRecord],
         outputs: &[OpenAnonAssetRecord],
-        input_keypair: &AXfrKeyPair,
+        input_keypair: &XfrKeyPair,
     ) -> Result<(&mut Self, AXfrPreNote, Vec<OpenAnonAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
 
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
-        let remainder_pk = input_keypair.get_public_key();
+        let remainder_pk = input_keypair.get_pk();
 
         // Create a remainders hashmap with remainder amount for each asset type
         for input in inputs {
@@ -786,7 +786,7 @@ impl TransactionBuilder {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder as u64)
                     .asset_type(asset_type)
-                    .pub_key(&remainder_pk)
+                    .pub_key(&remainder_pk.into_noah()?)
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -810,7 +810,7 @@ impl TransactionBuilder {
             let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
-                .pub_key(&remainder_pk)
+                .pub_key(&remainder_pk.into_noah()?)
                 .finalize(&mut prng)
                 .unwrap()
                 .build()
@@ -828,7 +828,8 @@ impl TransactionBuilder {
         }
 
         let note =
-            init_anon_xfr_note(inputs, &vec_outputs, fees, input_keypair).c(d!())?;
+            init_anon_xfr_note(inputs, &vec_outputs, fees, &input_keypair.into_noah()?)
+                .c(d!())?;
         self.abar_abar_cache.push(note.clone());
 
         // return a list of all new remainder abars generated
@@ -1141,7 +1142,7 @@ fn gen_bar_conv_note(
     seed: [u8; 32],
     input_record: &OpenAssetRecord,
     auth_key_pair: &XfrKeyPair,
-    abar_pub_key: &AXfrPubKey,
+    abar_pub_key: &XfrPublicKey,
     is_bar_transparent: bool,
 ) -> Result<(BarAnonConvNote, Commitment)> {
     // let mut prng = ChaChaRng::from_entropy();
@@ -1156,7 +1157,7 @@ fn gen_bar_conv_note(
             &prover_params,
             input_record,
             &auth_key_pair.into_noah()?,
-            abar_pub_key,
+            &abar_pub_key.into_noah()?,
         )
         .c(d!())?;
 
@@ -1172,7 +1173,7 @@ fn gen_bar_conv_note(
             &prover_params,
             input_record,
             &auth_key_pair.into_noah()?,
-            abar_pub_key,
+            &abar_pub_key.into_noah()?,
         )
         .c(d!())?;
         let c = note.body.output.commitment;
@@ -1555,7 +1556,7 @@ impl TransferOperationBuilder {
 pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonAssetRecord>,
     outputs: Vec<OpenAnonAssetRecord>,
-    keypair: Option<AXfrKeyPair>,
+    keypair: Option<XfrKeyPair>,
     pre_note: Option<AXfrPreNote>,
     commitments: Vec<Commitment>,
 
@@ -1603,7 +1604,7 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_keypair is used to specify the input keypair for nullifier generation
-    pub fn add_keypair(&mut self, keypair: AXfrKeyPair) -> &mut Self {
+    pub fn add_keypair(&mut self, keypair: XfrKeyPair) -> &mut Self {
         self.keypair = Some(keypair);
         self
     }
@@ -1794,7 +1795,7 @@ impl AnonTransferOperationBuilder {
     }
 
     /// get a hashmap of commitment, public key, asset, amount
-    pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
+    pub fn get_commitment_map(&self) -> HashMap<String, (XfrPublicKey, AssetType, u64)> {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
             let abar_rand =
@@ -1802,7 +1803,14 @@ impl AnonTransferOperationBuilder {
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
-            commitment_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
+            commitment_map.insert(
+                abar_rand,
+                (
+                    XfrPublicKey::from_noah(&abar_pkey).unwrap(),
+                    abar_asset,
+                    abar_amt,
+                ),
+            );
         }
         commitment_map
     }
@@ -1881,7 +1889,7 @@ impl AnonTransferOperationBuilder {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder)
                     .asset_type(asset)
-                    .pub_key(&keypair.get_public_key())
+                    .pub_key(&keypair.get_pk().into_noah()?)
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -1902,7 +1910,7 @@ impl AnonTransferOperationBuilder {
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             fees_in_fra,
-            &keypair,
+            &keypair.into_noah()?,
         )
         .c(d!("error from init_anon_xfr_note"))?;
 
@@ -1972,7 +1980,7 @@ mod tests {
                 structs::AssetType as AT,
             },
         },
-        noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
     };
@@ -2344,7 +2352,7 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let from = XfrKeyPair::generate(&mut prng);
-        let to = AXfrKeyPair::generate(&mut prng).get_public_key();
+        let to = XfrKeyPair::generate(&mut prng).get_pk();
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
@@ -2450,12 +2458,15 @@ mod tests {
         // simulate another oabar just to get new keypair
         let (_, another_keypair) = gen_oabar_and_keys(&mut prng, amount, asset_type);
         // negative test for input keypairs
-        assert_eq!(keypair_in.get_public_key(), *oabar.pub_key_ref());
-        assert_ne!(
-            keypair_in.get_public_key(),
-            another_keypair.get_public_key()
+        assert_eq!(
+            keypair_in.get_pk().into_noah().unwrap(),
+            *oabar.pub_key_ref()
         );
-        assert_ne!(another_keypair.get_public_key(), *oabar.pub_key_ref());
+        assert_ne!(keypair_in.get_pk(), another_keypair.get_pk());
+        assert_ne!(
+            another_keypair.get_pk().into_noah().unwrap(),
+            *oabar.pub_key_ref()
+        );
 
         // Simulate output abar
         let (oabar_out, _keypair_out) =
@@ -2490,8 +2501,9 @@ mod tests {
         let owner_memo = oabar.get_owner_memo().unwrap();
 
         // Trying to decrypt asset type and amount from owner memo using wrong keys
-        let new_xfrkeys = AXfrKeyPair::generate(&mut prng);
-        let result_decrypt = owner_memo.decrypt(&new_xfrkeys.get_secret_key());
+        let new_xfrkeys = XfrKeyPair::generate(&mut prng);
+        let result_decrypt =
+            owner_memo.decrypt(&new_xfrkeys.get_sk().into_noah().unwrap());
         assert!(result_decrypt.is_err());
 
         // initialize ledger and add abar to merkle tree
@@ -2531,12 +2543,12 @@ mod tests {
         prng: &mut R,
         amount: u64,
         asset_type: AT,
-    ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
-        let keypair = AXfrKeyPair::generate(prng);
+    ) -> (OpenAnonAssetRecord, XfrKeyPair) {
+        let keypair = XfrKeyPair::generate(prng);
         let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(amount)
             .asset_type(asset_type)
-            .pub_key(&keypair.get_public_key())
+            .pub_key(&keypair.get_pk().into_noah().unwrap())
             .finalize(prng)
             .unwrap()
             .build()
@@ -2547,7 +2559,7 @@ mod tests {
     #[test]
     pub fn test_extra_fee_estimation_only_fra() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let k = AXfrKeyPair::generate(&mut prng);
+        let k = XfrKeyPair::generate(&mut prng);
         {
             let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
 
@@ -2555,7 +2567,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2572,7 +2584,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2583,7 +2595,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2602,7 +2614,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2613,7 +2625,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(200000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2631,7 +2643,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(10)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2641,7 +2653,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(200000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2657,7 +2669,7 @@ mod tests {
     #[test]
     pub fn test_extra_fee_estimation_multi_asset() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let k = AXfrKeyPair::generate(&mut prng);
+        let k = XfrKeyPair::generate(&mut prng);
 
         let asset1 = AT::from_identical_byte(1u8);
         let _asset2 = AT::from_identical_byte(2u8);
@@ -2669,7 +2681,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2686,7 +2698,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2696,7 +2708,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1100000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2713,7 +2725,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2723,7 +2735,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2733,7 +2745,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1100000)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2750,7 +2762,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2760,7 +2772,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2771,7 +2783,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(fee)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2788,7 +2800,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2798,7 +2810,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(900000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2809,7 +2821,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(fee)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2826,7 +2838,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(800000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2836,7 +2848,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(900000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2847,7 +2859,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(fee)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2862,7 +2874,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(1000000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2872,7 +2884,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(900000)
                     .asset_type(asset1)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -2883,7 +2895,7 @@ mod tests {
                 OpenAnonAssetRecordBuilder::new()
                     .amount(2 * fee)
                     .asset_type(ASSET_TYPE_FRA)
-                    .pub_key(&k.get_public_key())
+                    .pub_key(&k.get_pk().into_noah().unwrap())
                     .finalize(&mut prng)
                     .unwrap()
                     .build()

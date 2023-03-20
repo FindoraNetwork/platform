@@ -41,13 +41,12 @@ use {
             ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
             bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
             commit,
-            keys::AXfrPubKey,
             structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
         },
+        keys::PublicKey as NoahXfrPublicKey,
         setup::VerifierParams,
         xfr::{
             gen_xfr_body,
-            sig::XfrPublicKey as NoahXfrPublicKey,
             structs::{
                 AssetRecord, AssetType as NoahAssetType, TracingPolicies, TracingPolicy,
                 XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
@@ -421,20 +420,6 @@ impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.to_bytes().hash(state);
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-pub struct AXfrAddress {
-    pub key: AXfrPubKey,
-}
-
-#[allow(clippy::derived_hash_with_manual_eq)]
-impl Hash for AXfrAddress {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.noah_to_bytes().hash(state);
     }
 }
 
@@ -1164,12 +1149,7 @@ impl TransferAsset {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
-        self.body
-            .transfer
-            .owners_memos
-            .iter()
-            .map(|mem| mem.clone().map(|om| om))
-            .collect()
+        self.body.transfer.owners_memos.to_vec()
     }
 
     #[inline(always)]

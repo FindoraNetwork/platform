@@ -12,7 +12,7 @@ use {
         utils::{create_definition_transaction, fra_gen_initial_tx},
     },
     noah::{
-        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonAssetRecordBuilder},
+        anon_xfr::structs::OpenAnonAssetRecordBuilder,
         xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
@@ -21,7 +21,7 @@ use {
         },
     },
     noah_algebra::prelude::{One, Zero},
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_core::SeedableRng,
     zei::{BlindAssetRecord, XfrKeyPair},
 };
@@ -831,7 +831,10 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let pub_key = AXfrKeyPair::generate(&mut prng).get_public_key();
+    let pub_key = XfrKeyPair::generate(&mut prng)
+        .get_pk()
+        .into_noah()
+        .unwrap();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(noah::xfr::structs::AssetType([39u8; 32]))

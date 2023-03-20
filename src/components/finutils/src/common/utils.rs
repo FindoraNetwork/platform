@@ -18,12 +18,8 @@ use {
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
     noah::{
-        anon_xfr::{
-            keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{
-                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo,
-                OpenAnonAssetRecord,
-            },
+        anon_xfr::structs::{
+            AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
         },
         xfr::{
             asset_record::{open_blind_asset_record, AssetRecordType},
@@ -795,7 +791,7 @@ pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
 /// * `is_bar_transparent`  -  if transparent bar (ar)
 pub fn generate_bar2abar_op(
     auth_key_pair: &XfrKeyPair,
-    abar_pub_key: &AXfrPubKey,
+    abar_pub_key: &XfrPublicKey,
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     is_bar_transparent: bool,
@@ -846,7 +842,7 @@ pub fn generate_bar2abar_op(
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonAssetRecord,
-    from: &AXfrKeyPair,
+    from: &XfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
 ) -> Result<()> {
