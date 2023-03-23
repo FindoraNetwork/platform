@@ -129,6 +129,18 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
+                    for op in tx.body.operations.iter() {
+                        if let Operation::TransferAnonAsset(op) = op {
+                            let mut inputs = op.note.body.inputs.clone();
+                            inputs.sort();
+                            inputs.dedup();
+                            if inputs.len() != op.note.body.inputs.len() {
+                                resp.log = "anon Transfer input error".to_owned();
+                                resp.code = 1;
+                                return resp;
+                            }
+                        }
+                    }
                     if td_height > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
@@ -267,6 +279,18 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
+                for op in tx.body.operations.iter() {
+                    if let Operation::TransferAnonAsset(op) = op {
+                        let mut inputs = op.note.body.inputs.clone();
+                        inputs.sort();
+                        inputs.dedup();
+                        if inputs.len() != op.note.body.inputs.len() {
+                            resp.log = "anon Transfer input error".to_owned();
+                            resp.code = 1;
+                            return resp;
+                        }
+                    }
+                }
                 if td_height > CFG.checkpoint.check_signatures_num {
                     for op in tx.body.operations.iter() {
                         if let Operation::TransferAsset(op) = op {

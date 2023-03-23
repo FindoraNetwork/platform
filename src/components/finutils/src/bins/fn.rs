@@ -670,11 +670,13 @@ fn run() -> Result<()> {
                         .c(d!("invalid file"))
                 })
             })?;
-        let commitments = m.value_of("commitment-file").c(d!()).and_then(|f| {
+        let mut commitments = m.value_of("commitment-file").c(d!()).and_then(|f| {
             fs::read_to_string(f)
                 .c(d!())
                 .map(|rms| rms.lines().map(String::from).collect::<Vec<String>>())
         })?;
+        commitments.sort();
+        commitments.dedup();
         let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
             fs::read_to_string(f)
                 .c(d!())
