@@ -28,12 +28,10 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        data_model::Operation,
+        data_model::{Operation, Transaction},
+        fbnc::{new_mapx, Mapx},
         staking::KEEP_HIST,
-        store::{
-            api_cache,
-            fbnc::{new_mapx, Mapx},
-        },
+        store::api_cache,
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -82,23 +80,29 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let commitment = state.get_state_commitment();
     let la_hash = commitment.0.as_ref().to_vec();
 
-    let h = state.get_tendermint_height() as i64;
-    TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
-    resp.set_last_block_height(h);
-    if 0 < h {
-        if CFG.checkpoint.disable_evm_block_height < h
-            && h < CFG.checkpoint.enable_frc20_height
+    let td_height = state.get_tendermint_height() as i64;
+    TENDERMINT_BLOCK_HEIGHT.swap(td_height, Ordering::Relaxed);
+    resp.set_last_block_height(td_height);
+    if 0 < td_height {
+        if CFG.checkpoint.disable_evm_block_height < td_height
+            && td_height < CFG.checkpoint.enable_frc20_height
         {
             resp.set_last_block_app_hash(la_hash);
+        } else if td_height < CFG.checkpoint.enable_ed25519_triple_masking_height {
+            let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
+            resp.set_last_block_app_hash(app_hash("info", td_height, la_hash, cs_hash));
         } else {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+            let tm_hash = state.get_anon_state_commitment().0;
+            resp.set_last_block_app_hash(app_hash_v2(
+                "info", td_height, la_hash, cs_hash, tm_hash,
+            ));
         }
     }
 
     drop(state);
 
-    info!(target: "abciapp", "======== Last committed height: {} ========", h);
+    info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
 
     if la.all_commited() {
         la.begin_block();
@@ -130,6 +134,18 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(tx) = convert_tx(req.get_tx()) {
+                    for op in tx.body.operations.iter() {
+                        if let Operation::TransferAnonAsset(op) = op {
+                            let mut inputs = op.note.body.inputs.clone();
+                            inputs.sort();
+                            inputs.dedup();
+                            if inputs.len() != op.note.body.inputs.len() {
+                                resp.log = "anon Transfer input error".to_owned();
+                                resp.code = 1;
+                                return resp;
+                            }
+                        }
+                    }
                     if td_height > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
@@ -161,6 +177,12 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
+                    } else if is_tm_transaction(&tx)
+                        && td_height
+                            < CFG.checkpoint.enable_ed25519_triple_masking_height
+                    {
+                        resp.code = 1;
+                        resp.log = "Triple Masking is disabled".to_owned();
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
@@ -204,7 +226,7 @@ pub fn begin_block(
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
-        ledger::store::fbnc::flush_data();
+        ledger::fbnc::flush_data();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }
@@ -262,6 +284,18 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
+                for op in tx.body.operations.iter() {
+                    if let Operation::TransferAnonAsset(op) = op {
+                        let mut inputs = op.note.body.inputs.clone();
+                        inputs.sort();
+                        inputs.dedup();
+                        if inputs.len() != op.note.body.inputs.len() {
+                            resp.log = "anon Transfer input error".to_owned();
+                            resp.code = 1;
+                            return resp;
+                        }
+                    }
+                }
                 if td_height > CFG.checkpoint.check_signatures_num {
                     for op in tx.body.operations.iter() {
                         if let Operation::TransferAsset(op) = op {
@@ -326,7 +360,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
                         {
-                            info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
+                            error!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
                             resp.code = 1;
                             resp.log =
@@ -365,6 +399,17 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
+                    } else if is_tm_transaction(&tx)
+                        && td_height
+                            < CFG.checkpoint.enable_ed25519_triple_masking_height
+                    {
+                        info!(target: "abciapp",
+                            "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
+                            td_height, tx
+                        );
+                        resp.code = 2;
+                        resp.log = "Triple Masking is disabled".to_owned();
+                        return resp;
                     } else if CFG.checkpoint.utxo_checktx_height < td_height {
                         match tx.check_tx() {
                             Ok(_) => {
@@ -467,6 +512,12 @@ pub fn end_block(
 
     let mut la = s.la.write();
 
+    if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        let _ = s.account_base_app.write().end_block(req);
+    }
+
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -531,8 +582,11 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         && td_height < CFG.checkpoint.enable_frc20_height
     {
         r.set_data(la_hash);
-    } else {
+    } else if td_height < CFG.checkpoint.enable_ed25519_triple_masking_height {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+    } else {
+        let tm_hash = state.get_anon_state_commitment().0;
+        r.set_data(app_hash_v2("commit", td_height, la_hash, cs_hash, tm_hash));
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);
@@ -667,4 +721,46 @@ fn app_hash(
     } else {
         la_hash
     }
+}
+
+/// Combines ledger state hash and EVM chain state hash
+/// and print app hashes for debugging
+fn app_hash_v2(
+    when: &str,
+    height: i64,
+    mut la_hash: Vec<u8>,
+    mut cs_hash: Vec<u8>,
+    mut tm_hash: Vec<u8>,
+) -> Vec<u8> {
+    info!(target: "abciapp",
+        "app_hash_{}: {}_{}_{}, height: {}",
+        when,
+        hex::encode(la_hash.clone()),
+        hex::encode(cs_hash.clone()),
+        hex::encode(tm_hash.clone()),
+        height
+    );
+
+    // append ONLY non-empty EVM chain state hash
+    if !tm_hash.is_empty() || !cs_hash.is_empty() {
+        la_hash.append(&mut cs_hash);
+        la_hash.append(&mut tm_hash);
+
+        Sha256::hash(la_hash.as_slice()).to_vec()
+    } else {
+        la_hash
+    }
+}
+
+fn is_tm_transaction(tx: &Transaction) -> bool {
+    tx.body
+        .operations
+        .iter()
+        .try_for_each(|op| match op {
+            Operation::BarToAbar(_a) => None,
+            Operation::AbarToBar(_a) => None,
+            Operation::TransferAnonAsset(_a) => None,
+            _ => Some(()),
+        })
+        .is_none()
 }

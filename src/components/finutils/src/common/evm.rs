@@ -23,13 +23,15 @@ use fp_utils::tx::EvmRawTxWrapper;
 use ledger::data_model::AssetTypeCode;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
+use noah::xfr::asset_record::AssetRecordType;
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
-use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
+use zei::XfrKeyPair;
+use zei::XfrPublicKey;
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -37,30 +39,17 @@ pub fn transfer_to_account(
     address: Option<&str>,
     asset: Option<&str>,
     lowlevel_data: Option<&str>,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let mut builder = utils::new_tx_builder().c(d!())?;
+    let mut builder = utils::new_tx_builder()?;
 
-    let kp = get_keypair().c(d!())?;
+    let kp = get_keypair(is_address_eth)?;
 
     let asset = if let Some(asset) = asset {
         let asset = AssetTypeCode::new_from_base64(asset)?;
         Some(asset)
     } else {
         None
-    };
-
-    let transfer_op = utils::gen_transfer_op(
-        &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        asset,
-        false,
-        false,
-        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )
-    .c(d!())?;
-    let target_address = match address {
-        Some(s) => MultiSigner::from_str(s).c(d!())?,
-        None => MultiSigner::Xfr(kp.get_pk()),
     };
 
     let lowlevel_data = if let Some(data) = lowlevel_data {
@@ -70,16 +59,36 @@ pub fn transfer_to_account(
         None
     };
 
+    let transfer_op = utils::gen_transfer_op(
+        &kp,
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
+        asset,
+        false,
+        false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
+    )?;
+
+    let target_address = match address {
+        Some(s) => MultiSigner::from_str(s).c(d!())?,
+        None => MultiSigner::Xfr(kp.get_pk()),
+    };
+
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(&kp, target_address, amount, asset, lowlevel_data)
-        .c(d!())?
+        .add_operation_convert_account(
+            &kp,
+            target_address,
+            amount,
+            asset,
+            lowlevel_data,
+        )?
         .sign(&kp);
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.build_and_take_transaction()?;
+    tx.sign(&kp);
     tx.sign_to_map(&kp);
-
-    utils::send_tx(&tx).c(d!())
+    utils::send_tx(&tx)?;
+    Ok(())
 }
 
 #[allow(missing_docs)]
@@ -94,7 +103,7 @@ impl Keypair {
         match self {
             Keypair::Ecdsa(kp) => MultiSignature::from(kp.sign(data)),
             Keypair::Ed25519(kp) => {
-                MultiSignature::from(kp.get_sk_ref().sign(data, kp.get_pk_ref()))
+                MultiSignature::from(kp.get_sk_ref().sign(data).unwrap())
             }
         }
     }
@@ -105,8 +114,9 @@ pub fn transfer_from_account(
     amount: u64,
     address: Option<&str>,
     eth_phrase: Option<&str>,
+    is_address_fra: bool,
 ) -> Result<()> {
-    let fra_kp = get_keypair()?;
+    let fra_kp = get_keypair(is_address_fra)?;
 
     let target = match address {
         Some(s) => {
@@ -204,8 +214,11 @@ fn one_shot_abci_query(
 }
 
 /// Query contract account info by abci/query
-pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAccount)> {
-    let fra_kp = get_keypair()?;
+pub fn contract_account_info(
+    address: Option<&str>,
+    is_address_fra: bool,
+) -> Result<(Address, SmartAccount)> {
+    let fra_kp = get_keypair(is_address_fra)?;
 
     let address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,

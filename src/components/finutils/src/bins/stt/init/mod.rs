@@ -44,7 +44,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
             .values()
             .map(|u| &u.pubkey)
             .chain(VALIDATOR_LIST.values().map(|v| &v.pubkey))
-            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 2_000))
+            .map(|pk| (*pk, FRA_PRE_ISSUE_AMOUNT / 2_000))
             .collect::<Vec<_>>();
 
         // Wallet Address: fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5
@@ -56,7 +56,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         let bank = pnk!(wallet::public_key_from_base64(
             "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ="
         ));
-        target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98));
+        target_list.push((bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98));
 
         println!(">>> Transfer FRAs to validators ...");
         common::utils::transfer_batch(&root_kp, target_list, None, true, true)
