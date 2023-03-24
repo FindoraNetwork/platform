@@ -49,6 +49,4 @@ opt-level = 1
 overflow-checks = false
 
 [patch.crates-io]
-ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", rev = "ad461f" }
-curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", rev = "a2df65" }
-x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek", rev = "53bb1a" }
+ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }

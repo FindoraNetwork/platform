@@ -4,9 +4,7 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
-};
+use zei::XfrPublicKey;
 
 mod whoami;
 
@@ -21,7 +19,10 @@ use {
     fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
     ledger::{
-        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        data_model::{
+            AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+        },
         staking::{
             ops::{
                 governance::{governance_penalty_tendermint_auto, ByzantineKind},
@@ -295,7 +296,7 @@ pub fn system_prism_mint_pay(
         let atc = AssetTypeCode { val: mint.asset };
         let at = if let Some(mut at) = la.get_asset_type(&atc) {
             at.properties.issuer = IssuerPublicKey {
-                key: *BLACK_HOLE_PUBKEY_STAKING,
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
             };
             if mint.max_supply != 0 {
                 at.properties.asset_rules.max_units = Some(mint.max_supply);
@@ -305,7 +306,7 @@ pub fn system_prism_mint_pay(
         } else {
             let mut at = AssetType::default();
             at.properties.issuer = IssuerPublicKey {
-                key: *BLACK_HOLE_PUBKEY_STAKING,
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
             };
 
             if mint.max_supply != 0 {

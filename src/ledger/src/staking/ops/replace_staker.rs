@@ -8,7 +8,7 @@ use {
     crate::staking::Staking,
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used for `Staker Replace Operation`.
@@ -38,7 +38,7 @@ impl ReplaceStakerOps {
             nonce,
         };
 
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
 
         ReplaceStakerOps {
             body,

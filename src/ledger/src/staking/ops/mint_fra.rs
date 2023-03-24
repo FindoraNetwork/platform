@@ -10,17 +10,15 @@ use {
         data_model::TxOutput,
         staking::{Amount, FRA},
     },
+    noah::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        structs::{AssetRecordTemplate, AssetType},
+    },
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrPublicKey,
-            structs::{AssetRecordTemplate, AssetType, OwnerMemo},
-        },
-    },
+    zei::{BlindAssetRecord, OwnerMemo, XfrPublicKey},
 };
 
 /// 420 million FRAs
@@ -48,7 +46,7 @@ impl MintFraOps {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         vec![None; self.entries.len()]
     }
 }
@@ -78,14 +76,14 @@ impl MintEntry {
             amount,
             asset_type,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            receiver_pk.unwrap_or(target_pk),
+            receiver_pk.unwrap_or(target_pk).into_noah().unwrap(),
         );
-        let pc_gens = PublicParams::default().pc_gens;
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {
             id: None,
-            record: ba,
+            record: BlindAssetRecord::from_noah(&ba).unwrap(),
             lien: None,
         };
 
