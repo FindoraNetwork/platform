@@ -16,8 +16,7 @@ use ethabi::Token;
 use ethereum::{
     Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
 };
-use ethereum_types::U256;
-use ethereum_types::{Bloom, BloomInput, H160, H256};
+use ethereum_types::{Bloom, BloomInput, H160, H256, U256};
 use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 use fp_core::{
     context::Context,
@@ -33,10 +32,10 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use fp_types::crypto::HA256;
+
 use fp_types::{
     actions::evm::Action,
-    crypto::{Address, HA160},
+    crypto::{Address, HA160, HA256},
 };
 use ledger::staking::evm::EVM_STAKING_MINTS;
 use ledger::staking::FRA_PRE_ISSUE_AMOUNT;
@@ -50,8 +49,7 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
 use utils::parse_evm_staking_coinbase_mint_event;
-use zei::noah_algebra::serialization::NoahFromToBytes;
-use zei::XfrPublicKey;
+use zei::{noah_algebra::serialization::NoahFromToBytes, XfrPublicKey};
 
 use crate::utils::parse_evm_staking_mint_event;
 

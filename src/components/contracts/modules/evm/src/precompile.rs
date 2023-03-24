@@ -2,10 +2,7 @@ use crate::runtime::stack::FindoraStackState;
 use ethereum_types::H160;
 use evm::{
     executor::stack::{PrecompileFailure, PrecompileOutput},
-    Context,
-    // Context,
-    ExitError,
-    ExitSucceed,
+    Context, ExitError, ExitSucceed,
 };
 use impl_trait_for_tuples::impl_for_tuples;
 

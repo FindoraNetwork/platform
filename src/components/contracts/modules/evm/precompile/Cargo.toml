@@ -21,3 +21,4 @@ evm-precompile-bn128 = {path = "./bn128"}
 fp-core = {path = "../../../primitives/core"}
 module-evm = {path = "../../../modules/evm"}
 parking_lot = "0.12"
+evm-precompile-eth-pairings = { path = "./eth-pairings" }

@@ -10,7 +10,7 @@ use {
             ristretto,
             xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
         },
-        XfrBody
+        XfrBody,
     },
 };
 
@@ -26,7 +26,6 @@ macro_rules! msg_eq {
         );
     };
 }
-
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 
