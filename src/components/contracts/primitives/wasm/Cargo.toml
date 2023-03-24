@@ -20,7 +20,7 @@ fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 rlp = "0.5"
 ruc = "1.0"
-sha3 = "0.8"
+sha3 = "0.10"
 serde_json = "1.0"
 wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
 
