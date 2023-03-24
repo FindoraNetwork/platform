@@ -3,29 +3,50 @@
 //!
 
 use {
-    super::helpers,
     crate::{
         data_model::{
-            AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
-            Operation, Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
+            AssetRules, AssetTypeCode, DefineAsset, DefineAssetBody, IssueAsset,
+            IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
+            Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
         },
         staking::FRA_PRE_ISSUE_AMOUNT,
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrKeyPair,
-            structs::AssetRecordTemplate,
-        },
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        structs::AssetRecordTemplate,
     },
+    zei::{BlindAssetRecord, XfrKeyPair},
 };
+
+/// Create a transaction to define a custom asset
+pub fn create_definition_transaction(
+    code: &AssetTypeCode,
+    keypair: &XfrKeyPair,
+    asset_rules: AssetRules,
+    memo: Option<Memo>,
+    seq_id: u64,
+) -> Result<Transaction> {
+    let issuer_key = IssuerPublicKey {
+        key: *keypair.get_pk_ref(),
+    };
+    let asset_body =
+        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
+    let asset_create =
+        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
+
+    Ok(Transaction::from_operation(
+        Operation::DefineAsset(asset_create),
+        seq_id,
+    ))
+}
 
 /// Define and Issue FRA.
 /// Currently this should only be used for tests.
+#[allow(unused)]
 pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
     /*
      * Define FRA
@@ -35,7 +56,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let (mut tx, _) = pnk!(helpers::create_definition_transaction(
+    let mut tx = pnk!(create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {
@@ -55,23 +76,22 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         FRA_PRE_ISSUE_AMOUNT / 2,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk(),
+        fra_owner_kp.get_pk().into_noah().unwrap(),
     );
 
-    let params = PublicParams::default();
-
+    let pc_gens = PedersenCommitmentRistretto::default();
     let outputs = (0..2)
         .map(|_| {
             let (ba, _, _) = build_blind_asset_record(
                 &mut ChaChaRng::from_entropy(),
-                &params.pc_gens,
+                &pc_gens,
                 &template,
                 vec![],
             );
             (
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
                     lien: None,
                 },
                 None,

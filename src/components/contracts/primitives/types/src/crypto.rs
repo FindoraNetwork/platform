@@ -1,21 +1,23 @@
-use bech32::{FromBase32, ToBase32};
-use core::convert::TryFrom;
-use core::fmt::Formatter;
-use core::str::FromStr;
-use fp_utils::{ecdsa, hashing::keccak_256};
-use globutils::wallet;
-use hex::FromHex;
-use primitive_types::{H160, H256};
-use ruc::{d, eg, RucResult};
-use serde::{Deserialize, Serialize};
-use sha3::{Digest, Keccak256};
-use std::ops::{Deref, DerefMut};
-use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+use {
+    bech32::{FromBase32, ToBase32},
+    core::convert::TryFrom,
+    core::fmt::Formatter,
+    core::str::FromStr,
+    fp_utils::{ecdsa, hashing::keccak_256},
+    globutils::wallet,
+    hex::FromHex,
+    primitive_types::{H160, H256},
+    ruc::{d, eg, RucResult},
+    serde::{Deserialize, Serialize},
+    sha3::{Digest, Keccak256},
+    std::ops::{Deref, DerefMut},
+    zei::noah_algebra::serialization::NoahFromToBytes,
+    zei::{XfrPublicKey, XfrSignature},
+};
 
-/// An opaque 32-byte cryptographic identifier.
+/// An opaque 34-byte cryptographic identifier.
 #[derive(
-    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+    Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug, Default,
 )]
 pub struct Address32([u8; 32]);
 
@@ -83,7 +85,7 @@ impl<'a> TryFrom<&'a [u8]> for Address32 {
 
 impl From<XfrPublicKey> for Address32 {
     fn from(k: XfrPublicKey) -> Self {
-        Address32::try_from(k.zei_to_bytes().as_slice()).unwrap()
+        Address32::try_from(k.noah_to_bytes().as_slice()).unwrap()
     }
 }
 
@@ -205,7 +207,7 @@ pub trait Verify {
 /// Signature verify that can work with any known signature types..
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSignature {
-    /// An zei xfr signature.
+    /// An noah xfr signature.
     Xfr(XfrSignature),
     /// An ECDSA/SECP256k1 signature.
     Ecdsa(ecdsa::Signature),
@@ -250,26 +252,21 @@ impl Verify for MultiSignature {
 
     fn verify(&self, msg: &[u8], signer: &Address32) -> bool {
         match self {
-            Self::Xfr(ref sig) => match XfrPublicKey::zei_from_bytes(signer.as_ref()) {
-                Ok(who) => sig.verify(msg, &who),
-                _ => false,
-            },
-            // Self::Ecdsa(ref sig) => match sig.recover(msg) {
-            //     Some(pubkey) => {
-            //         &keccak_256(pubkey.as_ref())
-            //             == <dyn AsRef<[u8; 32]>>::as_ref(signer)
-            //     }
-            //     _ => false,
-            // },
-            Self::Ecdsa(ref sig) => {
-                // let mut msg_hashed = [0u8; 32];
-                // msg_hashed.copy_from_slice(msg);
+            Self::Xfr(ref sig) => {
+                let mut bytes = [0u8; 32];
+                bytes[0..32].copy_from_slice(signer.as_ref());
+                match XfrPublicKey::noah_from_bytes(&bytes) {
+                    Ok(who) => sig.verify(msg, &who),
+                    _ => false,
+                }
+            }
 
+            Self::Ecdsa(ref sig) => {
                 let msg_hashed = keccak_256(msg);
                 match secp256k1_ecdsa_recover(sig.as_ref(), &msg_hashed) {
                     Ok(pubkey) => {
                         Address32::from(H160::from(H256::from_slice(
-                            Keccak256::digest(&pubkey).as_slice(),
+                            Keccak256::digest(pubkey).as_slice(),
                         ))) == signer.clone()
                     }
                     _ => false,
@@ -281,7 +278,7 @@ impl Verify for MultiSignature {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSigner {
-    /// An zei xfr identity.
+    /// An noah xfr identity.
     Xfr(XfrPublicKey),
     // /// An SECP256k1/ECDSA identity (actually, the keccak 256 hash of the compressed pub key).
     // Ecdsa(ecdsa::Public),
@@ -434,13 +431,13 @@ mod tests {
     use super::*;
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use zei::xfr::sig::XfrKeyPair;
+    use zei::XfrKeyPair;
 
     #[test]
     fn xfr_sign_verify_work() {
         let mut prng = ChaChaRng::from_entropy();
         let alice = XfrKeyPair::generate(&mut prng);
-        let sig = alice.get_sk_ref().sign(b"hello", alice.get_pk_ref());
+        let sig = alice.get_sk_ref().sign(b"hello").unwrap();
         let signer = MultiSigner::from(alice.get_pk());
         let sig = MultiSignature::from(sig);
         assert!(

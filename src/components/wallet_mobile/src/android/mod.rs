@@ -1,3 +1,6 @@
+#[macro_use]
+mod exception;
+
 mod constructor;
 mod evm;
 mod transfer;
@@ -5,11 +8,13 @@ mod tx_builder;
 
 use crate::rust::types;
 use crate::rust::*;
+use exception::ThrowExceptionImpl;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
-use zei::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::{XfrKeyPair, XfrPublicKey};
 
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.
@@ -147,7 +152,7 @@ pub extern "system" fn Java_com_findora_JniApi_keypairFromStr(
         .get_string(text)
         .expect("Couldn't get java string!")
         .into();
-    let val = types::XfrKeyPair::from(keypair_from_str(text));
+    let val = types::XfrKeyPair::from(keypair_from_str(text).into_noah().unwrap());
     Box::into_raw(Box::new(val)) as jlong
 }
 
@@ -161,7 +166,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_publicKeyToBech32(
     xfr_public_key_ptr: jlong,
 ) -> jstring {
     let key = &*(xfr_public_key_ptr as *mut types::XfrPublicKey);
-    let res = public_key_to_bech32(key);
+    let res = public_key_to_bech32(&XfrPublicKey::from_noah(key).unwrap());
     let output = env.new_string(res).expect("Couldn't create java string!");
     **output
 }
@@ -176,7 +181,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getPubKeyStr(
     xfr_keypair_ptr: jlong,
 ) -> jstring {
     let key = &*(xfr_keypair_ptr as *mut types::XfrKeyPair);
-    let pubkey = get_pub_key_str(key);
+    let pubkey = get_pub_key_str(&XfrKeyPair::from_noah(key).unwrap());
     let output = env
         .new_string(pubkey)
         .expect("Couldn't create java string!");
@@ -193,7 +198,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getPrivKeyStr(
     xfr_keypair_ptr: jlong,
 ) -> jstring {
     let key = &*(xfr_keypair_ptr as *mut types::XfrKeyPair);
-    let prikey = get_priv_key_str(key);
+    let prikey = get_priv_key_str(&XfrKeyPair::from_noah(key).unwrap());
     let output = env
         .new_string(prikey)
         .expect("Couldn't create java string!");
@@ -215,7 +220,9 @@ pub extern "system" fn Java_com_findora_JniApi_restoreKeypairFromMnemonicDefault
         .expect("Couldn't get java string!")
         .into();
     if let Ok(keypair) = rs_restore_keypair_from_mnemonic_default(phrase.as_str()) {
-        Box::into_raw(Box::new(types::XfrKeyPair::from(keypair))) as jlong
+        Box::into_raw(Box::new(types::XfrKeyPair::from(
+            keypair.into_noah().unwrap(),
+        ))) as jlong
     } else {
         ::std::ptr::null_mut::<()>() as jlong
     }
@@ -232,7 +239,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_keypairToStr(
     xfr_keypair_ptr: jlong,
 ) -> jstring {
     let key = &*(xfr_keypair_ptr as *mut types::XfrKeyPair);
-    let res = keypair_to_str(key);
+    let res = keypair_to_str(&XfrKeyPair::from_noah(key).unwrap());
     let output = env.new_string(res).expect("Couldn't create java string!");
     **output
 }
@@ -248,7 +255,9 @@ pub extern "system" fn Java_com_findora_JniApi_createKeypairFromSecret(
         .expect("Couldn't get java string!")
         .into();
     if let Some(keypair) = create_keypair_from_secret(sk) {
-        Box::into_raw(Box::new(types::XfrKeyPair::from(keypair))) as jlong
+        Box::into_raw(Box::new(types::XfrKeyPair::from(
+            keypair.into_noah().unwrap(),
+        ))) as jlong
     } else {
         ::std::ptr::null_mut::<()>() as jlong
     }
@@ -263,8 +272,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getPkFromKeypair(
     xfr_keypair_ptr: jlong,
 ) -> jlong {
     let kp = &*(xfr_keypair_ptr as *mut types::XfrKeyPair);
-    let pk = get_pk_from_keypair(kp);
-    Box::into_raw(Box::new(types::XfrPublicKey::from(pk))) as jlong
+    let pk = get_pk_from_keypair(&XfrKeyPair::from_noah(kp).unwrap());
+    Box::into_raw(Box::new(types::XfrPublicKey::from(pk.into_noah().unwrap()))) as jlong
 }
 
 #[no_mangle]
@@ -274,7 +283,9 @@ pub extern "system" fn Java_com_findora_JniApi_newKeypair(
     _: JClass,
 ) -> jlong {
     let keypair = new_keypair();
-    Box::into_raw(Box::new(types::XfrKeyPair::from(keypair))) as jlong
+    Box::into_raw(Box::new(types::XfrKeyPair::from(
+        keypair.into_noah().unwrap(),
+    ))) as jlong
 }
 
 #[no_mangle]
@@ -288,7 +299,7 @@ pub extern "system" fn Java_com_findora_JniApi_bech32ToBase64(
         .expect("Couldn't get java string!")
         .into();
 
-    let bs = rs_bech32_to_base64(pk.as_str()).unwrap();
+    let bs = throw_exception!(env, rs_bech32_to_base64(pk.as_str()));
     let output = env.new_string(bs).expect("Couldn't create java string!");
     **output
 }
@@ -304,7 +315,7 @@ pub extern "system" fn Java_com_findora_JniApi_base64ToBech32(
         .expect("Couldn't get java string!")
         .into();
 
-    let bs = rs_base64_to_bech32(pk.as_str()).unwrap();
+    let bs = throw_exception!(env, rs_base64_to_bech32(pk.as_str()));
     let output = env.new_string(bs).expect("Couldn't create java string!");
     **output
 }
@@ -321,7 +332,7 @@ pub extern "system" fn Java_com_findora_JniApi_base64ToBech32(
 /// @see {@link module:Findora-Wasm~ClientAssetRecord#from_json_record|ClientAssetRecord.from_json_record} for information about how to construct an asset record object
 /// from a JSON result returned from the ledger server.
 pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
-    _env: JNIEnv,
+    env: JNIEnv,
     _: JClass,
     record_ptr: jlong,
     owner_memo_ptr: jlong,
@@ -335,7 +346,10 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
         Some(memo.clone())
     };
     let keypair = &*(keypair_ptr as *mut types::XfrKeyPair);
-    let oar = rs_open_client_asset_record(record, owner_memo, keypair).unwrap();
+    let oar = throw_exception!(
+        env,
+        rs_open_client_asset_record(record, owner_memo, &XfrKeyPair::from_noah(keypair).unwrap())
+    );
     Box::into_raw(Box::new(types::OpenAssetRecord::from(oar))) as jlong
 }
 

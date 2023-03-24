@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod tests;
+
 use core::cmp::max;
 use core::ops::BitAnd;
 use evm::{

@@ -13,9 +13,9 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::sync::atomic::{AtomicI64, Ordering},
-    zei::xfr::{
-        sig::XfrPublicKey,
-        structs::{AssetType, XfrAmount, XfrAssetType},
+    zei::{
+        noah_api::xfr::structs::{AssetType, XfrAmount, XfrAssetType},
+        XfrPublicKey,
     },
 };
 #[allow(missing_docs)]
@@ -155,7 +155,8 @@ pub fn check_convert_account(
                     ));
             }
             if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
+                if o.record.public_key
+                    == XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?
                     && ty == expected_asset
                 {
                     if let XfrAmount::NonConfidential(amount) = o.record.amount {

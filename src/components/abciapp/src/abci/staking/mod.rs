@@ -4,9 +4,7 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
-};
+
 
 mod whoami;
 
@@ -21,7 +19,10 @@ use {
     fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
     ledger::{
-        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        data_model::{
+            AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+        },
         staking::{
             ops::{
                 governance::{governance_penalty_tendermint_auto, ByzantineKind},
@@ -38,6 +39,7 @@ use {
         ops::{Deref, DerefMut},
         sync::atomic::Ordering,
     },
+    zei::XfrPublicKey
 };
 
 // The top 50~ candidate validators
@@ -45,6 +47,7 @@ use {
 const VALIDATOR_LIMIT: usize = 58;
 // Modify the validator's validator line to 100
 const VALIDATOR_LIMIT_V2: usize = 100;
+
 lazy_static! {
     /// Tendermint node address, sha256(pubkey)[:20]
     pub static ref TD_NODE_SELF_ADDR: Vec<u8> = pnk!(whoami::get_self_addr());
@@ -99,7 +102,7 @@ pub fn get_validators(
     // - current entries == last entries
     let cur_entries: BTreeMap<&Vec<u8>, i64> = last_entries;
     let height = staking.cur_height();
-    let mut vs = if height < CFG.checkpoint.fix_staking_validator {
+    let mut vs = if height < CFG.checkpoint.validator_whitelist_v1_height {
         staking
             .validator_get_current()
             .c(d!())?
@@ -144,20 +147,71 @@ pub fn get_validators(
     } else {
         VALIDATOR_LIMIT_V2
     };
+    let validator_whitelist: Vec<Vec<u8>> =
+        if height < CFG.checkpoint.validator_whitelist_v1_height {
+            vec![]
+        } else if height < CFG.checkpoint.validator_whitelist_v2_height {
+            CFG.checkpoint
+                .validator_whitelist_v1
+                .iter()
+                .map(|v| hex::decode(v).c(d!()))
+                .collect::<Result<Vec<_>>>()
+                .c(d!("invalid file"))
+                .unwrap()
+        } else if height < CFG.checkpoint.validator_whitelist_v3_height {
+            CFG.checkpoint
+                .validator_whitelist_v2
+                .iter()
+                .map(|v| hex::decode(v).c(d!()))
+                .collect::<Result<Vec<_>>>()
+                .c(d!("invalid file"))
+                .unwrap()
+        } else {
+            CFG.checkpoint
+                .validator_whitelist_v3
+                .iter()
+                .map(|v| hex::decode(v).c(d!()))
+                .collect::<Result<Vec<_>>>()
+                .c(d!("invalid file"))
+                .unwrap()
+        };
+
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
-    if height < CFG.checkpoint.fix_staking_validator {
+    if height < CFG.checkpoint.validator_whitelist_v1_height {
         vs.iter_mut()
             .skip(validator_limit)
-            .for_each(|(_, pub_key, power)| {
-                alt!(cur_entries.contains_key(pub_key), *power = 0, *power = -1);
+            .for_each(|(_, _, power)| {
+                *power = -1;
             });
-    } else {
-        vs.iter_mut()
-            .skip(validator_limit)
-            .for_each(|(addr, _, power)| {
+    } else if height < CFG.checkpoint.validator_whitelist_v2_height {
+        for (index, (addr, _, power)) in vs.iter_mut().enumerate() {
+            if index < validator_limit {
+                if !cur_entries.contains_key(addr) {
+                    *power = -1;
+                } else if !validator_whitelist.is_empty()
+                    && !validator_whitelist.contains(addr)
+                {
+                    *power = 1;
+                }
+            } else {
                 alt!(cur_entries.contains_key(addr), *power = 0, *power = -1);
-            });
+            }
+        }
+    } else {
+        for (index, (addr, _, power)) in vs.iter_mut().enumerate() {
+            if index < validator_limit {
+                if !cur_entries.contains_key(addr) && 0 == (*power) {
+                    *power = -1;
+                } else if !validator_whitelist.is_empty()
+                    && !validator_whitelist.contains(addr)
+                {
+                    *power = 1;
+                }
+            } else {
+                alt!(cur_entries.contains_key(addr), *power = 0, *power = -1);
+            }
+        }
     }
 
     Ok(Some(
@@ -312,7 +366,7 @@ pub fn system_prism_mint_pay(
         let atc = AssetTypeCode { val: mint.asset };
         let at = if let Some(mut at) = la.get_asset_type(&atc) {
             at.properties.issuer = IssuerPublicKey {
-                key: *BLACK_HOLE_PUBKEY_STAKING,
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
             };
             if mint.max_supply != 0 {
                 at.properties.asset_rules.max_units = Some(mint.max_supply);
@@ -322,7 +376,7 @@ pub fn system_prism_mint_pay(
         } else {
             let mut at = AssetType::default();
             at.properties.issuer = IssuerPublicKey {
-                key: *BLACK_HOLE_PUBKEY_STAKING,
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
             };
 
             if mint.max_supply != 0 {

@@ -24,7 +24,6 @@ serde_json = "1.0.64"
 sha3 = { version = "0.10", default-features = false }
 hex = "0.4.2"
 ethabi = "17.1.0"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -34,11 +33,11 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
-
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
