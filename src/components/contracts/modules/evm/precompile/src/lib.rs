@@ -1,5 +1,6 @@
 use ethereum_types::H160;
 use evm::{executor::stack::PrecompileSet, Context};
+use evm_precompile_eth_pairings::EthPairing;
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
@@ -22,7 +23,7 @@ where
         Self(Default::default(), ctx)
     }
     pub fn used_addresses() -> std::vec::Vec<H160> {
-        std::vec![1, 2, 3, 4, 5, 1024, 1025]
+        std::vec![0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1000, 0x2001]
             .into_iter()
             .map(hash)
             .collect()
@@ -76,9 +77,9 @@ where
             a if a == H160::from_low_u64_be(Anemoi::contract_id()) => {
                 Some(Anemoi::execute(input, target_gas, context, ctx))
             }
-            // a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
-            //     Some(EthPairing::execute(handle, ctx))
-            // }
+            a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
+                Some(EthPairing::execute(input, target_gas, context, ctx))
+            }
             _ => None,
         }
     }

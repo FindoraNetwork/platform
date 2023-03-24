@@ -3,10 +3,10 @@
 use {
     abci::{Event, Pair},
     ledger::data_model::{Operation, Transaction, TxnSID},
+    noah::xfr::structs::{XfrAmount, XfrAssetType},
     protobuf::RepeatedField,
     serde::Serialize,
     std::time::SystemTime,
-    zei::xfr::structs::{XfrAmount, XfrAssetType},
 };
 
 /// generate attr(tags) for index-ops of tendermint
@@ -39,8 +39,13 @@ pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
     res.push(ev);
 
     let (from, to) = gen_tendermint_attr_addr(tx);
+    let (nullifiers, commitments) = gen_tendermint_attr_anon(tx);
 
-    if !from.is_empty() || !to.is_empty() {
+    if !from.is_empty()
+        || !to.is_empty()
+        || !nullifiers.is_empty()
+        || !commitments.is_empty()
+    {
         let mut ev = Event::new();
         ev.set_field_type("addr".to_owned());
 
@@ -76,6 +81,8 @@ pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
 
         index_addr!(from, "addr.from");
         index_addr!(to, "addr.to");
+        index_addr!(nullifiers, "nullifier.used");
+        index_addr!(commitments, "commitment.created");
     }
 
     RepeatedField::from_vec(res)
@@ -125,6 +132,59 @@ fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
                 }
                 Operation::UpdateMemo(d) => {
                     append_attr!(d);
+                }
+                Operation::BarToAbar(d) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr = globutils::wallet::public_key_to_bech32(
+                        &d.input_record().public_key,
+                    );
+                    base.0.push(attr);
+                }
+                Operation::AbarToBar(d) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr = globutils::wallet::public_key_to_bech32(
+                        &d.note.get_public_key(),
+                    );
+                    base.1.push(attr);
+                }
+                _ => {}
+            }
+
+            base
+        })
+}
+
+fn gen_tendermint_attr_anon(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
+    tx.body
+        .operations
+        .iter()
+        .fold((vec![], vec![]), |mut base, op| {
+            match op {
+                Operation::BarToAbar(d) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr = globutils::wallet::commitment_to_base58(
+                        &d.output_record().commitment,
+                    );
+                    base.1.push(attr);
+                }
+                Operation::AbarToBar(d) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr =
+                        globutils::wallet::nullifier_to_base58(&d.note.get_input());
+                    base.0.push(attr);
+                }
+                Operation::TransferAnonAsset(d) => {
+                    for ix in &d.note.body.inputs {
+                        let mut attr = TagAttr::default();
+                        attr.addr = globutils::wallet::nullifier_to_base58(ix);
+                        base.0.push(attr);
+                    }
+                    for ox in &d.note.body.outputs {
+                        let mut attr = TagAttr::default();
+                        attr.addr =
+                            globutils::wallet::commitment_to_base58(&ox.commitment);
+                        base.1.push(attr);
+                    }
                 }
                 _ => {}
             }
