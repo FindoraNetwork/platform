@@ -16,7 +16,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::BTreeMap,
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {

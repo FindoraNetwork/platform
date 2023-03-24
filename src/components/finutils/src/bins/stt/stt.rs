@@ -22,12 +22,12 @@ use {
             check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
             FRA_PRE_ISSUE_AMOUNT,
         },
-        store::utils::fra_gen_initial_tx,
+        utils::fra_gen_initial_tx,
     },
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -208,13 +208,13 @@ mod issue {
             },
             staking::FRA_PRE_ISSUE_AMOUNT,
         },
-        rand_chacha::rand_core::SeedableRng,
-        rand_chacha::ChaChaRng,
-        zei::setup::PublicParams,
-        zei::xfr::{
+        noah::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        rand_chacha::rand_core::SeedableRng,
+        rand_chacha::ChaChaRng,
     };
 
     pub fn issue() -> Result<()> {
@@ -233,21 +233,21 @@ mod issue {
             FRA_PRE_ISSUE_AMOUNT / 2,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            root_kp.get_pk(),
+            root_kp.get_pk().into_noah()?,
         );
-        let params = PublicParams::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(
                     &mut ChaChaRng::from_entropy(),
-                    &params.pc_gens,
+                    &pc_gens,
                     &template,
                     vec![],
                 );
                 (
                     TxOutput {
                         id: None,
-                        record: ba,
+                        record: BlindAssetRecord::from_noah(&ba).unwrap(),
                         lien: None,
                     },
                     None,
@@ -266,12 +266,12 @@ mod issue {
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
         builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
 mod delegate {
-    use {super::*, zei::xfr::asset_record::AssetRecordType};
+    use {super::*, noah::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,
@@ -291,7 +291,7 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
             None,
             false,
             false,
@@ -303,7 +303,7 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        let mut tx = builder.take_transaction();
+        let mut tx = builder.build_and_take_transaction()?;
         tx.sign(owner_kp);
         Ok(tx)
     }
@@ -341,7 +341,7 @@ mod undelegate {
             }
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -358,7 +358,7 @@ mod claim {
             builder.add_operation_claim(owner_kp, amount);
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
