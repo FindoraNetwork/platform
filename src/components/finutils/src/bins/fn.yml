@@ -212,6 +212,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
         - from-seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of the receiver
             short: f
@@ -224,6 +225,7 @@ subcommands:
             long: to-pubkey
             takes_value: true
             value_name: PubKey
+            allow_hyphen_values: true
         - to-wallet-address:
             help: fra prefixed address of FindoraNetwork
             short: T
@@ -295,6 +297,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
             conflicts_with:
               - create
         - seckey:
@@ -365,6 +368,7 @@ subcommands:
             long: code
             takes_value: true
             value_name: ASSET CODE
+            allow_hyphen_values: true
         - addr:
             help: Findora wallet address
             long: addr
@@ -401,26 +405,8 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
-  #- history
-  #    about: query operating history
-  #    args:
-  #      - coinbase:
-  #          help: show coinbase history
-  #          long: coinbase
-  #          conflicts_with:
-  #            - transaction
-  #      - transaction:
-  #          help: show transaction history
-  #          conflicts_with:
-  #            - coinbase
-  #      - wallet:
-  #          help: wallet nick name
-  #          long: wallet
-  #          takes_value: true
-  #          value_name: WALLET
-  #          required: true
   - account:
-      about: Return user contract account information
+      about: Return user contract account information or fra balance if secret key is provided
       args:
         - addr:
             help: findora account(eg:fra1rkv...) or Ethereum address(g:0xd3Bf...)
@@ -428,19 +414,30 @@ subcommands:
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
-            required: true
+        - sec-key:
+            help: base64-formatted `XfrPrivateKey`
+            short: s
+            long: sec-key
+            takes_value: true
+            value_name: SECRET KEY
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
         - addr:
-            help: ethereum address to receive FRA, eg:0xd3Bf...
+            help: ethereum address to receive asset, eg:0xd3Bf...
             short: a
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
             required: true
         - amount:
-            help: deposit FRA amount
+            help: deposit asset amount
             short: n
             long: amount
             takes_value: true
@@ -485,6 +482,243 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - owned-abars:
+      about: Get Anon UTXOs for a keypair use commitment
+      args:
+        - commitments:
+            help: Commitment of the ABAR
+            short: c
+            long: commitments
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of receiver
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+  - anon-balance:
+      about: List Anon balance and spending status for a public key and a list of commitments
+      args:
+        - commitments:
+            help: the list of commitments in base64 form.
+            short: c
+            long: commitments
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+  - owned-open-abars:
+      about: Get Open Anon UTXOs for a keypair use commitment
+      args:
+        - commitment:
+            help: The commitment of ABAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+  - owned-utxos:
+      about: List owned UTXOs for a public key
+      args:
+        - asset:
+            help: asset code which you want to tansfer
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+  - convert-bar-to-abar:
+      about: Convert a BAR to Anon BAR for yourself
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - to-address:
+            help: bech32 address of receiver keys
+            short: a
+            long: to-address
+            takes_value: true
+            value_name: TO ADDRESS
+            required: true
+        - txo-sid:
+            help: Txo Sid of input to convert
+            short: t
+            long: txo-sid
+            takes_value: true
+            value_name: TXO SID
+            required: true
+  - convert-abar-to-bar:
+      about: Convert a ABAR to BAR
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - to-pubkey:
+            help: base64-formated `XfrPublicKey` of the receiver
+            short: t
+            long: to-pubkey
+            takes_value: true
+            value_name: PubKey
+            allow_hyphen_values: true
+        - to-wallet-address:
+            help: Xfr public key of the receiver
+            short: T
+            long: to-wallet-address
+            takes_value: true
+            value_name: XFR WALLET ADDRESS
+            conflicts_with:
+              - to-pubkey
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type
+  - anon-transfer:
+      about: Perform Anonymous Transfer
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - fra-commitment:
+            help: Commitment for the input FRA Anon BAR
+            long: fra-commitment
+            takes_value: true
+            value_name: FRA COMMITMENT
+            allow_hyphen_values: true
+        - to-address:
+            help: Address of the receiver
+            long: to-address
+            takes_value: true
+            value_name: ADDRESS
+            required: true
+            allow_hyphen_values: true
+        - amount:
+            help: how much units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true
+  - anon-transfer-batch:
+      about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - commitment-file:
+            help: Commitments for the input Anon BARs
+            short: c
+            long: commitment-file
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+        - to-address-file:
+            help: Xfr public keys of the receivers
+            long: to-address-file
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+        - amount-file:
+            help: how much units to transfer for each receiver
+            short: n
+            long: amount-file
+            takes_value: true
+            value_name: Amount
+            required: true
+        - asset-file:
+            help: Relative asset code type.
+            short: a
+            long: asset-file
+            takes_value: true
+            value_name: Asset
+            required: true
+  - anon-fetch-merkle-proof:
+      about: Query to fetch mtleaf info
+      args:
+        - atxo-sid:
+            help: ATXO SID of the Anonymous Blind Asset Record
+            short: a
+            long: atxo-sid
+            takes_value: true
+            value_name: ATXO SID
+            required: true
+  - check-abar-status:
+      about: Check the spending status and balance of ABAR
+      args:
+        - commitment:
+            help: Commitment of the ABAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:
@@ -501,6 +735,20 @@ subcommands:
             takes_value: true
             value_name: TARGET PUBLIC KEY
             required: true
+            allow_hyphen_values: true
+        - td_address:
+            help: the tendermint address that you may want to replace.
+            long: td_address
+            takes_value: true
+            value_name: TENDERMINT ADDRESS
+            required: false
+        - td_pubkey:
+            help: the tendermint public key that you may want to replace.
+            long: td_pubkey
+            takes_value: true
+            value_name: TENDERMINT PUBKEY
+            required: false
+            allow_hyphen_values: true
   - dev:
       about: Manage development clusters on your localhost
       args:

@@ -6,13 +6,10 @@ use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{
-        sig::XfrPublicKey,
-        structs::{AssetType, ASSET_TYPE_LENGTH},
-    },
-};
+use zei::noah_algebra::serialization::NoahFromToBytes;
+use zei::noah_api::xfr::structs::AssetType;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::XfrPublicKey;
 
 pub fn deposit_asset_event() -> Event {
     Event {
@@ -72,7 +69,7 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         .clone()
         .into_bytes()
         .unwrap_or_default();
-    let target = XfrPublicKey::zei_from_bytes(receiver.as_slice()).c(d!())?;
+    let target = XfrPublicKey::noah_from_bytes(receiver.as_slice()).c(d!())?;
 
     let amount = result.params[2].value.clone().into_uint().c(d!())?;
 

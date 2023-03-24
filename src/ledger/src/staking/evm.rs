@@ -6,7 +6,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use parking_lot::{Mutex, RwLock};
 use ruc::Result;
 use std::{collections::BTreeMap, sync::Arc};
-use zei::xfr::sig::XfrPublicKey;
+use zei::XfrPublicKey;
 
 ///EVM staking interface
 pub static EVM_STAKING: OnceCell<Arc<RwLock<dyn EVMStaking>>> = OnceCell::new();

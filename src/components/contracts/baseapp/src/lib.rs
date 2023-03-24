@@ -10,6 +10,7 @@ pub mod extensions;
 mod modules;
 mod notify;
 mod staking;
+pub mod tm_events;
 
 use crate::modules::ModuleManager;
 use abci::Header;
@@ -168,6 +169,7 @@ impl module_evm::Config for BaseApp {
         evm_precompile_sha3fips::Sha3FIPS256,
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
+        evm_precompile_eth_pairings::EthPairing,
     );
     type PrecompilesType = FindoraPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;

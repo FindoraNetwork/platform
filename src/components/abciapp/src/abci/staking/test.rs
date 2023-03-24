@@ -8,17 +8,18 @@ use {
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
-        store::{utils::fra_gen_initial_tx, LedgerState},
+        store::LedgerState,
+        utils::fra_gen_initial_tx,
     },
     rand::random,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::xfr::{
+    zei::noah_api::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, XfrAmount},
     },
+    zei::{XfrKeyPair, XfrPublicKey},
 };
 
 #[test]
@@ -51,7 +52,8 @@ fn check_block_rewards_rate() -> Result<()> {
         let tx = gen_transfer_tx(
             &ledger,
             &root_kp,
-            &FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()],
+            &XfrPublicKey::from_noah(&FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()])
+                .c(d!())?,
             FRA_PRE_ISSUE_AMOUNT / 200,
             seq_id,
         )
@@ -99,7 +101,8 @@ fn gen_transfer_tx(
 ) -> Result<Transaction> {
     let mut tx_builder = TransactionBuilder::from_seq_id(seq_id);
 
-    let target_list = vec![(target_pk, am), (&*BLACK_HOLE_PUBKEY, TX_FEE_MIN)];
+    let binding = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).c(d!())?;
+    let target_list = vec![(target_pk, am), (&binding, TX_FEE_MIN)];
 
     let mut trans_builder = TransferOperationBuilder::new();
 
@@ -118,13 +121,17 @@ fn gen_transfer_tx(
             continue;
         }
 
-        open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp)
-            .c(d!())
-            .and_then(|ob| {
-                trans_builder
-                    .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
-                    .c(d!())
-            })?;
+        open_blind_asset_record(
+            &utxo.0.record.into_noah().c(d!())?,
+            &owner_memo.map(|o| o.into_noah()),
+            &owner_kp.into_noah().c(d!())?,
+        )
+        .c(d!())
+        .and_then(|ob| {
+            trans_builder
+                .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
+                .c(d!())
+        })?;
 
         alt!(0 == am, break);
     }
@@ -138,7 +145,7 @@ fn gen_transfer_tx(
             n,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            *pk,
+            pk.into_noah().unwrap(),
         )
     });
 
@@ -159,5 +166,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction())
+    tx_builder.build_and_take_transaction()
 }
