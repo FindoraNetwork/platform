@@ -19,6 +19,7 @@ mod data;
 #[cfg(test)]
 mod tests;
 
+// use ethereum::Log;
 use ethereum_types::{H160, H256};
 use evm::backend::Log;
 use evm::ExitError;

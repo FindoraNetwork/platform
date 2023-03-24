@@ -20,7 +20,7 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use zei::xfr::sig::XfrKeyPair;
+use zei::XfrKeyPair;
 
 lazy_static! {
     pub static ref BASE_APP: Mutex<BaseApp> = Mutex::new(
@@ -68,7 +68,7 @@ pub fn build_signed_transaction(
 
     let signer: Address = who.get_pk().into();
     let msg = serde_json::to_vec(&(function.clone(), extra.clone())).unwrap();
-    let sig = who.get_sk_ref().sign(msg.as_slice(), who.get_pk_ref());
+    let sig = who.get_sk_ref().sign(msg.as_slice()).unwrap();
     let signature = MultiSignature::from(sig);
 
     UncheckedTransaction::new_signed(function, signer, signature, extra)
