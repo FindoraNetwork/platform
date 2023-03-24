@@ -12,24 +12,49 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 
 use {
-    crate::converter::ConvertAccount,
-    crate::staking::{
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            mint_fra::MintFraOps, replace_staker::ReplaceStakerOps,
-            undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
-            update_validator::UpdateValidatorOps,
+    crate::{
+        converter::ConvertAccount,
+        staking::{
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                mint_fra::MintFraOps, replace_staker::ReplaceStakerOps,
+                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            Staking,
         },
-        Staking,
     },
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
+    digest::{consts::U64, Digest},
     fbnc::NumKey,
     globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
+    noah::{
+        anon_xfr::{
+            abar_to_abar::AXfrNote,
+            abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
+            abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
+            ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
+            bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
+            commit,
+            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
+        },
+        keys::PublicKey as NoahXfrPublicKey,
+        setup::VerifierParams,
+        xfr::{
+            gen_xfr_body,
+            structs::{
+                AssetRecord, AssetType as NoahAssetType, TracingPolicies, TracingPolicy,
+                XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
+            },
+            XfrNotePolicies,
+        },
+    },
+    noah_algebra::{bls12_381::BLSScalar, serialization::NoahFromToBytes},
     rand::Rng,
     rand_chacha::{rand_core, ChaChaRng},
     rand_core::{CryptoRng, RngCore, SeedableRng},
@@ -45,18 +70,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{
-            lib::{gen_xfr_body, XfrNotePolicies},
-            sig::{XfrKeyPair, XfrPublicKey},
-            structs::{
-                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
-                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
-            },
-        },
-    },
+    zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -91,7 +105,7 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 /// Findora asset type code
 pub struct AssetTypeCode {
     /// Internal asset type
-    pub val: ZeiAssetType,
+    pub val: NoahAssetType,
 }
 
 impl NumKey for AssetTypeCode {
@@ -102,7 +116,7 @@ impl NumKey for AssetTypeCode {
         let mut b = b.to_owned();
         b.resize(ASSET_TYPE_LENGTH, 0u8);
         Ok(Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
             ),
         })
@@ -116,7 +130,7 @@ impl Default for AssetTypeCode {
     #[inline(always)]
     fn default() -> Self {
         AssetTypeCode {
-            val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
+            val: NoahAssetType([255; ASSET_TYPE_LENGTH]),
         }
     }
 }
@@ -144,7 +158,7 @@ impl AssetTypeCode {
     pub fn gen_random_with_rng<R: RngCore + CryptoRng>(prng: &mut R) -> Self {
         let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
         Self {
-            val: ZeiAssetType(val),
+            val: NoahAssetType(val),
         }
     }
 
@@ -159,7 +173,7 @@ impl AssetTypeCode {
     pub fn new_from_vec(mut bytes: Vec<u8>) -> Self {
         bytes.resize(ASSET_TYPE_LENGTH, 0u8);
         Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap(),
             ),
         }
@@ -223,7 +237,7 @@ impl AssetTypeCode {
         as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
         let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(as_vec.as_slice()).unwrap();
         Self {
-            val: ZeiAssetType(buf),
+            val: NoahAssetType(buf),
         }
     }
 
@@ -237,7 +251,7 @@ impl AssetTypeCode {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
                 let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
-                    val: ZeiAssetType(buf),
+                    val: NoahAssetType(buf),
                 })
             }
             Err(e) => Err(eg!((format!("Failed to deserialize base64 '{b64}': {e}",)))),
@@ -391,9 +405,9 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.as_bytes())
+        b64enc(&self.key.to_bytes())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -405,7 +419,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -418,9 +432,9 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(self.key.as_bytes())
+        b64enc(&self.key.to_bytes())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -432,7 +446,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -495,7 +509,7 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.as_bytes(), *weight);
+            weight_map.insert(key.to_bytes(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
@@ -709,6 +723,22 @@ impl NumKey for TxoSID {
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    Ord,
+    PartialOrd,
+)]
+#[allow(missing_docs)]
+pub struct ATxoSID(pub u64);
+
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct OutputPosition(pub usize);
@@ -783,7 +813,7 @@ pub enum UtxoStatus {
 pub struct Utxo(pub TxOutput);
 
 impl Utxo {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[inline(always)]
     pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
         if let XfrAmount::NonConfidential(n) = self.0.record.amount {
@@ -898,8 +928,11 @@ impl TransferAssetBody {
             return Err(eg!());
         }
 
-        let transfer =
-            Box::new(gen_xfr_body(prng, input_records, output_records).c(d!())?);
+        let transfer = Box::new(
+            gen_xfr_body(prng, input_records, output_records)
+                .and_then(|xb| XfrBody::from_noah(&xb))
+                .c(d!())?,
+        );
         let outputs = transfer
             .outputs
             .iter()
@@ -927,10 +960,10 @@ impl TransferAssetBody {
         keypair: &XfrKeyPair,
         input_idx: Option<usize>,
     ) -> IndexedSignature<TransferAssetBody> {
-        let public_key = keypair.get_pk_ref();
+        let public_key = keypair.get_pk();
         IndexedSignature {
-            signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
-            address: XfrAddress { key: *public_key },
+            signature: SignatureOf::new(&keypair, &(self.clone(), input_idx)),
+            address: XfrAddress { key: public_key },
             input_idx,
         }
     }
@@ -1115,13 +1148,8 @@ impl TransferAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
-        self.body
-            .transfer
-            .owners_memos
-            .iter()
-            .map(|mem| mem.as_ref())
-            .collect()
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
+        self.body.transfer.owners_memos.to_vec()
     }
 
     #[inline(always)]
@@ -1169,11 +1197,11 @@ impl IssueAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         self.body
             .records
             .iter()
-            .map(|(_, memo)| memo.as_ref())
+            .map(|(_, memo)| memo.clone())
             .collect()
     }
 
@@ -1229,12 +1257,281 @@ impl UpdateMemo {
         update_memo_body: UpdateMemoBody,
         signing_key: &XfrKeyPair,
     ) -> UpdateMemo {
-        let signature = SignatureOf::new(signing_key, &update_memo_body);
+        let signature = SignatureOf::new(&signing_key, &update_memo_body);
         UpdateMemo {
             body: update_memo_body,
             pubkey: *signing_key.get_pk_ref(),
             signature,
         }
+    }
+}
+
+/// A note which enumerates the transparent and confidential BAR to
+/// Anon Asset record conversion.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BarAnonConvNote {
+    /// A transfer note with ZKP for a confidential asset record
+    BarNote(Box<BarToAbarNote>),
+    /// A transfer note with ZKP for a non-confidential asset record
+    ArNote(Box<ArToAbarNote>),
+}
+
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BarToAbarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: BarAnonConvNote,
+    /// The TxoSID of the the input BAR
+    pub txo_sid: TxoSID,
+    nonce: NoReplayToken,
+}
+
+impl BarToAbarOps {
+    /// Generates a new BarToAbarOps object
+    /// # Arguments
+    /// * bar_to_abar_note - The BarToAbarNote of the conversion
+    /// * txo_sid          - the TxoSID of the converting BAR
+    /// * nonce
+    pub fn new(
+        note: BarAnonConvNote,
+        txo_sid: TxoSID,
+        nonce: NoReplayToken,
+    ) -> Result<BarToAbarOps> {
+        Ok(BarToAbarOps {
+            note,
+            txo_sid,
+            nonce,
+        })
+    }
+
+    /// verifies the signatures and proof of the note
+    pub fn verify(&self) -> Result<()> {
+        match &self.note {
+            BarAnonConvNote::BarNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::bar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key)
+                    .c(d!())
+            }
+            BarAnonConvNote::ArNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::ar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_ar_to_abar_note(&node_params, note).c(d!())
+            }
+        }
+    }
+
+    /// provides a copy of the input record in the note
+    pub fn input_record(&self) -> BlindAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => {
+                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+            }
+            BarAnonConvNote::ArNote(n) => {
+                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+            }
+        }
+    }
+
+    /// provides a copy of the output record of the note.
+    pub fn output_record(&self) -> AnonAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => n.body.output.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.output.clone(),
+        }
+    }
+
+    /// provides a copy of the AxfrOwnerMemo in the note
+    pub fn axfr_memo(&self) -> AxfrOwnerMemo {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => n.body.memo.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.memo.clone(),
+        }
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// AbarConvNote
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AbarConvNote {
+    /// Conversion to a amount or type confidential BAR
+    AbarToBar(Box<AbarToBarNote>),
+    /// Conversion to a transparent BAR
+    AbarToAr(Box<AbarToArNote>),
+}
+
+impl AbarConvNote {
+    /// Verifies the ZKP based on the type of conversion
+    pub fn verify<D: Digest<OutputSize = U64> + Default>(
+        &self,
+        merkle_root: BLSScalar,
+        hasher: D,
+    ) -> Result<()> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_bar_note(
+                    &abar_to_bar_verifier_params,
+                    &note,
+                    &merkle_root,
+                    hasher,
+                )
+                .c(d!("Abar to Bar conversion proof verification failed"))
+            }
+            AbarConvNote::AbarToAr(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_ar_verifier_params = VerifierParams::abar_to_ar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_ar_note(
+                    &abar_to_ar_verifier_params,
+                    &note,
+                    &merkle_root,
+                    hasher,
+                )
+                .c(d!("Abar to AR conversion proof verification failed"))
+            }
+        }
+    }
+
+    /// input nullifier in the note body
+    pub fn get_input(&self) -> Nullifier {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.input,
+            AbarConvNote::AbarToAr(note) => note.body.input,
+        }
+    }
+
+    /// merkle root version of the proof
+    pub fn get_merkle_root_version(&self) -> u64 {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.merkle_root_version,
+            AbarConvNote::AbarToAr(note) => note.body.merkle_root_version,
+        }
+    }
+
+    /// public key of the note body
+    pub fn get_public_key(&self) -> XfrPublicKey {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+            }
+        }
+    }
+
+    /// output BAR of the note body
+    pub fn get_output(&self) -> BlindAssetRecord {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+            }
+        }
+    }
+
+    /// gets address of owner memo in the note body
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                vec![note
+                    .body
+                    .memo
+                    .as_ref()
+                    .map(|om| OwnerMemo::from_noah(om).unwrap())]
+            }
+            AbarConvNote::AbarToAr(note) => {
+                vec![note
+                    .body
+                    .memo
+                    .as_ref()
+                    .map(|om| OwnerMemo::from_noah(om).unwrap())]
+            }
+        }
+    }
+
+    /// get serialized bytes for signature and prove (only ABAR body).
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
+            }
+        }
+    }
+}
+
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AbarToBarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: AbarConvNote,
+    nonce: NoReplayToken,
+}
+
+impl AbarToBarOps {
+    /// Generates a new BarToAbarOps object
+    pub fn new(note: AbarConvNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
+        Ok(AbarToBarOps { note, nonce })
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// A struct to hold the transfer ops
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AnonTransferOps {
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AXfrNote,
+    nonce: NoReplayToken,
+}
+impl AnonTransferOps {
+    /// Generates the anon transfer note
+    pub fn new(note: AXfrNote, nonce: NoReplayToken) -> Result<AnonTransferOps> {
+        Ok(AnonTransferOps { note, nonce })
+    }
+
+    /// Sets the nonce for the operation
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    /// Fetches the nonce of the operation
+    #[inline(always)]
+    fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
     }
 }
 
@@ -1267,35 +1564,57 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
+    /// Anonymous conversion operation
+    BarToAbar(Box<BarToAbarOps>),
+    /// De-anonymize ABAR operation
+    AbarToBar(Box<AbarToBarOps>),
+    /// Anonymous transfer operation
+    TransferAnonAsset(Box<AnonTransferOps>),
     ///replace staker.
     ReplaceStaker(ReplaceStakerOps),
 }
 
+impl Operation {
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            Operation::UpdateStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Delegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UnDelegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Claim(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::FraDistribution(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateValidator(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Governance(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateMemo(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ConvertAccount(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::BarToAbar(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ReplaceStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::TransferAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::IssueAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::DefineAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::MintFra(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::AbarToBar(i) => i.note.digest(),
+            Operation::TransferAnonAsset(i) => {
+                Serialized::new(&i.note.body).as_ref().to_vec()
+            }
+        }
+    }
+}
+
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     match op {
-        Operation::UpdateStaker(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Delegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UnDelegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Claim(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::FraDistribution(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UpdateValidator(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Governance(i) => {
-            i.set_nonce(no_replay_token);
-        }
+        Operation::UpdateStaker(i) => i.set_nonce(no_replay_token),
+        Operation::Delegation(i) => i.set_nonce(no_replay_token),
+        Operation::UnDelegation(i) => i.set_nonce(no_replay_token),
+        Operation::Claim(i) => i.set_nonce(no_replay_token),
+        Operation::FraDistribution(i) => i.set_nonce(no_replay_token),
+        Operation::UpdateValidator(i) => i.set_nonce(no_replay_token),
+        Operation::Governance(i) => i.set_nonce(no_replay_token),
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
+        Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
+        Operation::AbarToBar(i) => i.set_nonce(no_replay_token),
+        Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1323,6 +1642,19 @@ impl TransactionBody {
         result.no_replay_token = no_replay_token;
         result
     }
+
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bytes.extend_from_slice(Serialized::new(&self.no_replay_token).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.credentials).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.policy_options).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.memos).as_ref());
+        for o in &self.operations {
+            bytes.extend_from_slice(&o.digest());
+        }
+        bytes
+    }
 }
 
 #[allow(missing_docs)]
@@ -1343,6 +1675,8 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
+    #[serde(default)]
+    pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
 }
@@ -1612,7 +1946,7 @@ impl FinalizedTransaction {
 }
 
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
-pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType([0; ASSET_TYPE_LENGTH]);
+pub const ASSET_TYPE_FRA: NoahAssetType = NoahAssetType([0; ASSET_TYPE_LENGTH]);
 
 /// FRA decimals
 pub const FRA_DECIMALS: u8 = 6;
@@ -1620,13 +1954,21 @@ pub const FRA_DECIMALS: u8 = 6;
 lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
-    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
     /// BlackHole of Staking
-    pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY_STAKING: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
-pub const TX_FEE_MIN: u64 = 1_0000;
+pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
+/// Double the
+pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
+
+/// Calculate the FEE with inputs and outputs number.
+pub const FEE_CALCULATING_FUNC: fn(u32, u32) -> u32 = |x: u32, y: u32| {
+    let extra_outputs = y.saturating_sub(x);
+    50_0000 + 10_0000 * x + 20_0000 * y + (10_000 * extra_outputs)
+};
 
 impl Transaction {
     #[inline(always)]
@@ -1644,6 +1986,7 @@ impl Transaction {
         self.check_fee() && !self.is_coinbase_tx()
     }
 
+    #[allow(clippy::if_same_then_else)]
     /// A simple fee checker
     ///
     /// The check logic is as follows:
@@ -1658,21 +2001,32 @@ impl Transaction {
         //
         // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
+
+        let mut min_fee = TX_FEE_MIN;
+        // Charge double the min fee if the transaction is BarToAbar
+        for op in self.body.operations.iter() {
+            if let Operation::BarToAbar(_a) = op {
+                min_fee = BAR_TO_ABAR_TX_FEE_MIN;
+            }
+        }
+
         self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
-                                && *BLACK_HOLE_PUBKEY == o.record.public_key
+                                && XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap()
+                                    == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
-                                    if am > (TX_FEE_MIN - 1) {
+                                    if am > (min_fee - 1) {
                                         return true;
                                     }
                                 }
                             }
                         }
+                        tracing::error!("Txn failed in check_fee {:?}", self);
                         false
                     });
                 } else if let Operation::DefineAsset(ref x) = ops {
@@ -1683,9 +2037,16 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if let Operation::TransferAnonAsset(_) = ops {
+                    return true;
+                } else if let Operation::BarToAbar(_) = ops {
+                    return true;
+                } else if let Operation::AbarToBar(_) = ops {
+                    return true;
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
+                tracing::error!("Txn failed in check_fee {:?}", self);
                 false
             })
     }
@@ -1782,7 +2143,7 @@ impl Transaction {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         let mut memos = Vec::new();
         for op in self.body.operations.iter() {
             match op {
@@ -1794,6 +2155,9 @@ impl Transaction {
                 }
                 Operation::IssueAsset(issue_asset) => {
                     memos.append(&mut issue_asset.get_owner_memos_ref());
+                }
+                Operation::AbarToBar(abar_to_bar) => {
+                    memos.append(&mut abar_to_bar.note.get_owner_memos_ref());
                 }
                 _ => {}
             }
@@ -1831,7 +2195,7 @@ impl Transaction {
     pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
         let serialized = Serialized::new(&self.body);
         for sig in self.signatures.iter() {
-            match sig.0.verify(public_key, &serialized) {
+            match sig.0.verify(&public_key, &serialized) {
                 Err(_) => {}
                 Ok(_) => {
                     return Ok(());
@@ -1857,6 +2221,7 @@ impl Transaction {
     /// NOTE: This method is used to verify the signature in the transaction,
     /// when the user constructs the transaction not only needs to sign each `operation`,
     /// but also needs to sign the whole transaction, otherwise it will not be passed here
+    #[allow(missing_docs)]
     #[inline(always)]
     pub fn check_tx(&self) -> Result<()> {
         let select_check = |tx: &Transaction, pk: &XfrPublicKey| -> Result<()> {
@@ -1909,6 +2274,9 @@ impl Transaction {
                         }
                     }
                 }
+                Operation::BarToAbar(_) => {}
+                Operation::AbarToBar(_) => {}
+                Operation::TransferAnonAsset(_) => {}
             }
         }
 
@@ -1951,6 +2319,23 @@ impl StateCommitmentData {
     }
 }
 
+/// Commitment data for Anon merkle trees
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AnonStateCommitmentData {
+    /// Root hash of the latest committed version of abar merkle tree
+    pub abar_root_hash: BLSScalar,
+    /// Root hash of the nullifier set merkle tree
+    pub nullifier_root_hash: BitDigest,
+}
+
+impl AnonStateCommitmentData {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
+        HashOf::new(&Some(self).cloned())
+    }
+}
+
 /// Used in `Staking` logic to create consensus-tmp XfrPublicKey
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct ConsensusRng(u32);
@@ -1975,4 +2360,23 @@ impl RngCore for ConsensusRng {
 #[allow(missing_docs)]
 pub fn gen_random_keypair() -> XfrKeyPair {
     XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
+    let c = commit(
+        oabar.pub_key_ref(),
+        oabar.get_blind(),
+        oabar.get_amount(),
+        oabar.get_asset_type().as_scalar(),
+    )
+    .unwrap();
+    c.0
+}
+
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct ABARData {
+    pub commitment: String,
 }

@@ -23,12 +23,14 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 [dev-dependencies]
-rand_chacha = "0.2"
+rand_chacha = "0.3"
 parking_lot = "0.12"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 
 [features]
 web3_service = ["enterprise-web3"]
