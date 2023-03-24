@@ -25,9 +25,8 @@ do
 done
 
 # config nodes and abcis
-script_config=$(dirname "$0")/confignodes.py
 echo -n "setting $(($V+$N)) nodes: "
-python3 $script_config
+./tools/devnet/confignodes.sh
 if [ $? -ne 0 ]; then
     echo -en "${RED}failed${NC}"
 else

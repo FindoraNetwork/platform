@@ -10,7 +10,7 @@ if [ ! -z "$1" ]; then
 fi
 
 # start abcis
-nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $9}' | sort -V`
+nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $8}' | sort -V`
 for node in $nodes
 do
 if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
