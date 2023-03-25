@@ -71,7 +71,7 @@ btm = "0.1.6"
 [dev-dependencies]
 
 [build-dependencies]
-vergen = "=3.1.0"
+vergen = "=8.0.0"
 
 [features]
 default = ["diskcache"]

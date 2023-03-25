@@ -76,4 +76,4 @@ noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
 
 [build-dependencies]
-vergen = "=3.1.0"
+vergen = "=8.0.0"
