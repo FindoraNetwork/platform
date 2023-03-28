@@ -659,9 +659,19 @@ impl BlockEffect {
 
         // Check that no operations are duplicated as in a replay attack
         // Note that we need to check here as well as in LedgerStatus::check_txn_effect
-        for txn in self.txns.iter() {
-            if txn.body.no_replay_token == txn_effect.txn.body.no_replay_token {
-                return Err(eg!());
+        let mut flag = true;
+        if self.staking_simulator.cur_height > CFG.checkpoint.fix_check_replay
+            && txn_effect.txn.body.operations.len() == 1
+        {
+            if let Some(Operation::MintFra(_)) = txn_effect.txn.body.operations.get(0) {
+                flag = false;
+            }
+        }
+        if flag {
+            for txn in self.txns.iter() {
+                if txn.body.no_replay_token == txn_effect.txn.body.no_replay_token {
+                    return Err(eg!());
+                }
             }
         }
 
