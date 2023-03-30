@@ -1026,19 +1026,38 @@ pub struct UpdateMemoBody {
 pub enum AssetTypePrefix {
     UserDefined,
     ERC20,
-    NFT,
+    ERC721,
+    ERC1155,
 }
 
 impl AssetTypePrefix {
     #[allow(missing_docs)]
     pub fn bytes(&self) -> Vec<u8> {
-        let code = match self {
-            AssetTypePrefix::UserDefined => "56",
-            AssetTypePrefix::ERC20 => "77",
-            AssetTypePrefix::NFT => "02",
-        };
-
-        hex::decode(format!("{code:0>64}",)).unwrap()
+        match self {
+            // println!("{:?}",Keccak256::digest(b"Findora User-defined Asset Type",).as_slice());
+            AssetTypePrefix::UserDefined => vec![
+                21, 32, 222, 134, 151, 157, 34, 235, 197, 37, 167, 187, 177, 22, 151,
+                207, 188, 106, 180, 176, 48, 199, 185, 128, 200, 9, 142, 225, 131, 159,
+                227, 159,
+            ],
+            // println!("{:?}",Keccak256::digest(b"Findora ERC20 Asset Type",).as_slice());
+            AssetTypePrefix::ERC20 => vec![
+                65, 125, 161, 85, 119, 221, 149, 146, 115, 34, 149, 216, 194, 125, 118,
+                193, 48, 66, 123, 79, 108, 204, 246, 48, 201, 158, 89, 51, 76, 223, 150,
+                61,
+            ],
+            // println!("{:?}",Keccak256::digest(b"Findora ERC721 Asset Type",).as_slice());
+            AssetTypePrefix::ERC721 => vec![
+                170, 49, 235, 37, 197, 120, 157, 2, 29, 201, 171, 189, 37, 86, 83, 193,
+                122, 235, 202, 55, 40, 170, 141, 141, 78, 235, 98, 142, 128, 114, 97,
+                59,
+            ],
+            // println!("{:?}",Keccak256::digest(b"Findora ERC1155 Asset Type",).as_slice());
+            AssetTypePrefix::ERC1155 => vec![
+                150, 43, 52, 224, 244, 30, 0, 120, 126, 90, 220, 123, 15, 96, 104, 17,
+                211, 55, 68, 229, 107, 134, 178, 207, 138, 35, 88, 150, 3, 48, 36, 154,
+            ],
+        }
     }
 }
 

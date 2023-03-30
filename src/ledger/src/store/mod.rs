@@ -1350,7 +1350,7 @@ impl LedgerStatus {
                 no_replay_token.get_seq_id() as usize,
             );
             if let Err(e) = self.sliding_set.insert(rand, seq_id) {
-                pd!(format!("Error inserting into window: {e}"));
+                tracing::warn!(" Error inserting into window: {e}");
             }
         }
         block.no_replay_tokens.clear();
