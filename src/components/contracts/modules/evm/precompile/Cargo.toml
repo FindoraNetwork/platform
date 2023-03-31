@@ -13,6 +13,7 @@ evm = { version = "0.35.0", default-features = false, features = ["with-serde"] 
 ethereum-types = "0.13.1"
 evm-precompile-basic = {path = "./basic"}
 evm-precompile-frc20 = {path = "./frc20"}
+evm-precompile-zkcard = {path = "./zkcard"}
 evm-precompile-modexp = {path = "./modexp"}
 evm-precompile-sha3fips = {path = "./sha3fips"}
 evm-precompile-anemoi = {path = "./anemoi"}

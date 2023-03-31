@@ -1,6 +1,7 @@
 use ethereum_types::H160;
 use evm::{executor::stack::PrecompileSet, Context};
 use evm_precompile_eth_pairings::EthPairing;
+use evm_precompile_zkcard::ZkCard;
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
@@ -79,6 +80,9 @@ where
             }
             a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
                 Some(EthPairing::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(ZkCard::contract_id()) => {
+                Some(ZkCard::execute(input, target_gas, context, ctx))
             }
             _ => None,
         }
