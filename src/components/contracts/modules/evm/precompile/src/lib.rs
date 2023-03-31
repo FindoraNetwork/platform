@@ -8,6 +8,7 @@ use evm_precompile_basic::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, S
 use evm_precompile_frc20::FRC20;
 use evm_precompile_modexp::Modexp;
 use evm_precompile_sha3fips::{Sha3FIPS256, Sha3FIPS512};
+use evm_precompile_zkcard::ZkCard;
 use fp_core::context::Context as Context2;
 use module_evm::precompile::PrecompileId;
 use module_evm::Config;
@@ -79,6 +80,9 @@ where
             // a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
             //     Some(EthPairing::execute(handle, ctx))
             // }
+            a if a == H160::from_low_u64_be(ZkCard::contract_id()) => {
+                Some(ZkCard::execute(input, target_gas, context, ctx))
+            }
             _ => None,
         }
     }

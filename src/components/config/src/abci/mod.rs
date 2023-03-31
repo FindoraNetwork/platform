@@ -90,6 +90,8 @@ pub struct CheckPointConfig {
 
     pub disable_delegate_frc20: i64,
 
+    pub disable_delegate_zkcard: i64,
+
     pub fix_exec_code: i64,
 
     #[serde(default = "def_check_signatures_num")]
@@ -175,7 +177,8 @@ lazy_static! {
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
-        fix_check_replay: 0
+        fix_check_replay: 0,
+        disable_delegate_zkcard: 0
     };
 }
 
@@ -210,7 +213,8 @@ lazy_static! {
         prismxx_inital_height: 4033522,
         prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
         remove_fake_staking_hash: 4033522,
-        fix_check_replay: 4033522
+        fix_check_replay: 4033522,
+        disable_delegate_zkcard: 5000000
     };
 }
 
