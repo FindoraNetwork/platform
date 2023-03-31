@@ -89,6 +89,8 @@ pub struct CheckPointConfig {
 
     pub disable_delegate_frc20: i64,
 
+    pub disable_delegate_zkcard: i64,
+
     pub fix_exec_code: i64,
 }
 
@@ -124,6 +126,7 @@ impl CheckPointConfig {
                                 validators_limit_v2_height: 0,
                                 evm_substate_v2_height: 0,
                                 disable_delegate_frc20: 0,
+                                disable_delegate_zkcard: 0,
                                 fix_exec_code: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
@@ -149,6 +152,7 @@ impl CheckPointConfig {
                                 validators_limit_v2_height: 3351349,
                                 evm_substate_v2_height: 3351349,
                                 disable_delegate_frc20: 3401450,
+                                disable_delegate_zkcard: 50000000,
                                 fix_exec_code: 3401450,
                             };
                             let content = toml::to_string(&config).unwrap();

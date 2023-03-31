@@ -15,6 +15,7 @@
 // along with Moonbeam. If not, see <http://www.gnu.org/licenses/>.
 
 mod data;
+mod data2;
 
 #[cfg(test)]
 mod tests;
@@ -24,8 +25,9 @@ use evm::backend::Log;
 use evm::ExitError;
 
 pub use data::{Address, EvmData, EvmDataReader, EvmDataWriter};
-pub use precompile_utils_macro::generate_function_selector;
+pub use data2::{AsVec, Bytes, EvmData2, EvmDataReader2, EvmDataWriter2, ToBytes};
 
+pub use precompile_utils_macro::generate_function_selector;
 /// Alias for Result returning an EVM precompile error.
 pub type EvmResult<T = ()> = Result<T, ExitError>;
 
