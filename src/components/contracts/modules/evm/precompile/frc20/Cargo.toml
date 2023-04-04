@@ -15,7 +15,7 @@ evm-precompile-utils = { path = "../utils"}
 fp-traits = { path = "../../../../primitives/traits" }
 tracing = "0.1"
 module-evm = { path = "../../../../modules/evm"}
-num_enum = { version = "0.5.4", default-features = false }
+num_enum = { version = "0.6.0", default-features = false }
 slices = "0.2.0"
 config = { path = "../../../../../config" }
 
