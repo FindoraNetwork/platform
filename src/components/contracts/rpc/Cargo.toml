@@ -19,7 +19,7 @@ evm = { version = "0.35.0", default-features = false, features = ["with-serde"] 
 fp-rpc-core = { path = "../primitives/rpc-core" }
 fp-rpc-server = { path = "../primitives/rpc-server" }
 futures = { version = "0.3.16", features = ["compat", "thread-pool"] }
-hex-literal = "0.3"
+hex-literal = "0.4"
 jsonrpc-core = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core" }
 jsonrpc-core-client = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core-client" }
 jsonrpc-derive = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-derive" }
