@@ -1,0 +1,70 @@
+[package]
+name = "wallet_mobile"
+version = "0.1.0"
+authors = ["tyler <tailin@findora.org>"]
+edition = "2018"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "wallet_mobile"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+# wasm-opt has a segfaulting issue. Disabling for now
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[dependencies]
+aes-gcm = "0.9.0"
+base64 = "0.13"
+bech32 = "0.7.2"
+ffi-support = "0.4"
+futures = "0.3.16"
+getrandom = { version = "0.2", features = ["js"] }
+hex = "0.4.2"
+js-sys = "0.3.27"
+rand = { version = "0.7", features = ["wasm-bindgen"] }
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+ring = "0.16.19"
+ruc = "1.0"
+serde = { version = "1.0.124", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+
+finutils = { path = "../finutils", default-features = false, features = []}
+fp-types = { path = "../contracts/primitives/types" }
+fp-utils = { path = "../contracts/primitives/utils" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
+cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
+
+ledger = { path = "../../ledger" }
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+    'Headers',
+    'Request',
+    'RequestInit',
+    'RequestMode',
+    'Response',
+    'Window',
+    'console',
+]
+
+[target.'cfg(target_os="android")'.dependencies]
+jni = "0.20"
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
+
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+safer-ffi = "0.0.10"
+
+[build-dependencies]
+cbindgen = "0.24"
+vergen = "3.1.0"
+
