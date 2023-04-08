@@ -1335,10 +1335,9 @@ impl LedgerStatus {
                 let code = if code.val == ASSET_TYPE_FRA {
                     code
                 } else {
-                    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-                    asset_code.append(&mut code.to_bytes());
-                    AssetTypeCode::new_from_vec(
-                        keccak_256(asset_code.as_slice()).to_vec(),
+                    AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                        AssetTypePrefix::UserDefined,
+                        code,
                     )
                 };
                 code

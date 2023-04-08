@@ -49,11 +49,10 @@ pub fn create_definition_transaction(
     let code = if code.val == ASSET_TYPE_FRA {
         *code
     } else {
-        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-        asset_code.append(&mut code.to_bytes());
-        AssetTypeCode {
-            val: AssetType(keccak_256(&asset_code)),
-        }
+        AssetTypeCode::from_prefix_and_raw_asset_type_code(
+            AssetTypePrefix::UserDefined,
+            &code,
+        )
     };
 
     Ok((
@@ -76,11 +75,10 @@ pub fn asset_creation_body(
     memo: Option<Memo>,
     confidential_memo: Option<ConfidentialMemo>,
 ) -> (DefineAssetBody, AssetTypeCode) {
-    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-    asset_code.append(&mut token_code.to_bytes());
-    let new_token_code = AssetTypeCode {
-        val: AssetType(keccak_256(&asset_code)),
-    };
+    let new_token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        token_code,
+    );
 
     let mut token = Asset {
         code: *token_code,

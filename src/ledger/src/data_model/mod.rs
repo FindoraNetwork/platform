@@ -10,6 +10,10 @@ mod effects;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
+use noah_algebra::bls12_381::BLSScalar;
+use noah_algebra::new_bls12_381;
+use noah_algebra::prelude::Scalar;
+use noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
 
 use {
     crate::converter::ConvertAccount,
@@ -255,6 +259,27 @@ impl AssetTypeCode {
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
     //     self.val.0.to_vec()
     // }
+
+    /// Generates the asset type code from the prefix and the Anemoi hash function
+    #[inline(always)]
+    pub fn from_prefix_and_raw_asset_type_code(
+        prefix: AssetTypePrefix,
+        raw_asset_type_code: &AssetTypeCode,
+    ) -> Self {
+        let mut f = Vec::with_capacity(3);
+        f.push(prefix.to_field_element());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
+        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[0] = raw_asset_type_code.val.0[31];
+        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+
+        let res = AnemoiJive381::eval_variable_length_hash(&f);
+        Self::new_from_vec(res.to_bytes())
+    }
 }
 
 impl Code {
@@ -1039,6 +1064,17 @@ impl AssetTypePrefix {
         };
 
         hex::decode(format!("{code:0>64}",)).unwrap()
+    }
+
+    #[allow(missing_docs)]
+    pub fn to_field_element(&self) -> BLSScalar {
+        // TODO: change to some random numbers in mainnet launch
+        // The current number comes from the Anemoi parameters
+        return match self {
+            AssetTypePrefix::UserDefined => new_bls12_381!("6406215194479240286762731634835344236141886914605144794931128113894074089386"),
+            AssetTypePrefix::ERC20 => new_bls12_381!("25560080366671527635336967422834298208909930660967190727048965370381122828324"),
+            AssetTypePrefix::NFT => new_bls12_381!("50658439267116975037933099803088424427085069111100904739841927317887955508403"),
+        };
     }
 }
 

@@ -124,11 +124,10 @@ impl ApiCache {
         {
             creation.body.asset.code
         } else {
-            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-            asset_code.append(&mut creation.body.asset.code.to_bytes());
-            AssetTypeCode {
-                val: AssetType(keccak_256(&asset_code)),
-            }
+            AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                AssetTypePrefix::UserDefined,
+                &creation.body.asset.code,
+            )
         };
         let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
