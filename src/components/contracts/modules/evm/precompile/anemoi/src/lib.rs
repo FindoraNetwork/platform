@@ -44,26 +44,26 @@ impl Anemoi {
                     .copied()
                     .collect::<Vec<u8>>(),
             );
-            if res.is_err() {
+            if let Ok(res) = res {
+                field_elems.push(res);
+            } else {
                 return Err(PrecompileFailure::Error {
                     exit_status: ExitError::Other(
                         "Cannot convert bytes to field elements".into(),
                     ),
                 });
-            } else {
-                field_elems.push(res.unwrap());
             }
         }
 
         let mut res = AnemoiJive381::eval_variable_length_hash(&field_elems).to_bytes();
         res.reverse();
 
-        return Ok(PrecompileOutput {
+        Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: gas_cost,
             output: res.to_vec(),
             logs: Default::default(),
-        });
+        })
     }
 }
 

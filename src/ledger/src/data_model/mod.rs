@@ -11,9 +11,10 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 use noah_algebra::bls12_381::BLSScalar;
-use noah_algebra::new_bls12_381;
 use noah_algebra::prelude::Scalar;
 use noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
+use num_bigint::BigUint;
+use std::str::FromStr;
 
 use {
     crate::converter::ConvertAccount,
@@ -426,7 +427,6 @@ impl XfrAddress {
     // }
 }
 
-#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -453,7 +453,6 @@ impl IssuerPublicKey {
     // }
 }
 
-#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -1070,11 +1069,14 @@ impl AssetTypePrefix {
     pub fn to_field_element(&self) -> BLSScalar {
         // TODO: change to some random numbers in mainnet launch
         // The current number comes from the Anemoi parameters
-        return match self {
-            AssetTypePrefix::UserDefined => new_bls12_381!("6406215194479240286762731634835344236141886914605144794931128113894074089386"),
-            AssetTypePrefix::ERC20 => new_bls12_381!("25560080366671527635336967422834298208909930660967190727048965370381122828324"),
-            AssetTypePrefix::NFT => new_bls12_381!("50658439267116975037933099803088424427085069111100904739841927317887955508403"),
-        };
+        match self {
+            AssetTypePrefix::UserDefined =>
+                BLSScalar::from(&BigUint::from_str("6406215194479240286762731634835344236141886914605144794931128113894074089386").unwrap()),
+            AssetTypePrefix::ERC20 =>
+                BLSScalar::from(&BigUint::from_str("25560080366671527635336967422834298208909930660967190727048965370381122828324").unwrap()),
+            AssetTypePrefix::NFT =>
+                BLSScalar::from(&BigUint::from_str("50658439267116975037933099803088424427085069111100904739841927317887955508403").unwrap()),
+        }
     }
 }
 

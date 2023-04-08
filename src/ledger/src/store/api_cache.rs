@@ -15,16 +15,12 @@ use {
         store::LedgerState,
     },
     config::abci::global_cfg::CFG,
-    fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk, NumKey},
-    fp_utils::hashing::keccak_256,
+    fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     globutils::wallet,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::xfr::{
-        sig::XfrPublicKey,
-        structs::{AssetType, OwnerMemo},
-    },
+    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;

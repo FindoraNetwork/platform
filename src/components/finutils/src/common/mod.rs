@@ -17,7 +17,6 @@ pub mod utils;
 
 use {
     crate::api::DelegationInfo,
-    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -30,7 +29,6 @@ use {
             td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
             TendermintAddrRef,
         },
-        store::fbnc::NumKey,
     },
     ruc::*,
     std::{env, fs},
@@ -44,7 +42,6 @@ use {
         xfr::{
             asset_record::AssetRecordType,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::AssetType,
         },
     },
 };

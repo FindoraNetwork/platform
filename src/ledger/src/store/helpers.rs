@@ -13,8 +13,6 @@ use {
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID,
         TxoRef, TxoSID, ASSET_TYPE_FRA,
     },
-    fbnc::NumKey,
-    fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
@@ -25,7 +23,7 @@ use {
             asset_record::AssetRecordType,
             asset_record::{build_blind_asset_record, open_blind_asset_record},
             sig::{XfrKeyPair, XfrPublicKey},
-            structs::{AssetRecord, AssetRecordTemplate, AssetType},
+            structs::{AssetRecord, AssetRecordTemplate},
         },
     },
 };

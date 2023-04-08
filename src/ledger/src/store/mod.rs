@@ -29,8 +29,7 @@ use {
     bitmap::{BitMap, SparseMap},
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
-    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, NumKey, Vecx},
-    fp_utils::hashing::keccak_256,
+    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
@@ -1329,18 +1328,15 @@ impl LedgerStatus {
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
         let handle_asset_type_code = |code: AssetTypeCode| -> AssetTypeCode {
-            if CFG.checkpoint.utxo_asset_prefix_height > self.td_commit_height {
+            if CFG.checkpoint.utxo_asset_prefix_height > self.td_commit_height
+                || code.val == ASSET_TYPE_FRA
+            {
                 code
             } else {
-                let code = if code.val == ASSET_TYPE_FRA {
-                    code
-                } else {
-                    AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                        AssetTypePrefix::UserDefined,
-                        code,
-                    )
-                };
-                code
+                AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                    AssetTypePrefix::UserDefined,
+                    &code,
+                )
             }
         };
         for no_replay_token in block.no_replay_tokens.iter() {
