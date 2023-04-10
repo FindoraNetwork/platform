@@ -41,10 +41,18 @@ pub fn transfer_to_account(
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     let kp = get_keypair().c(d!())?;
+
+    let asset = if let Some(asset) = asset {
+        let asset = AssetTypeCode::new_from_base64(asset)?;
+        Some(asset)
+    } else {
+        None
+    };
+
     let transfer_op = utils::gen_transfer_op(
         &kp,
         vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        None,
+        asset,
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
@@ -53,13 +61,6 @@ pub fn transfer_to_account(
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
         None => MultiSigner::Xfr(kp.get_pk()),
-    };
-
-    let asset = if let Some(asset) = asset {
-        let asset = AssetTypeCode::new_from_base64(asset)?;
-        Some(asset)
-    } else {
-        None
     };
 
     let lowlevel_data = if let Some(data) = lowlevel_data {
