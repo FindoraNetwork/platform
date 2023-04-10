@@ -12,7 +12,7 @@ readme = "README.md"
 # config = {path = "../../../config"}
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
-ruc = "1.0"
+ruc = "4.1"
 
 # primitives
 fp-core = { path = "../core" }

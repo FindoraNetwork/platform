@@ -27,7 +27,7 @@ fbnc = { version = "0.2.9", default-features = false}
 ring = "0.16.19"
 aes-gcm = '^0.10.1'
 bech32 = "0.7.2"
-ruc = "1.0"
+ruc = "4.1"
 bs58 = "0.4"
 
 # Must enable the "js"-feature,

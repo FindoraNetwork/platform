@@ -32,7 +32,7 @@ tracing = "0.1"
 rand = "0.8"
 parking_lot = "0.12"
 rlp = "0.5"
-ruc = "1.0"
+ruc = "4.1"
 rucv4 = { package = "ruc", version = "4.0" }
 rustc-hex = { version = "2.1.0" }
 rustc_version = "0.4.0"

@@ -19,7 +19,7 @@ tracing = "0.1"
 parking_lot = "0.12"
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
-ruc = "1.0"
+ruc = "4.1"
 serde = {version = "1.0.124", features = ["derive"]}
 serde_json = "1.0.40"
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
