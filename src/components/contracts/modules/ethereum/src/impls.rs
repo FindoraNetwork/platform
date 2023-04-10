@@ -144,7 +144,6 @@ impl<C: Config> App<C> {
         CurrentBlockNumber::put(ctx.db.write().borrow_mut(), &block_number)?;
         BlockHash::insert(ctx.db.write().borrow_mut(), &block_number, &block_hash)?;
         if is_store_block {
-            CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
             CurrentReceipts::insert(
                 ctx.db.write().borrow_mut(),
                 &block_hash,
@@ -155,6 +154,7 @@ impl<C: Config> App<C> {
                 &block_hash,
                 &statuses,
             )?;
+            CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
 
             #[cfg(feature = "web3_service")]
             {
