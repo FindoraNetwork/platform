@@ -5,6 +5,7 @@ members = [
     "src/components/abciapp",
     "src/components/config",
     "src/components/wasm",
+    "src/components/wallet_mobile",
     "src/components/contracts/baseapp",
     "src/components/contracts/modules/account",
     "src/components/contracts/modules/ethereum",
