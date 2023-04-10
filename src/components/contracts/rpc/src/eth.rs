@@ -522,12 +522,19 @@ impl EthApi for EthApiImpl {
                 .current_transaction_statuses(Some(BlockId::Hash(hash)));
 
             match (block, statuses) {
-                (Some(block), Some(statuses)) => Ok(Some(rich_block_build(
-                    block,
-                    statuses.into_iter().map(Some).collect(),
-                    Some(hash),
-                    full,
-                ))),
+                (Some(block), Some(statuses)) => {
+                    let blk = rich_block_build(
+                        block,
+                        statuses.into_iter().map(Some).collect(),
+                        Some(hash),
+                        full,
+                    );
+
+                    match blk {
+                        Ok(v) => Ok(Some(v)),
+                        Err(e) => Err(e),
+                    }
+                }
                 _ => Ok(None),
             }
         });
@@ -569,12 +576,17 @@ impl EthApi for EthApiImpl {
                 (Some(block), Some(statuses)) => {
                     let hash = block.header.hash();
 
-                    Ok(Some(rich_block_build(
+                    let blk = rich_block_build(
                         block,
                         statuses.into_iter().map(Some).collect(),
                         Some(hash),
                         full,
-                    )))
+                    );
+
+                    match blk {
+                        Ok(v) => Ok(Some(v)),
+                        Err(e) => Err(e),
+                    }
                 }
                 _ => Ok(None),
             }
@@ -1330,8 +1342,12 @@ fn rich_block_build(
     statuses: Vec<Option<TransactionStatus>>,
     hash: Option<H256>,
     full_transactions: bool,
-) -> RichBlock {
-    Rich {
+) -> Result<RichBlock> {
+    if block.transactions.len() > statuses.len() {
+        return Err(internal_err("block transaction statuses statue error!!!"));
+    }
+
+    Ok(Rich {
         inner: Block {
             hash: Some(hash.unwrap_or_else(|| {
                 H256::from_slice(
@@ -1394,7 +1410,7 @@ fn rich_block_build(
             size: Some(U256::from(rlp::encode(&block).len() as u32)),
         },
         extra_info: BTreeMap::new(),
-    }
+    })
 }
 
 fn transaction_build(
