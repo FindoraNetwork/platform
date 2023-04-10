@@ -1,0 +1,26 @@
+[package]
+name = "evm-precompile-anemoi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bench]]
+name = 'anemoi'
+path = 'benches/anemoi.rs'
+harness = false
+
+[dependencies]
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm-precompile-utils = { path = "../utils"}
+tracing = "0.1"
+module-evm = { path = "../../../../modules/evm"}
+num_enum = { version = "0.5.4", default-features = false }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+
+[dev-dependencies]
+baseapp = { path = "../../../../baseapp" }
+fp-mocks = { path = "../../../../primitives/mocks" }
+ethereum-types = { version = "0.13.1", default-features = false }
+hex = "0.4"

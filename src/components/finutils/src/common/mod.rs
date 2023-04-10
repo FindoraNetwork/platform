@@ -17,7 +17,6 @@ pub mod utils;
 
 use {
     crate::api::DelegationInfo,
-    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -30,7 +29,6 @@ use {
             td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
             TendermintAddrRef,
         },
-        store::fbnc::NumKey,
     },
     ruc::*,
     std::{env, fs},
@@ -44,7 +42,6 @@ use {
         xfr::{
             asset_record::AssetRecordType,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::AssetType,
         },
     },
 };
@@ -737,9 +734,10 @@ pub fn create_asset_x(
     code: Option<AssetTypeCode>,
 ) -> Result<AssetTypeCode> {
     let code = code.unwrap_or_else(AssetTypeCode::gen_random);
-
-    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-    asset_code.append(&mut code.to_bytes());
+    let asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &code,
+    );
 
     let mut rules = AssetRules::default();
     rules.set_decimals(decimal).c(d!())?;
@@ -757,9 +755,7 @@ pub fn create_asset_x(
     let mut tx = builder.take_transaction();
     tx.sign_to_map(kp);
 
-    utils::send_tx(&tx).map(|_| AssetTypeCode {
-        val: AssetType(keccak_256(&asset_code)),
-    })
+    utils::send_tx(&tx).map(|_| asset_code)
 }
 
 /// Issue a custom asset with specified amount

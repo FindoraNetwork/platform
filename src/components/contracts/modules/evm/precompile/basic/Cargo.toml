@@ -8,6 +8,11 @@ repository = "https://github.com/findoranetwork/platform/"
 description = "Basic precompiles for EVM module."
 readme = "README.md"
 
+[[bench]]
+name = 'sha256'
+path = 'benches/sha256.rs'
+harness = false
+
 [dependencies]
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
