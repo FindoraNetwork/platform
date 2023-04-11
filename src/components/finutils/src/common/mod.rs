@@ -721,7 +721,9 @@ pub fn create_asset(
 
     create_asset_x(&kp, memo, decimal, max_units, transferable, Some(code))
         .c(d!())
-        .map(|_| ())
+        .map(|code| {
+            println!("type: {}", code.to_base64());
+        })
 }
 
 #[allow(missing_docs)]
