@@ -36,7 +36,7 @@ getrandom = { version = "0.2", features = ["js"] }
 
 noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { git = "https://github.com/shaorongqiang/platform-lib-utils", branch = "main" }

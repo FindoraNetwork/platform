@@ -34,7 +34,7 @@ fp-utils = { path = "../components/contracts/primitives/utils" }
 ruc = "1.0"
 itertools = "0.10"
 noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 bulletproofs = { package = "noah-bulletproofs", version = "4.0.0" }
 
