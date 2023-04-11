@@ -26,7 +26,7 @@ parking_lot = "0.12"
 
 getrandom = "0.2"
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }

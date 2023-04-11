@@ -28,7 +28,7 @@ zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/pl
 [dev-dependencies]
 rand_chacha = "0.3"
 parking_lot = "0.12"
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 

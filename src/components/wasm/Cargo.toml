@@ -34,7 +34,7 @@ bs58 = "0.4"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
 
