@@ -62,7 +62,7 @@ use {
     },
     noah::{
         anon_xfr::{
-            decrypt_memo, nullify, parse_memo,
+            decrypt_memo, nullify, parse_memo, init_anon_xfr,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
                 OpenAnonAssetRecordBuilder,
@@ -1476,6 +1476,14 @@ impl AnonTransferOperationBuilder {
             .c(d!())
             .map_err(error_to_jsvalue)
     }
+}
+
+///
+///  Initializes the fast MSM wasm inside the noah library
+///
+#[wasm_bindgen]
+pub async fn init_axfr() -> Result<(), JsValue> {
+    init_anon_xfr().await
 }
 
 ///////////// CRYPTO //////////////////////

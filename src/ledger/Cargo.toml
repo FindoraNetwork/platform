@@ -33,9 +33,9 @@ fp-types = { path = "../components/contracts/primitives/types" }
 fp-utils = { path = "../components/contracts/primitives/utils" }
 ruc = "1.0"
 itertools = "0.10"
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 bulletproofs = { package = "noah-bulletproofs", version = "4.0.0" }
 
 fbnc = { version = "0.2.9", default-features = false}
@@ -70,7 +70,7 @@ fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "main" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.4" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
