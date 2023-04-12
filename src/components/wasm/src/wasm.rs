@@ -90,6 +90,7 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
+    wasm_bindgen_futures,
     zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
