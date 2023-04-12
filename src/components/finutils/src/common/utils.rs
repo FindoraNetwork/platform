@@ -2,6 +2,8 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use std::collections::BTreeMap;
+
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -465,6 +467,30 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
         .sum();
 
     Ok(balance)
+}
+
+/// Retrieve Utxos of a findora keypair and calcultate the balance of the specified asset
+/// FRA is the default asset type
+pub fn get_asset_all(kp: &XfrKeyPair) -> Result<BTreeMap<AssetTypeCode, u64>> {
+    let info = get_owned_utxos(kp.get_pk_ref())?;
+
+    let mut set = BTreeMap::new();
+
+    for (_k, v) in info {
+        let res = open_blind_asset_record(&v.0 .0.record, &v.1, kp)?;
+
+        let code = AssetTypeCode {
+            val: res.asset_type,
+        };
+
+        if let Some(amount) = set.get_mut(&code) {
+            *amount += res.amount;
+        } else {
+            set.insert(code, res.amount);
+        }
+    }
+
+    Ok(set)
 }
 
 fn get_owned_utxos(
