@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 
-attohttpc = { version = "0.23", default-features = false, features = ["compress", "json", "tls-rustls"] }
+attohttpc = { version = "0.25", default-features = false, features = ["compress", "json", "tls-rustls"] }
 clap = "2.33.3"
 lazy_static = { version = "1.2.0" }
 ruc = "1.0"
