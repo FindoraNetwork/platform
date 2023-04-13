@@ -12,6 +12,13 @@ use zei::xfr::{
     structs::{AssetType, XfrAmount, XfrAssetType},
 };
 
+#[inline(always)]
+fn is_empty(x: &Option<Vec<u8>>) -> bool {
+    match x {
+        Some(v) => !v.is_empty(),
+        None => false,
+    }
+}
 /// Use this operation to transfer.
 ///
 /// This operation only support binded xfr_address is sender address.
@@ -32,7 +39,7 @@ pub struct ConvertAccount {
     pub asset_type: Option<AssetType>,
 
     /// convert asset lowlevel data.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "is_empty")]
     pub lowlevel_data: Option<Vec<u8>>,
 }
 
