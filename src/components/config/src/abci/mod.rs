@@ -204,13 +204,13 @@ lazy_static! {
         evm_substate_v2_height: 3351349,
         disable_delegate_frc20: 3401450,
         fix_exec_code: 3401450,
-        check_signatures_num: 5000_0000,
-        fix_deliver_tx_revert_nonce_height: 4000_0000,
-        utxo_asset_prefix_height: 5000_0000,
-        prismxx_inital_height: 5000_0000,
-        prism_bridge_address: String::new(),
-        remove_fake_staking_hash: 5000_0000,
-        fix_check_replay: 5000_0000
+        check_signatures_num: 4033522,
+        fix_deliver_tx_revert_nonce_height: 4033522,
+        utxo_asset_prefix_height: 4033522,
+        prismxx_inital_height: 4033522,
+        prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
+        remove_fake_staking_hash: 4033522,
+        fix_check_replay: 4033522
     };
 }
 

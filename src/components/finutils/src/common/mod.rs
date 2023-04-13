@@ -587,14 +587,23 @@ fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyP
 }
 
 /// Show the asset balance of a findora account
-pub fn show_account(sk_str: Option<&str>, asset: Option<&str>) -> Result<()> {
+pub fn show_account(sk_str: Option<&str>, _asset: Option<&str>) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
-    let token_code = asset
-        .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
-        .transpose()?;
-    let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
+    // let token_code = asset
+    //     .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
+    //     .transpose()?;
+    // let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
+    //
+    // println!("{}: {}", asset.unwrap_or("FRA"), balance);
 
-    println!("{}: {}", asset.unwrap_or("FRA"), balance);
+    let res = utils::get_asset_all(&kp)?;
+
+    for (k, v) in res {
+        let codes = k.to_base64();
+
+        println!("{codes}: {v}");
+    }
+
     Ok(())
 }
 
