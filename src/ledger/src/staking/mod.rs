@@ -33,7 +33,6 @@ use {
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
-    noah::keys::PublicKey as NoahXfrPublicKey,
     ops::{
         fra_distribution::FraDistributionOps,
         mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
@@ -51,6 +50,7 @@ use {
             Arc,
         },
     },
+    zei::noah_api::keys::PublicKey as NoahXfrPublicKey,
     zei::{XfrKeyPair, XfrPublicKey},
 };
 

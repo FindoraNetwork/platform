@@ -12,22 +12,22 @@ use {
         AuthenticatedUtxo, SignatureRules as PlatformSignatureRules, TxOutput,
         TxoRef as PlatformTxoRef, TxoSID,
     },
-    noah::anon_xfr::structs::{
-        AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
-        MTLeafInfo as NoahMTLeafInfo,
-    },
-    noah::xfr::structs::{
-        AssetTracerDecKeys, AssetTracerEncKeys,
-        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
-        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
-        TracingPolicy as NoahTracingPolicy,
-    },
-    noah_algebra::bls12_381::BLSScalar,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
+    zei::noah_algebra::bls12_381::BLSScalar,
+    zei::noah_api::anon_xfr::structs::{
+        AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
+        MTLeafInfo as NoahMTLeafInfo,
+    },
+    zei::noah_api::xfr::structs::{
+        AssetTracerDecKeys, AssetTracerEncKeys,
+        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
+        TracingPolicy as NoahTracingPolicy,
+    },
     zei::{BlindAssetRecord, XfrPublicKey},
 };
 

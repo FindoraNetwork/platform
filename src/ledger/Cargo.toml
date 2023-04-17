@@ -33,23 +33,19 @@ fp-types = { path = "../components/contracts/primitives/types" }
 fp-utils = { path = "../components/contracts/primitives/utils" }
 ruc = "1.0"
 itertools = "0.10"
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
-bulletproofs = { package = "noah-bulletproofs", version = "4.0.0-1" }
 
 fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"
 
-globutils = { git = "https://github.com/shaorongqiang/platform-lib-utils", branch = "main" }
-bitmap = { git = "https://github.com/shaorongqiang/platform-lib-bitmap", branch = "main" }
-cryptohash = { git = "https://github.com/shaorongqiang/platform-lib-cryptohash", branch = "main" }
-credentials = { git = "https://github.com/shaorongqiang/platform-lib-credentials", branch = "main" }
-merkle_tree = { git = "https://github.com/shaorongqiang/platform-lib-merkle", branch = "main" }
-sliding_set = { git = "https://github.com/shaorongqiang/platform-lib-slidingset", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
+bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "develop" }
+cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
+merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "develop" }
+sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "develop" }
 
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 [features]
 default = ["fin_storage"]
 diskcache = ["fbnc/diskcache"]
@@ -69,8 +65,7 @@ parking_lot = "0.12"
 fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
-sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "main" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "develop" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

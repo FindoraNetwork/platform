@@ -36,13 +36,13 @@ use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
 };
-use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
 use ruc::*;
 use runtime::runner::ActionRunner;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
+use zei::noah_algebra::serialization::NoahFromToBytes;
 use zei::XfrPublicKey;
 
 pub use runtime::*;
