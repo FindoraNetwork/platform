@@ -26,18 +26,15 @@ parking_lot = "0.12"
 
 getrandom = "0.2"
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 
 ruc = "1.0"
 rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
 
 ledger = { path = "../../ledger", default-features = false }
-globutils = { git = "https://github.com/shaorongqiang/platform-lib-utils", branch = "main" }
-credentials = { git = "https://github.com/shaorongqiang/platform-lib-credentials", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
 
 eth_checksum = { version = "0.1.2", optional = true }
 fp-core = { path = "../contracts/primitives/core", default-features = false }

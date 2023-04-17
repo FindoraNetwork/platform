@@ -1,5 +1,5 @@
 use std::os::raw::c_char;
-use zei::xfr::sig::XfrPublicKey;
+use zei::noah_api::keys::PublicKey;
 
 use crate::rust::{
     self, account::EVMTransactionBuilder, c_char_to_string, string_to_c_char,
