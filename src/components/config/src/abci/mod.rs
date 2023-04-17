@@ -92,6 +92,8 @@ pub struct CheckPointConfig {
 
     pub fix_exec_code: i64,
 
+    pub enable_ed25519_triple_masking_height: i64,
+
     #[serde(default = "def_check_signatures_num")]
     pub check_signatures_num: i64,
 
@@ -111,6 +113,13 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_remove_fake_staking_hash")]
     pub remove_fake_staking_hash: u64,
+
+    #[serde(default = "def_fix_check_replay")]
+    pub fix_check_replay: u64,
+}
+
+fn def_fix_check_replay() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.fix_check_replay
 }
 
 fn def_check_signatures_num() -> i64 {
@@ -162,12 +171,14 @@ lazy_static! {
         evm_substate_v2_height: 0,
         disable_delegate_frc20: 0,
         fix_exec_code: 0,
+        enable_ed25519_triple_masking_height: 0,
         check_signatures_num: 0,
         fix_deliver_tx_revert_nonce_height: 0,
         utxo_asset_prefix_height: 0,
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
+        fix_check_replay: 0
     };
 }
 
@@ -196,12 +207,14 @@ lazy_static! {
         evm_substate_v2_height: 3351349,
         disable_delegate_frc20: 3401450,
         fix_exec_code: 3401450,
+        enable_ed25519_triple_masking_height: 5000_0000,
         check_signatures_num: 5000_0000,
         fix_deliver_tx_revert_nonce_height: 4000_0000,
         utxo_asset_prefix_height: 5000_0000,
         prismxx_inital_height: 5000_0000,
         prism_bridge_address: String::new(),
         remove_fake_staking_hash: 5000_0000,
+        fix_check_replay: 5000_0000
     };
 }
 

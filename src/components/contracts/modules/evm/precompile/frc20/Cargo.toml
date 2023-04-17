@@ -22,4 +22,4 @@ config = { path = "../../../../../config" }
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }
 fp-mocks = { path = "../../../../primitives/mocks" }
-sha3 = "0.8"
+sha3 = "0.10"
