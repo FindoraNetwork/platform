@@ -16,11 +16,11 @@ use {
         },
     },
     ed25519_dalek::Signer,
-    noah::xfr::structs::{XfrAmount, XfrAssetType},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::noah_api::xfr::structs::{XfrAmount, XfrAssetType},
     zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 

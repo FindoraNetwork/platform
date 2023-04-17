@@ -15,15 +15,15 @@ use {
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
-    noah::xfr::{
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    std::fmt::Debug,
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::xfr::{
         asset_record::AssetRecordType,
         asset_record::{build_blind_asset_record, open_blind_asset_record},
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
-    noah_algebra::ristretto::PedersenCommitmentRistretto,
-    rand_core::{CryptoRng, RngCore},
-    ruc::*,
-    std::fmt::Debug,
     zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 

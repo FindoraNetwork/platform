@@ -35,7 +35,16 @@ use {
             TendermintAddrRef,
         },
     },
-    noah::{
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    std::{env, fs},
+    tendermint::PrivateKey,
+    utils::{
+        get_block_height, get_local_block_height, get_validator_detail,
+        parse_td_validator_keys,
+    },
+    zei::noah_api::{
         anon_xfr::{
             nullify,
             structs::{
@@ -49,15 +58,6 @@ use {
             },
             structs::{AssetType, XfrAmount, XfrAssetType},
         },
-    },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
-    std::{env, fs},
-    tendermint::PrivateKey,
-    utils::{
-        get_block_height, get_local_block_height, get_validator_detail,
-        parse_td_validator_keys,
     },
     zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };

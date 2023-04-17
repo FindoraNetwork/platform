@@ -33,7 +33,23 @@ use {
     globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
-    noah::{
+    rand::Rng,
+    rand_chacha::{rand_core, ChaChaRng},
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::{HashMap, HashSet},
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        mem,
+        ops::Deref,
+        result::Result as StdResult,
+    },
+    unicode_normalization::UnicodeNormalization,
+    zei::noah_algebra::{bls12_381::BLSScalar, serialization::NoahFromToBytes},
+    zei::noah_api::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
             abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
@@ -54,22 +70,6 @@ use {
             XfrNotePolicies,
         },
     },
-    noah_algebra::{bls12_381::BLSScalar, serialization::NoahFromToBytes},
-    rand::Rng,
-    rand_chacha::{rand_core, ChaChaRng},
-    rand_core::{CryptoRng, RngCore, SeedableRng},
-    ruc::*,
-    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
-    std::{
-        collections::{HashMap, HashSet},
-        convert::TryFrom,
-        fmt,
-        hash::{Hash, Hasher},
-        mem,
-        ops::Deref,
-        result::Result as StdResult,
-    },
-    unicode_normalization::UnicodeNormalization,
     zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 

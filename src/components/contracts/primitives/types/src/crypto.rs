@@ -6,12 +6,12 @@ use {
     fp_utils::{ecdsa, hashing::keccak_256},
     globutils::wallet,
     hex::FromHex,
-    noah_algebra::serialization::NoahFromToBytes,
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
+    zei::noah_algebra::serialization::NoahFromToBytes,
     zei::{XfrPublicKey, XfrSignature},
 };
 
