@@ -7,7 +7,6 @@
 
 use {
     credentials::CredUserSecretKey,
-    curve25519_dalek::scalar::Scalar,
     digest::Digest,
     fp_types::crypto::MultiSigner,
     globutils::{wallet, Serialized, SignatureOf},
@@ -39,7 +38,7 @@ use {
         },
     },
     rand_chacha::ChaChaRng,
-    rand_core::{CryptoRng, RngCore, SeedableRng},
+    rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
     sha2::Sha512,
     std::{
@@ -50,10 +49,7 @@ use {
     zei::noah_algebra::prelude::*,
     zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
     zei::noah_api::{
-        anon_creds::{
-            ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
-            ConfidentialAC, Credential,
-        },
+        anon_creds::{ACCommitment, ACCommitmentKey, Credential},
         anon_xfr::{
             abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
             abar_to_ar::{
@@ -70,8 +66,7 @@ use {
         setup::ProverParams,
         xfr::{
             asset_record::{
-                build_blind_asset_record, build_open_asset_record,
-                open_blind_asset_record, AssetRecordType,
+                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
             },
             structs::{
                 AssetRecord, AssetRecordTemplate, AssetType, OpenAssetRecord,
@@ -1065,79 +1060,6 @@ impl TransactionBuilder {
     }
 }
 
-/// Generates an asset record from an asset record template using optional identity proof.
-/// Returns the asset record, amount blinds, and type blind.
-pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
-    prng: &mut R,
-    template: &AssetRecordTemplate,
-    identity_proof: Option<ConfidentialAC>,
-) -> Result<(AssetRecord, (Scalar, Scalar), Scalar)> {
-    // Check input consistency:
-    // - if no policy, then no identity proof needed
-    // - if policy and identity tracing, then identity proof is needed
-    // - if policy but no identity tracing, then no identity proof is needed
-    let asset_tracing = !template.asset_tracing_policies.is_empty();
-    if !asset_tracing && identity_proof.is_some()
-        || asset_tracing
-            && (template
-                .asset_tracing_policies
-                .get_policy(0)
-                .as_ref()
-                .c(d!())?
-                .identity_tracing
-                .is_some()
-                && identity_proof.is_none()
-                || template
-                    .asset_tracing_policies
-                    .get_policy(0)
-                    .as_ref()
-                    .unwrap()
-                    .identity_tracing
-                    .is_none()
-                    && identity_proof.is_some())
-    {
-        return Err(eg!());
-    }
-    // 1. get ciphertext and proofs from identity proof structure
-    let (attr_ctext, reveal_proof) = match identity_proof {
-        None => (None, None),
-        Some(conf_ac) => {
-            let (c, p) = conf_ac.get_fields();
-            (Some(c.into_iter().map(|i| (0u32, i)).collect()), Some(p))
-        }
-    };
-    // 2. Use record template and ciphertexts to build open asset record
-    let pc_gens = PedersenCommitmentRistretto::default();
-    let (open_asset_record, asset_tracing_memos, owner_memo) = build_open_asset_record(
-        prng,
-        &pc_gens,
-        template,
-        vec![attr_ctext.unwrap_or_default()],
-    );
-    // 3. Return record input containing open asset record, tracing policy, identity reveal proof,
-    //    asset_tracer_memo, and owner_memo
-
-    let mut identity_proofs = vec![];
-    if reveal_proof.is_some() {
-        identity_proofs.push(reveal_proof);
-    }
-
-    Ok((
-        AssetRecord {
-            open_asset_record: open_asset_record.clone(),
-            tracing_policies: template.asset_tracing_policies.clone(),
-            identity_proofs,
-            owner_memo,
-            asset_tracers_memos: asset_tracing_memos,
-        },
-        (
-            open_asset_record.amount_blinds.0 .0,
-            open_asset_record.amount_blinds.1 .0,
-        ),
-        open_asset_record.type_blind.0,
-    ))
-}
-
 fn gen_bar_conv_note(
     seed: [u8; 32],
     input_record: &OpenAssetRecord,
@@ -1281,76 +1203,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
-    /// Adds output to the records, and stores the asset amount blinds and type blind in the blinds parameter passed in.
-    pub fn add_output_and_store_blinds<R: CryptoRng + RngCore>(
-        &mut self,
-        asset_record_template: &AssetRecordTemplate,
-        credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
-        prng: &mut R,
-        blinds: &mut ((Scalar, Scalar), Scalar),
-    ) -> Result<&mut Self> {
-        if self.transfer.is_some() {
-            return Err(eg!(
-                ("Cannot mutate a transfer that has been signed".to_string())
-            ));
-        }
-        let (ar, amount_blinds, type_blind) =
-            if let Some((user_secret_key, credential, commitment_key)) =
-                credential_record
-            {
-                match asset_record_template.asset_tracing_policies.get_policy(0) {
-                    None => {
-                        // identity tracing must have asset_tracing policy
-                        return Err(eg!());
-                    }
-                    Some(policy) => {
-                        match &policy.identity_tracing {
-                            // policy must have a identity tracing policy
-                            None => {
-                                return Err(eg!());
-                            }
-                            Some(reveal_policy) => {
-                                let conf_ac = ac_confidential_open_commitment(
-                                    prng,
-                                    user_secret_key.get_ref(),
-                                    credential,
-                                    commitment_key,
-                                    &policy.enc_keys.attrs_enc_key,
-                                    &reveal_policy.reveal_map,
-                                    &[],
-                                )
-                                .c(d!())?;
-                                build_record_and_get_blinds(
-                                    prng,
-                                    &asset_record_template,
-                                    Some(conf_ac),
-                                )
-                                .c(d!())?
-                            }
-                        }
-                    }
-                }
-            } else {
-                if let Some(policy) =
-                    asset_record_template.asset_tracing_policies.get_policy(0)
-                {
-                    if policy.identity_tracing.is_some() {
-                        return Err(eg!());
-                    }
-                }
-                build_record_and_get_blinds(prng, &asset_record_template, None)?
-            };
-        blinds.0 = amount_blinds;
-        blinds.1 = type_blind;
-        self.output_records.push(ar);
-        self.outputs_tracing_policies
-            .push(asset_record_template.asset_tracing_policies.clone());
-        self.output_identity_commitments.push(None);
-        Ok(self)
-    }
-
     // Check if outputs and inputs are balanced
-
     fn check_balance(&self) -> Result<()> {
         let input_total: u64 = self
             .input_records
