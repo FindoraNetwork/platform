@@ -1,4 +1,4 @@
-use noah::xfr::structs::AssetType;
+use zei::noah_api::xfr::structs::AssetType;
 use serde::{Deserialize, Serialize};
 use zei::XfrPublicKey;
 

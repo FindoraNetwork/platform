@@ -13,10 +13,10 @@ use {
         staking::{ops::mint_fra::MintEntry, BlockHeight},
         store::LedgerState,
     },
-    noah::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
+    zei::noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
     zei::OwnerMemo,
 };
 

@@ -17,9 +17,11 @@ use ledger::{
 };
 use ruc::{eg, Result as RucResult};
 use serde_json::Result;
-use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::AssetRecordTemplate;
+use zei::noah_api::xfr::asset_record::{
+    open_blind_asset_record as open_bar, AssetRecordType,
+};
+use zei::noah_api::xfr::structs::AssetRecordTemplate;
+use zei::{OwnerMemo as ZeiOwnerMemo, XfrKeyPair, XfrPublicKey};
 
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
@@ -53,7 +55,7 @@ impl From<FeeInput> for PlatformFeeInput {
             am: fi.am,
             tr: fi.tr.txo_ref,
             ar: fi.ar.txo,
-            om: fi.om.map(|om| om.memo),
+            om: fi.om.map(|om| ZeiOwnerMemo::from_noah(&om.memo).unwrap()),
             kp: fi.kp,
         }
     }
@@ -225,7 +227,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> RucResult<TransactionBuilder> {
         let asset_token = AssetTypeCode::new_from_base64(&code)?;
 
@@ -239,7 +240,6 @@ impl TransactionBuilder {
             seq_num,
             amount,
             confidentiality_flags,
-            zei_params.get_ref(),
         )?;
         Ok(self)
     }
@@ -337,7 +337,8 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
+        self.get_builder_mut().build().unwrap();
         self.get_builder().serialize_str()
     }
 
@@ -359,7 +360,9 @@ impl TransactionBuilder {
     pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
         self.get_builder()
             .get_owner_memo_ref(idx)
-            .map(|memo| OwnerMemo { memo: memo.clone() })
+            .map(|memo| OwnerMemo {
+                memo: memo.into_noah(),
+            })
     }
 }
 
@@ -390,9 +393,9 @@ impl TransferOperationBuilder {
         amount: u64,
     ) -> RucResult<TransferOperationBuilder> {
         let oar = open_bar(
-            asset_record.get_bar_ref(),
+            &asset_record.get_bar_ref().into_noah()?,
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            key,
+            &key.into_noah()?,
         )?;
         self.get_builder_mut().add_input(
             *txo_ref.get_txo(),
@@ -422,7 +425,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah()?,
                 policies.get_policies_ref().clone(),
             )
         } else {
@@ -430,7 +433,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah()?,
             )
         };
         self.get_builder_mut().add_output(
