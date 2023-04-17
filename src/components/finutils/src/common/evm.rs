@@ -23,13 +23,13 @@ use fp_utils::tx::EvmRawTxWrapper;
 use ledger::data_model::AssetTypeCode;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
-use noah::xfr::asset_record::AssetRecordType;
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
+use zei::noah_api::xfr::asset_record::AssetRecordType;
 use zei::XfrKeyPair;
 use zei::XfrPublicKey;
 

@@ -1,10 +1,10 @@
+use super::{jStringToString, parseU64};
 use crate::rust::account::{get_serialized_address, EVMTransactionBuilder};
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
-use zei::xfr::sig::XfrPublicKey;
-
-use super::{jStringToString, parseU64};
+use zei::noah_api::keys::PublicKey;
+use zei::XfrPublicKey;
 
 #[no_mangle]
 /// # Safety
@@ -27,10 +27,13 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferToUtxoFromAccount(
 
     let sk = jStringToString(env, sk);
 
-    let recipient = *(recipient as *mut XfrPublicKey);
+    let recipient = *(recipient as *mut PublicKey);
 
     let ser_tx = EVMTransactionBuilder::new_transfer_to_utxo_from_account(
-        recipient, amount, sk, nonce,
+        XfrPublicKey::from_noah(&recipient).unwrap(),
+        amount,
+        sk,
+        nonce,
     )
     .unwrap();
 

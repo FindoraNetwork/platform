@@ -60,7 +60,17 @@ use {
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
     },
-    noah::{
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
+    std::convert::From,
+    wasm_bindgen::prelude::*,
+    zei::noah_algebra::{
+        bls12_381::BLSScalar,
+        prelude::{NoahFromToBytes, Scalar},
+    },
+    zei::noah_api::{
         anon_xfr::{
             decrypt_memo, nullify, parse_memo,
             structs::{
@@ -79,17 +89,7 @@ use {
             trace_assets as noah_trace_assets,
         },
     },
-    noah_algebra::{
-        bls12_381::BLSScalar,
-        prelude::{NoahFromToBytes, Scalar},
-    },
-    noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::{d, err::RucResult},
-    serde::{Deserialize, Serialize},
-    std::convert::From,
-    wasm_bindgen::prelude::*,
+    zei::noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
     zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 

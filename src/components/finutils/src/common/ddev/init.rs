@@ -15,9 +15,9 @@ use ledger::{
     staking::{td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA},
     utils::fra_gen_initial_tx,
 };
-use noah::xfr::asset_record::AssetRecordType;
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use zei::noah_api::xfr::asset_record::AssetRecordType;
 use zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 #[derive(Deserialize)]

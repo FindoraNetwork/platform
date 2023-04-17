@@ -3,9 +3,9 @@ FROM rust:1.66.0-slim
 RUN apt update -y && apt upgrade -y && apt install -y unzip wget make pkg-config
 RUN wget -nc -P /opt/ https://www.openssl.org/source/openssl-1.1.1s.tar.gz
 RUN wget -nc -P /opt/ https://dl.google.com/android/repository/android-ndk-r25c-linux.zip && unzip /opt/android-ndk-r25c-linux.zip -d /opt/
-ENV PATH="/opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATHTMP"
 
 ENV PATHTMP="$PATH"
+ENV PATH="/opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATHTMP"
 ENV WORK_DIR /platform
 
 ENV ANDROID_NDK_HOME /opt/android-ndk-r25c/

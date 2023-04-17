@@ -13,7 +13,7 @@ use rand_core::SeedableRng;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
-use zei::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
 
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.

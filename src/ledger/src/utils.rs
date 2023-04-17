@@ -2,7 +2,7 @@
 //! # Test only
 //!
 
-use noah::xfr::structs::AssetType;
+use zei::noah_api::xfr::structs::AssetType;
 
 use {
     crate::{
@@ -15,14 +15,14 @@ use {
     },
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
-    noah::xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        structs::AssetRecordTemplate,
-    },
-    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        structs::AssetRecordTemplate,
+    },
     zei::{BlindAssetRecord, XfrKeyPair},
 };
 

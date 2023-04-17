@@ -6,8 +6,8 @@ use credentials::{
 };
 use ruc::{d, err::RucResult};
 use wasm_bindgen::prelude::*;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
 
 #[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
@@ -163,7 +163,6 @@ impl TransactionBuilder {
     /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
     /// @param {BigInt} amount - Amount to be issued.
     /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-    /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
     pub fn add_basic_issue_asset(
         self,
         key_pair: &XfrKeyPair,
@@ -171,18 +170,10 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> Result<TransactionBuilder, JsValue> {
         let builder = self
             .0
-            .add_basic_issue_asset(
-                key_pair,
-                code,
-                seq_num,
-                amount,
-                conf_amount,
-                zei_params,
-            )
+            .add_basic_issue_asset(key_pair, code, seq_num, amount, conf_amount)
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
