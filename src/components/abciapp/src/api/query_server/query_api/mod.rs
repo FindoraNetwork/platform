@@ -24,8 +24,6 @@ use {
         },
     },
     ledger_api::*,
-    noah::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-    noah_algebra::serialization::NoahFromToBytes,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
@@ -35,6 +33,8 @@ use {
         sync::Arc,
     },
     tracing::info,
+    zei::noah_algebra::serialization::NoahFromToBytes,
+    zei::noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
     zei::{OwnerMemo, XfrPublicKey},
 };
 

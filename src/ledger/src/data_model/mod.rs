@@ -33,7 +33,25 @@ use {
     globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
-    noah::{
+    rand::Rng,
+    rand_chacha::{rand_core, ChaChaRng},
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::{HashMap, HashSet},
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        mem,
+        ops::Deref,
+        result::Result as StdResult,
+    },
+    unicode_normalization::UnicodeNormalization,
+    zei::noah_algebra::{
+        bls12_381::BLSScalar, serialization::NoahFromToBytes, traits::Scalar,
+    },
+    zei::noah_api::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
             abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
@@ -54,25 +72,7 @@ use {
             XfrNotePolicies,
         },
     },
-    noah_algebra::{
-        bls12_381::BLSScalar, prelude::Scalar, serialization::NoahFromToBytes,
-    },
-    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
-    rand::Rng,
-    rand_chacha::{rand_core, ChaChaRng},
-    rand_core::{CryptoRng, RngCore, SeedableRng},
-    ruc::*,
-    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
-    std::{
-        collections::{HashMap, HashSet},
-        convert::TryFrom,
-        fmt,
-        hash::{Hash, Hasher},
-        mem,
-        ops::Deref,
-        result::Result as StdResult,
-    },
-    unicode_normalization::UnicodeNormalization,
+    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
     zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 

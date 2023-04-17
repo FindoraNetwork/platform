@@ -2,10 +2,10 @@ use ethabi::{Event, EventParam, ParamType, RawLog};
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
-use noah::xfr::structs::AssetType;
-use noah::xfr::structs::ASSET_TYPE_LENGTH;
-use noah_algebra::serialization::NoahFromToBytes;
 use ruc::*;
+use zei::noah_algebra::serialization::NoahFromToBytes;
+use zei::noah_api::xfr::structs::AssetType;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
 use zei::XfrPublicKey;
 
 pub fn deposit_asset_event() -> Event {

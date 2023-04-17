@@ -19,7 +19,12 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    noah::{
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    sha2::Digest,
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
+    zei::noah_api::{
         anon_xfr::structs::{
             AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
         },
@@ -28,11 +33,6 @@ use {
             structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
         },
     },
-    ruc::*,
-    serde::{self, Deserialize, Serialize},
-    sha2::Digest,
-    std::collections::HashMap,
-    tendermint::{PrivateKey, PublicKey},
     zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
@@ -584,7 +584,11 @@ pub fn get_asset_all(kp: &XfrKeyPair) -> Result<BTreeMap<AssetTypeCode, u64>> {
     let mut set = BTreeMap::new();
 
     for (_k, v) in info {
-        let res = open_blind_asset_record(&v.0 .0.record, &v.1, kp)?;
+        let res = open_blind_asset_record(
+            &v.0 .0.record.into_noah()?,
+            &v.1,
+            &kp.into_noah()?,
+        )?;
 
         let code = AssetTypeCode {
             val: res.asset_type,
@@ -601,7 +605,7 @@ pub fn get_asset_all(kp: &XfrKeyPair) -> Result<BTreeMap<AssetTypeCode, u64>> {
 }
 
 #[allow(missing_docs)]
-fn get_owned_utxos(
+pub fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
     get_owned_utxos_x(None, addr).c(d!())

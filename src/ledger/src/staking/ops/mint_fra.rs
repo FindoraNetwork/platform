@@ -10,14 +10,14 @@ use {
         data_model::TxOutput,
         staking::{Amount, FRA},
     },
-    noah::xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        structs::{AssetRecordTemplate, AssetType},
-    },
-    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        structs::{AssetRecordTemplate, AssetType},
+    },
     zei::{BlindAssetRecord, OwnerMemo, XfrPublicKey},
 };
 

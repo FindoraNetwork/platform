@@ -17,10 +17,10 @@ use {
     config::abci::global_cfg::CFG,
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     globutils::{wallet, HashOf},
-    noah::anon_xfr::structs::AxfrOwnerMemo,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
+    zei::noah_api::anon_xfr::structs::AxfrOwnerMemo,
     zei::{OwnerMemo, XfrPublicKey},
 };
 
