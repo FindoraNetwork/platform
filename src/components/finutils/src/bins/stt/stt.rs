@@ -208,13 +208,13 @@ mod issue {
             },
             staking::FRA_PRE_ISSUE_AMOUNT,
         },
-        noah::xfr::{
+        rand_chacha::rand_core::SeedableRng,
+        rand_chacha::ChaChaRng,
+        zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+        zei::noah_api::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        noah_algebra::ristretto::PedersenCommitmentRistretto,
-        rand_chacha::rand_core::SeedableRng,
-        rand_chacha::ChaChaRng,
     };
 
     pub fn issue() -> Result<()> {
@@ -271,7 +271,7 @@ mod issue {
 }
 
 mod delegate {
-    use {super::*, noah::xfr::asset_record::AssetRecordType};
+    use {super::*, zei::noah_api::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,

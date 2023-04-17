@@ -11,7 +11,10 @@ use {
         },
         utils::{create_definition_transaction, fra_gen_initial_tx},
     },
-    noah::{
+    rand_core::SeedableRng,
+    zei::noah_algebra::prelude::{One, Zero},
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::{
         anon_xfr::structs::OpenAnonAssetRecordBuilder,
         xfr::{
             asset_record::{
@@ -20,9 +23,6 @@ use {
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
-    noah_algebra::prelude::{One, Zero},
-    noah_algebra::ristretto::PedersenCommitmentRistretto,
-    rand_core::SeedableRng,
     zei::{BlindAssetRecord, XfrKeyPair},
 };
 
@@ -837,7 +837,7 @@ fn test_update_anon_stores() {
         .unwrap();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
-        .asset_type(noah::xfr::structs::AssetType([39u8; 32]))
+        .asset_type(zei::noah_api::xfr::structs::AssetType([39u8; 32]))
         .pub_key(&pub_key)
         .finalize(&mut prng)
         .unwrap()
@@ -845,7 +845,7 @@ fn test_update_anon_stores() {
         .unwrap();
     let oabar2 = OpenAnonAssetRecordBuilder::new()
         .amount(123)
-        .asset_type(noah::xfr::structs::AssetType([39u8; 32]))
+        .asset_type(zei::noah_api::xfr::structs::AssetType([39u8; 32]))
         .pub_key(&pub_key)
         .finalize(&mut prng)
         .unwrap()

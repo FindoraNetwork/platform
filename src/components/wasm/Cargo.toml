@@ -34,10 +34,6 @@ bs58 = "0.4"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-
 finutils = { path = "../finutils", default-features = false }
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
@@ -77,4 +73,4 @@ getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen-test = "0.3.0"
 
 [features]
-lightweight = ["noah/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
+lightweight = ["zei/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.

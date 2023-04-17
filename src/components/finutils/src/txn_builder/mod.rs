@@ -38,7 +38,18 @@ use {
             TendermintAddr, Validator,
         },
     },
-    noah::{
+    rand_chacha::ChaChaRng,
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    serde::{Deserialize, Serialize},
+    sha2::Sha512,
+    std::{
+        cmp::Ordering,
+        collections::{BTreeMap, HashMap, HashSet},
+    },
+    tendermint::PrivateKey,
+    zei::noah_algebra::prelude::*,
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::{
         anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
@@ -69,17 +80,6 @@ use {
             XfrNotePolicies,
         },
     },
-    noah_algebra::prelude::*,
-    noah_algebra::ristretto::PedersenCommitmentRistretto,
-    rand_chacha::ChaChaRng,
-    rand_core::{CryptoRng, RngCore, SeedableRng},
-    serde::{Deserialize, Serialize},
-    sha2::Sha512,
-    std::{
-        cmp::Ordering,
-        collections::{BTreeMap, HashMap, HashSet},
-    },
-    tendermint::PrivateKey,
     zei::{BlindAssetRecord, OwnerMemo, XfrKeyPair, XfrPublicKey},
 };
 
@@ -1970,7 +1970,10 @@ mod tests {
             store::LedgerState,
             utils::fra_gen_initial_tx,
         },
-        noah::{
+        rand_chacha::ChaChaRng,
+        rand_core::SeedableRng,
+        zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+        zei::noah_api::{
             anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
             xfr::{
                 asset_record::{
@@ -1980,9 +1983,6 @@ mod tests {
                 structs::AssetType as AT,
             },
         },
-        noah_algebra::ristretto::PedersenCommitmentRistretto,
-        rand_chacha::ChaChaRng,
-        rand_core::SeedableRng,
     };
 
     // Defines an asset type

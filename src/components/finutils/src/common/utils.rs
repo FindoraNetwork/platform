@@ -17,7 +17,12 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    noah::{
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    sha2::Digest,
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
+    zei::noah_api::{
         anon_xfr::structs::{
             AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
         },
@@ -26,11 +31,6 @@ use {
             structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
         },
     },
-    ruc::*,
-    serde::{self, Deserialize, Serialize},
-    sha2::Digest,
-    std::collections::HashMap,
-    tendermint::{PrivateKey, PublicKey},
     zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 

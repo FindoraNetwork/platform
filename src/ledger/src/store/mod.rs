@@ -33,26 +33,6 @@ use {
     globutils::wallet,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
-    noah::{
-        anon_xfr::{
-            abar_to_abar::verify_anon_xfr_note,
-            structs::{
-                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
-                Nullifier,
-            },
-            TREE_DEPTH as MERKLE_TREE_DEPTH,
-        },
-        setup::VerifierParams,
-        xfr::{
-            structs::{TracingPolicies, TracingPolicy},
-            XfrNotePolicies,
-        },
-    },
-    noah_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
-    },
-    noah_algebra::{bls12_381::BLSScalar, prelude::*},
-    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
@@ -73,6 +53,26 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
+    zei::noah_accumulators::merkle_tree::{
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
+    },
+    zei::noah_algebra::{bls12_381::BLSScalar, prelude::*},
+    zei::noah_api::{
+        anon_xfr::{
+            abar_to_abar::verify_anon_xfr_note,
+            structs::{
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
+                Nullifier,
+            },
+            TREE_DEPTH as MERKLE_TREE_DEPTH,
+        },
+        setup::VerifierParams,
+        xfr::{
+            structs::{TracingPolicies, TracingPolicy},
+            XfrNotePolicies,
+        },
+    },
+    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
     zei::{OwnerMemo, XfrPublicKey},
 };
 

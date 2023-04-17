@@ -3,13 +3,13 @@
 use {
     super::*,
     curve25519_dalek::ristretto::CompressedRistretto,
-    noah::{
+    rand_core::SeedableRng,
+    std::cmp::min,
+    zei::noah_algebra::prelude::msg_eq,
+    zei::noah_api::{
         ristretto,
         xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
     },
-    noah_algebra::prelude::msg_eq,
-    rand_core::SeedableRng,
-    std::cmp::min,
     zei::XfrBody,
 };
 

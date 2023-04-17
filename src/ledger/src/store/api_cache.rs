@@ -19,10 +19,10 @@ use {
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     fp_utils::hashing::keccak_256,
     globutils::{wallet, HashOf},
-    noah::{anon_xfr::structs::AxfrOwnerMemo, xfr::structs::AssetType},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
+    zei::noah_api::{anon_xfr::structs::AxfrOwnerMemo, xfr::structs::AssetType},
     zei::{OwnerMemo, XfrPublicKey},
 };
 

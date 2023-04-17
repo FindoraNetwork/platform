@@ -34,9 +34,9 @@ use {
         data_model::{AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::{StakerMemo, VALIDATORS_MIN},
     },
-    noah::anon_xfr::structs::OpenAnonAssetRecordBuilder,
     ruc::*,
     std::{fmt, fs},
+    zei::noah_api::anon_xfr::structs::OpenAnonAssetRecordBuilder,
     zei::XfrSecretKey,
 };
 
