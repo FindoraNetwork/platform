@@ -32,6 +32,7 @@ use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
+use std::time::SystemTime;
 use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
@@ -341,6 +342,8 @@ impl EthApi for EthApiImpl {
                 nonce,
             } = request;
 
+            let started = profiling::start_profiler();
+
             let id = native_block_id(block_number);
             let block = account_base_app
                 .read()
@@ -365,7 +368,7 @@ impl EthApi for EthApiImpl {
             ctx.header.height = block.header.number.as_u64() as i64;
             ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
 
-            match to {
+            let res = match to {
                 Some(to) => {
                     let call = Call {
                         source: from.unwrap_or_default(),
@@ -411,7 +414,19 @@ impl EthApi for EthApiImpl {
 
                     Ok(Bytes(info.value[..].to_vec()))
                 }
+            };
+            if started {
+                profiling::gen_flame_graph(format!(
+                    "{}/flamegraph-{}.svg",
+                    &CFG.ledger_dir,
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                ));
+                profiling::stop_profiler();
             }
+            res
         });
 
         Box::pin(async move {

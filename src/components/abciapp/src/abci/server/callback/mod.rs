@@ -6,7 +6,10 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
+        abci::{
+            server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL,
+            PROFILER_ENABLED,
+        },
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -48,7 +51,7 @@ use {
             Arc,
         },
     },
-    tracing::{error, info},
+    tracing::{error, info, warn},
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
@@ -203,6 +206,25 @@ pub fn begin_block(
         sleep_ms!(24_000);
     }
 
+    let header = pnk!(req.header.as_ref());
+    {
+        if PROFILER_ENABLED.load(Ordering::Acquire) {
+            if profiling::start_profiler() {
+                warn!(target: "abciapp", "starting profiler at height {}", header.height);
+            } else {
+                warn!(target: "abciapp", "cannot create profiler at height {}", header.height);
+            }
+        } else {
+            if profiling::gen_flame_graph(format!(
+                "{}/flamegraph{}.svg",
+                &CFG.ledger_dir, header.height
+            )) {
+                info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
+            }
+
+            profiling::stop_profiler();
+        }
+    }
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block

@@ -22,7 +22,10 @@ use {
     ruc::*,
     std::{
         path::Path,
-        sync::{atomic::Ordering, Arc},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     },
     tx_sender::TendermintForward,
 };
@@ -31,6 +34,9 @@ pub use tx_sender::forward_txn_with_mode;
 
 pub mod callback;
 pub mod tx_sender;
+
+/// Flag to enable or disable cpu profiler
+pub static PROFILER_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// findora impl of tendermint abci
 #[derive(Clone)]

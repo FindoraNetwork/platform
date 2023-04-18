@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "src/profiling",
     "src/ledger",
     "src/components/finutils",
     "src/components/abciapp",
