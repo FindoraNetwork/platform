@@ -111,6 +111,13 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_remove_fake_staking_hash")]
     pub remove_fake_staking_hash: u64,
+
+    #[serde(default = "def_fix_check_replay")]
+    pub fix_check_replay: u64,
+}
+
+fn def_fix_check_replay() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.fix_check_replay
 }
 
 fn def_check_signatures_num() -> i64 {
@@ -168,6 +175,7 @@ lazy_static! {
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
+        fix_check_replay: 0
     };
 }
 
@@ -202,6 +210,7 @@ lazy_static! {
         prismxx_inital_height: 5000_0000,
         prism_bridge_address: String::new(),
         remove_fake_staking_hash: 5000_0000,
+        fix_check_replay: 5000_0000
     };
 }
 
