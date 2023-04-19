@@ -1,9 +1,10 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
 use config::abci::global_cfg::CFG;
+use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT};
 use ethereum::{
-    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
-    TransactionV0 as Transaction,
+    BlockAny, BlockV0 as Block, FrontierReceiptData, LegacyTransactionMessage,
+    ReceiptAny, ReceiptV0 as Receipt, TransactionV0 as Transaction,
 };
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};
@@ -25,9 +26,6 @@ use fp_utils::{proposer_converter, timestamp_converter};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 use tracing::{debug, info};
-
-#[cfg(feature = "web3_service")]
-use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT};
 
 impl<C: Config> App<C> {
     pub fn recover_signer_fast(
@@ -156,10 +154,7 @@ impl<C: Config> App<C> {
             )?;
             CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
 
-            #[cfg(feature = "web3_service")]
-            {
-                use ethereum::{BlockAny, FrontierReceiptData, ReceiptAny};
-
+            if CFG.enable_enterprise_web3 {
                 if block_number.as_u64() > *WEB3_SERVICE_START_HEIGHT {
                     if let Ok(mut b) = BLOCK.lock() {
                         if b.is_none() {

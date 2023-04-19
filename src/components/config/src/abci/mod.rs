@@ -361,6 +361,7 @@ pub mod global_cfg {
     pub struct Config {
         pub abci_host: String,
         pub abci_port: u16,
+        pub enable_enterprise_web3: bool,
         pub arc_history: (u16, Option<u16>),
         pub arc_fresh: bool,
         pub tendermint_host: String,
@@ -396,6 +397,7 @@ pub mod global_cfg {
             .about("An ABCI node implementation of FindoraNetwork.")
             .arg_from_usage("--abcid-host=[ABCId IP]")
             .arg_from_usage("--abcid-port=[ABCId Port]")
+            .arg_from_usage("--enable-enterprise-web3 'enable enterprise-web3'")
             .arg_from_usage("--arc-history=[EVM archive node tracing history, format \"PERIOD,INTERVAL\" in days]")
             .arg_from_usage("--arc-fresh 'EVM archive node with fresh tracing history'")
             .arg_from_usage("--tendermint-host=[Tendermint IP]")
@@ -441,6 +443,7 @@ pub mod global_cfg {
             .unwrap_or_else(|| "26658".to_owned())
             .parse::<u16>()
             .c(d!())?;
+        let enable_enterprise_web3 = m.is_present("enable-enterprise-web3");
         let arh = {
             let trace = m
                 .value_of("arc-history")
@@ -544,6 +547,7 @@ pub mod global_cfg {
         let res = Config {
             abci_host: ah,
             abci_port: ap,
+            enable_enterprise_web3,
             arc_history: arh,
             arc_fresh: arf,
             tendermint_host: th,

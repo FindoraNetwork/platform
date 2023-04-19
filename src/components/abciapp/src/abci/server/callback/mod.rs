@@ -19,6 +19,11 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     config::abci::global_cfg::CFG,
+    cryptohash::sha256,
+    enterprise_web3::{
+        Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
+        STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+    },
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
@@ -33,6 +38,7 @@ use {
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
+    std::{collections::HashMap, mem::replace},
     std::{
         fs,
         ops::Deref,
@@ -41,13 +47,7 @@ use {
             Arc,
         },
     },
-    tracing::info,
-};
-
-use cryptohash::sha256;
-#[cfg(feature = "web3_service")]
-use enterprise_web3::{
-    BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
+    tracing::{error, info},
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
@@ -537,13 +537,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     IN_SAFE_ITV.store(false, Ordering::Release);
 
-    #[cfg(feature = "web3_service")]
-    {
-        use enterprise_web3::{Setter, REDIS_CLIENT, WEB3_SERVICE_START_HEIGHT};
-        use std::collections::HashMap;
-        use std::mem::replace;
-        use tracing::error;
-
+    if CFG.enable_enterprise_web3 {
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {
             let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");

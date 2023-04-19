@@ -59,7 +59,7 @@ fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = {path = "../contracts/primitives/types"}
 
-enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
+enterprise-web3 = { path = "../contracts/primitives/enterprise-web3" }
 module-evm = { path = "../contracts/modules/evm"}
 
 [target.'cfg(target_os= "linux")'.dependencies]
@@ -74,5 +74,4 @@ vergen = "=3.1.0"
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
 debug_env = ["ledger/debug_env", "config/debug_env", "baseapp/debug_env"]
-web3_service = ["enterprise-web3", "baseapp/web3_service"]
 benchmark = ["baseapp/benchmark"]

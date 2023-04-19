@@ -71,6 +71,10 @@ fn node_command() -> Result<()> {
         .arg("--arc-history")
         .arg(&arc_history_arg);
 
+    if CFG.enable_enterprise_web3 {
+        abcid.arg("--enable-enterprise-web3");
+    }
+
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
         (CFG.enable_eth_api_service, "--enable-eth-api-service"),

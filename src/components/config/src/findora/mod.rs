@@ -149,6 +149,7 @@ pub mod config {
 
     #[derive(Default)]
     pub struct Config {
+        pub enable_enterprise_web3: bool,
         pub tendermint_host: String,
         pub tendermint_port: u16,
         pub arc_history: (u16, Option<u16>),
@@ -183,6 +184,7 @@ pub mod config {
         let matches = {
             let node = SubCommand::with_name("node")
                 .about("Start findora node.")
+                .arg_from_usage("--enable-enterprise-web3 'enable enterprise-web3'")
                 .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
                 .arg_from_usage("--arc-history=[EVM archive node tracing history, format \"PERIOD,INTERVAL\" in days]")
                 .arg_from_usage("--arc-fresh 'EVM archive node with fresh tracing history'")
@@ -254,6 +256,8 @@ pub mod config {
             print_version(matches);
             return Err(eg!("no this command"));
         };
+
+        let enable_enterprise_web3 = m.is_present("enable-enterprise-web3");
 
         let tcfg = m
             .value_of("config")
@@ -371,6 +375,7 @@ pub mod config {
         };
 
         let res = Config {
+            enable_enterprise_web3,
             tendermint_host: th,
             tendermint_port: tp,
             arc_history: arh,
