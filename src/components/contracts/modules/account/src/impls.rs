@@ -71,18 +71,18 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::insert(ctx.state.write().borrow_mut(), sender, &from_account)?;
         AccountStore::insert(ctx.state.write().borrow_mut(), dest, &to_account)?;
 
-        if CFG.enable_enterprise_web3 {
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let sender_slice: &[u8] = sender.as_ref();
-                let sender_h160 = H160::from_slice(&sender_slice[4..24]);
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut balance_map = BALANCE_MAP.lock().c(d!())?;
+            let sender_slice: &[u8] = sender.as_ref();
+            let sender_h160 = H160::from_slice(&sender_slice[4..24]);
 
-                let to_slice: &[u8] = dest.as_ref();
-                let to_h160 = H160::from_slice(&to_slice[4..24]);
+            let to_slice: &[u8] = dest.as_ref();
+            let to_h160 = H160::from_slice(&to_slice[4..24]);
 
-                balance_map.insert(sender_h160, from_account.balance);
-                balance_map.insert(to_h160, to_account.balance);
-            }
+            balance_map.insert(sender_h160, from_account.balance);
+            balance_map.insert(to_h160, to_account.balance);
         }
 
         Ok(())
@@ -106,14 +106,14 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .c(d!("issuance overflow"))?;
         TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)?;
 
-        if CFG.enable_enterprise_web3 {
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = target.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut balance_map = BALANCE_MAP.lock().c(d!())?;
+            let target_slice: &[u8] = target.as_ref();
+            let target_h160 = H160::from_slice(&target_slice[4..24]);
 
-                balance_map.insert(target_h160, target_account.balance);
-            }
+            balance_map.insert(target_h160, target_account.balance);
         }
 
         Ok(())
@@ -138,14 +138,14 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .c(d!("insufficient issuance"))?;
         TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)?;
 
-        if CFG.enable_enterprise_web3 {
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = target.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut balance_map = BALANCE_MAP.lock().c(d!())?;
+            let target_slice: &[u8] = target.as_ref();
+            let target_h160 = H160::from_slice(&target_slice[4..24]);
 
-                balance_map.insert(target_h160, target_account.balance);
-            }
+            balance_map.insert(target_h160, target_account.balance);
         }
 
         Ok(())
@@ -168,14 +168,14 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)?;
 
-        if CFG.enable_enterprise_web3 {
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = who.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut balance_map = BALANCE_MAP.lock().c(d!())?;
+            let target_slice: &[u8] = who.as_ref();
+            let target_h160 = H160::from_slice(&target_slice[4..24]);
 
-                balance_map.insert(target_h160, sa.balance);
-            }
+            balance_map.insert(target_h160, sa.balance);
         }
 
         Ok(())
@@ -194,14 +194,14 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         sa.balance = sa.balance.checked_add(value).c(d!("balance overflow"))?;
         AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)?;
 
-        if CFG.enable_enterprise_web3 {
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = who.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut balance_map = BALANCE_MAP.lock().c(d!())?;
+            let target_slice: &[u8] = who.as_ref();
+            let target_h160 = H160::from_slice(&target_slice[4..24]);
 
-                balance_map.insert(target_h160, sa.balance);
-            }
+            balance_map.insert(target_h160, sa.balance);
         }
 
         Ok(())
