@@ -19,6 +19,7 @@ use core::{any::type_name, ops::Range};
 use ethereum_types::{H256, U256};
 use num::{BigUint, ToPrimitive};
 use std::{fmt::Debug, vec, vec::Vec};
+use tracing::trace;
 
 pub struct Bytes(Vec<u8>);
 pub trait ToBytes {
@@ -109,7 +110,7 @@ impl<'a> EvmDataReader2<'a> {
                 .map_err(|_| error("tried to parse selector out of bounds"))?,
         );
         T::try_from_primitive(u32::from_be_bytes(buffer)).map_err(|_| {
-            log::trace!(
+            trace!(
                 target: "precompile",
                 "Failed to match function selector for {}",
                 type_name::<T>()
