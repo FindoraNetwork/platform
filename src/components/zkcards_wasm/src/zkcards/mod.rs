@@ -13,6 +13,7 @@ use proof_essentials::{
     },
 };
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 // Choose elliptic curve setting
 // And instantiate concrete type for our card protocol
@@ -23,6 +24,7 @@ type CardProtocol<'a> = discrete_log_cards::DLCards<'a, Curve>;
 type Enc = ElGamal<Curve>;
 type Comm = PedersenCommitment<Curve>;
 
+#[wasm_bindgen]
 #[derive(Deserialize, Serialize)]
 pub struct CardParameters(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -53,6 +55,7 @@ pub type PlayerPublicKey = discrete_log_cards::PublicKey<Curve>;
 pub type PlayerSecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
 pub type AggregatePublicKey = discrete_log_cards::PublicKey<Curve>;
 
+#[wasm_bindgen]
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Card(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -69,6 +72,7 @@ impl From<Card> for discrete_log_cards::Card<Curve> {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
 pub struct MaskedCard(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -90,6 +94,7 @@ impl<'a> From<&'a MaskedCard> for &'a discrete_log_cards::MaskedCard<Curve> {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
 pub struct RevealToken(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -106,6 +111,7 @@ impl From<RevealToken> for discrete_log_cards::RevealToken<Curve> {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Copy, Clone, Deserialize, Serialize)]
 pub struct ProofKeyOwnership(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -122,6 +128,7 @@ impl From<ProofKeyOwnership> for schnorr_identification::proof::Proof<Curve> {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ProofReveal(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -138,6 +145,7 @@ impl From<ProofReveal> for chaum_pedersen_dl_equality::proof::Proof<Curve> {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Deserialize, Serialize)]
 pub struct ProofShuffle(
     #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -159,6 +167,7 @@ impl<'a> From<&'a ProofShuffle> for &'a shuffle::proof::Proof<Scalar, Enc, Comm>
     }
 }
 
+#[wasm_bindgen]
 //pub struct ProofMasking(chaum_pedersen_dl_equality::proof::Proof<Curve>);
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ProofRemasking(
@@ -176,6 +185,7 @@ impl From<ProofRemasking> for chaum_pedersen_dl_equality::proof::Proof<Curve> {
     }
 }
 
+//#[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct RevealedToken {
     pub token: RevealToken,

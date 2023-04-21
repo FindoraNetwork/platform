@@ -36,3 +36,9 @@ impl From<CardProtocolError> for GameErrors {
         Self::ProtocolError(value)
     }
 }
+
+impl From<CryptoError> for GameErrors {
+    fn from(value: CryptoError) -> Self {
+        Self::CryptoError(value)
+    }
+}
