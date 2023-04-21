@@ -37,7 +37,7 @@ config = { path = "../../../config"}
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 ledger = { path = "../../../../ledger" }
-enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
+enterprise-web3 = { path = "../../primitives/enterprise-web3" }
 
 
 [dev-dependencies]
@@ -49,5 +49,4 @@ module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"
 
 [features]
-web3_service = ["enterprise-web3"]
 benchmark = []
