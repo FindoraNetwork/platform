@@ -1,0 +1,69 @@
+[package]
+name = "zkcards-wasm"
+version = "0.1.0"
+authors = ["simonjiaoh@gmail.com"]
+build = "build.rs"
+edition = "2021"
+
+description = ""
+repository = ""
+license = ""
+
+# wasm-opt has a segfaulting issue. Disabling for now
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[dependencies]
+base64 = "0.12"
+hex = "0.4.2"
+js-sys = "0.3.27"
+rand_chacha = "0.2"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+rand = { version = "0.7", features = ["wasm-bindgen"] }
+serde = { version = "1.0.124", features = ["derive"] }
+serde_json = "1.0"
+wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
+
+ring = "0.16.19"
+aes-gcm = "0.9.0"
+bech32 = "0.7.2"
+
+# Must enable the "js"-feature,
+# OR the compiling will fail.
+getrandom = { version = "0.2", features = ["js"] }
+
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+
+ark-ff = "0.3.0"
+ark-std = { version = "0.3.0", features = ["std"] }
+ark-serialize = { version = "0.3.0", features = ["derive"] }
+proof-essentials = { git = "https://github.com/FindoraNetwork/proof-toolbox.git", branch = "findora" }
+starknet-curve = { git = "https://github.com/FindoraNetwork/proof-toolbox.git", branch = "findora" }
+barnett = { git = "https://github.com/simonjiao/mental-poker.git", branch = "develop", package = "barnett-smart-card-protocol" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/wasm.rs"
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+  'Headers',
+  'Request',
+  'RequestInit',
+  'RequestMode',
+  'Response',
+  'Window',
+  'console',
+]
+
+[build-dependencies]
+serde = "1.0.124"
+serde_json = "1.0.41"
+vergen = "=3.1.0"
+wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
+
+[dev-dependencies]
+# Must enable the "js"-feature,
+# OR the compiling will fail.
+getrandom = { version = "0.2", features = ["js"] }

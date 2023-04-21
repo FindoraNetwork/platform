@@ -4,6 +4,7 @@ members = [
     "src/components/finutils",
     "src/components/abciapp",
     "src/components/config",
+    "src/components/zkcards_wasm",
     "src/components/wasm",
     "src/components/wallet_mobile",
     "src/components/contracts/baseapp",
