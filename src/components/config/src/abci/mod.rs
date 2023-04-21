@@ -114,6 +114,9 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_fix_check_replay")]
     pub fix_check_replay: u64,
+
+    #[serde(default = "def_fns_registry")]
+    pub fns_registry: String,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -142,6 +145,10 @@ fn def_prism_bridge_address() -> String {
 
 fn def_remove_fake_staking_hash() -> u64 {
     DEFAULT_CHECKPOINT_CONFIG.remove_fake_staking_hash
+}
+
+fn def_fns_registry() -> String {
+    DEFAULT_CHECKPOINT_CONFIG.fns_registry.clone()
 }
 
 #[cfg(feature = "debug_env")]
@@ -175,7 +182,8 @@ lazy_static! {
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
-        fix_check_replay: 0
+        fix_check_replay: 0,
+        fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
     };
 }
 
@@ -210,7 +218,8 @@ lazy_static! {
         prismxx_inital_height: 4033522,
         prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
         remove_fake_staking_hash: 4033522,
-        fix_check_replay: 4033522
+        fix_check_replay: 4033522,
+        fns_registry: "".to_owned(),
     };
 }
 
