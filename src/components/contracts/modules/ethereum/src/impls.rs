@@ -247,12 +247,7 @@ impl<C: Config> App<C> {
                     } else {
                         None
                     };
-
-                    let logs = vec![ethereum::Log {
-                        address: source,
-                        topics: vec![],
-                        data: format!("{e}").as_str().into(),
-                    }];
+                    tracing::info!(target: "ethereum", "evm exec error:{:?}",e);
 
                     let reason = ExitReason::Fatal(ExitFatal::UnhandledInterrupt);
                     let data = vec![];
@@ -262,12 +257,8 @@ impl<C: Config> App<C> {
                         from: source,
                         to,
                         contract_address: None,
-                        logs: logs.clone(),
-                        logs_bloom: {
-                            let mut bloom: Bloom = Bloom::default();
-                            Self::logs_bloom(logs, &mut bloom);
-                            bloom
-                        },
+                        logs: vec![],
+                        logs_bloom: Bloom::default(),
                     };
                     let used_gas = U256::zero();
 
