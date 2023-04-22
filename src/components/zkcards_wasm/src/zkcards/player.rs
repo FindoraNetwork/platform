@@ -20,14 +20,16 @@ pub struct Player {
     name: Vec<u8>,
     sk: PlayerSecretKey,
     pk: PlayerPublicKey,
+    deck: Vec<MaskedCard>,
+    card_mappings: HashMap<Card, Vec<u8>>,
 }
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct Surrogate {
-    pub(crate) name: Vec<u8>,
-    pub(crate) pk: PlayerPublicKey,
-    pub(crate) proof_key: ProofKeyOwnership,
+    name: Vec<u8>,
+    pk: PlayerPublicKey,
+    proof_key: ProofKeyOwnership,
 }
 
 impl Surrogate {
@@ -53,6 +55,8 @@ impl Player {
             name: name.clone(),
             sk,
             pk: PlayerPublicKey(pk),
+            deck: vec![],
+            card_mappings: HashMap::new(),
         })
     }
 
@@ -128,14 +132,22 @@ impl Player {
         .map_err(|e| GameErrors::CryptoError(e))
     }
 
+    pub(crate) fn add_deck(&mut self, deck: Vec<MaskedCard>) {
+        self.deck = deck;
+    }
+
+    pub(crate) fn add_card_mappings(&mut self, mappings: HashMap<Card, Vec<u8>>) {
+        self.card_mappings = mappings
+    }
+
     pub fn peek_at_card(
+        &self,
         parameters: &CardParameters,
         reveal_tokens: &Vec<RevealedToken>,
-        card_mappings: &HashMap<Card, Vec<u8>>,
         card: &MaskedCard,
-        cards: &Vec<MaskedCard>,
     ) -> Result<Vec<u8>> {
-        let _ = cards
+        let _ = self
+            .deck
             .iter()
             .position(|&x| x == *card)
             .ok_or(GameErrors::CardNotFound)?;
@@ -147,7 +159,8 @@ impl Player {
 
         let unmasked_card =
             CardProtocol::unmask(parameters.into(), &raw_reveal_tokens, card.into())?;
-        let opened_card = card_mappings
+        let opened_card = self
+            .card_mappings
             .get(&unmasked_card.into())
             .ok_or(GameErrors::InvalidCard)?;
 

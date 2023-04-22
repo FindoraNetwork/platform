@@ -1,10 +1,6 @@
 //!
 //! Interface for issuing transactions that can be compiled to Wasm.
 //!
-//! Allows web clients to issue transactions from a browser contexts.
-//!
-//! For now, forwards transactions to a ledger hosted locally.
-//!
 //! To compile wasm package, run wasm-pack build in the wasm directory.
 //!
 
@@ -12,6 +8,7 @@
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
+//todo: reduce se/de operations
 //todo: remove `unwrap`
 //todo: more comments
 
@@ -23,7 +20,6 @@ use crate::zkcards::{
 };
 use rand::thread_rng;
 use std::collections::HashMap;
-use std::hash::Hash;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -34,7 +30,7 @@ pub fn new_player(pp: CardParameters, name: Vec<u8>) -> Player {
 }
 
 #[wasm_bindgen]
-/// generate a `surrogate` with `ProofKeyOwnerShip` as this player's behave
+/// generate a `surrogate` with `ProofKeyOwnerShip` on the player's behave
 pub fn new_surrogate(player: &Player, pp: &CardParameters) -> Surrogate {
     player.new_surrogate(pp)
 }
@@ -54,11 +50,7 @@ pub fn shuffle(
     joint_pk: &AggregatePublicKey,
     nums_of_cards: usize,
 ) -> JsValue {
-    let raw_deck: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(deck).unwrap();
-    let deck = raw_deck
-        .into_iter()
-        .map(|c| serde_json::from_slice(c.as_slice()).unwrap())
-        .collect::<Vec<MaskedCard>>();
+    let deck: Vec<MaskedCard> = serde_wasm_bindgen::from_value(deck).unwrap();
     let (tokens, proof) = player.shuffle(pp, &deck, joint_pk, nums_of_cards).unwrap();
     let res = ShuffleResult { tokens, proof };
 
@@ -74,18 +66,10 @@ pub fn verify_shuffle(
     shuffled_deck: JsValue,
     proof_shuffle: &ProofShuffle,
 ) -> bool {
-    let raw_original_deck: Vec<Vec<u8>> =
+    let original_deck: Vec<MaskedCard> =
         serde_wasm_bindgen::from_value(original_deck).unwrap();
-    let original_deck = raw_original_deck
-        .into_iter()
-        .map(|c| serde_json::from_slice(c.as_slice()).unwrap())
-        .collect::<Vec<MaskedCard>>();
-    let raw_shuffled_deck: Vec<Vec<u8>> =
+    let shuffled_deck: Vec<MaskedCard> =
         serde_wasm_bindgen::from_value(shuffled_deck).unwrap();
-    let shuffled_deck = raw_shuffled_deck
-        .into_iter()
-        .map(|c| serde_json::from_slice(c.as_slice()).unwrap())
-        .collect::<Vec<MaskedCard>>();
 
     Player::verify_shuffle(
         parameters,
@@ -95,6 +79,23 @@ pub fn verify_shuffle(
         proof_shuffle,
     )
     .is_ok()
+}
+
+#[wasm_bindgen]
+/// Register initial card mappings received from game conract or server
+pub fn add_card_mappings(player: &mut Player, mappings: JsValue) {
+    let mappings: HashMap<Card, Vec<u8>> =
+        serde_wasm_bindgen::from_value(mappings).unwrap();
+
+    player.add_card_mappings(mappings);
+}
+
+#[wasm_bindgen]
+/// Register final deck received from game conract or server
+pub fn add_final_deck(player: &mut Player, deck: JsValue) {
+    let final_deck: Vec<MaskedCard> = serde_wasm_bindgen::from_value(deck).unwrap();
+
+    player.add_deck(final_deck);
 }
 
 #[wasm_bindgen]
@@ -111,28 +112,16 @@ pub fn compute_reveal_token(
 #[wasm_bindgen]
 /// open a card
 pub fn open_card(
+    player: &Player,
     parameters: &CardParameters,
     reveal_tokens: JsValue,
-    card_mappings: JsValue,
     card: &MaskedCard,
-    cards: JsValue,
 ) -> JsValue {
-    let raw_reveal_tokens: Vec<Vec<u8>> =
+    let reveal_tokens: Vec<RevealedToken> =
         serde_wasm_bindgen::from_value(reveal_tokens).unwrap();
-    let reveal_tokens = raw_reveal_tokens
-        .into_iter()
-        .map(|c| serde_json::from_slice(c.as_slice()).unwrap())
-        .collect::<Vec<RevealedToken>>();
-    let card_mappings: HashMap<Card, Vec<u8>> =
-        serde_wasm_bindgen::from_value(card_mappings).unwrap();
-    let raw_cards: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(cards).unwrap();
-    let cards = raw_cards
-        .into_iter()
-        .map(|c| serde_json::from_slice(c.as_slice()).unwrap())
-        .collect::<Vec<MaskedCard>>();
 
-    let play_card =
-        Player::peek_at_card(parameters, &reveal_tokens, &card_mappings, card, &cards)
-            .unwrap();
+    let play_card = player
+        .peek_at_card(parameters, &reveal_tokens, card)
+        .unwrap();
     serde_wasm_bindgen::to_value(&play_card).unwrap()
 }
