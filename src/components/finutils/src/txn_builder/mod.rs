@@ -61,7 +61,6 @@ use {
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
-            TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         keys::SecretKey,
         parameters::{AddressFormat, ProverParams},
@@ -451,7 +450,6 @@ impl TransactionBuilder {
                     SecretKey::Secp256k1(_) => {
                         if abar_bar_params[0].is_none() {
                             abar_bar_params[0] = Some(ProverParams::gen_abar_to_bar(
-                                MERKLE_TREE_DEPTH,
                                 AddressFormat::SECP256K1,
                             )?);
                         }
@@ -460,7 +458,6 @@ impl TransactionBuilder {
                     SecretKey::Ed25519(_) => {
                         if abar_bar_params[1].is_none() {
                             abar_bar_params[1] = Some(ProverParams::gen_abar_to_bar(
-                                MERKLE_TREE_DEPTH,
                                 AddressFormat::ED25519,
                             )?);
                         }
@@ -496,7 +493,6 @@ impl TransactionBuilder {
                     SecretKey::Secp256k1(_) => {
                         if abar_ar_params[0].is_none() {
                             abar_ar_params[0] = Some(ProverParams::gen_abar_to_bar(
-                                MERKLE_TREE_DEPTH,
                                 AddressFormat::SECP256K1,
                             )?);
                         }
@@ -505,7 +501,6 @@ impl TransactionBuilder {
                     SecretKey::Ed25519(_) => {
                         if abar_ar_params[1].is_none() {
                             abar_ar_params[1] = Some(ProverParams::gen_abar_to_bar(
-                                MERKLE_TREE_DEPTH,
                                 AddressFormat::ED25519,
                             )?);
                         }
