@@ -64,9 +64,9 @@ use {
                 AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
                 Nullifier,
             },
-            TREE_DEPTH as MERKLE_TREE_DEPTH,
+            AXfrAddressFoldingInstance, TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
-        setup::VerifierParams,
+        parameters::{AddressFormat, VerifierParams},
         xfr::{
             structs::{TracingPolicies, TracingPolicy},
             XfrNotePolicies,
@@ -1648,9 +1648,14 @@ impl LedgerStatus {
                 }
             }
 
-            let verifier_params = VerifierParams::load(
+            let af = match axfr_note.folding_instance {
+                AXfrAddressFoldingInstance::Secp256k1(_) => AddressFormat::SECP256K1,
+                AXfrAddressFoldingInstance::Ed25519(_) => AddressFormat::ED25519,
+            };
+            let verifier_params = VerifierParams::get_abar_to_abar(
                 axfr_note.body.inputs.len(),
                 axfr_note.body.outputs.len(),
+                af,
             )?;
             let abar_version = axfr_note.body.merkle_root_version;
             if abar_mt.version() - abar_version > VERSION_WINDOW {
