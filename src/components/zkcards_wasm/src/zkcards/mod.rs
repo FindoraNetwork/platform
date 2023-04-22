@@ -2,6 +2,9 @@ mod error;
 mod player;
 mod user_card;
 
+pub use player::*;
+pub use user_card::*;
+
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use barnett::discrete_log_cards;
 use proof_essentials::{
@@ -51,9 +54,20 @@ impl<'a> From<&'a CardParameters> for &'a discrete_log_cards::Parameters<Curve> 
     }
 }
 
-pub type PlayerPublicKey = discrete_log_cards::PublicKey<Curve>;
-pub type PlayerSecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
-pub type AggregatePublicKey = discrete_log_cards::PublicKey<Curve>;
+type PlayerSecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct PlayerPublicKey(
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub(crate)  discrete_log_cards::PublicKey<Curve>,
+);
+#[wasm_bindgen]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AggregatePublicKey(
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub(crate)  discrete_log_cards::PublicKey<Curve>,
+);
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
@@ -70,6 +84,11 @@ impl From<Card> for discrete_log_cards::Card<Curve> {
     fn from(value: Card) -> Self {
         value.0
     }
+}
+
+#[wasm_bindgen]
+pub struct MaskedCards {
+    inner: Vec<MaskedCard>,
 }
 
 #[wasm_bindgen]
@@ -167,7 +186,6 @@ impl<'a> From<&'a ProofShuffle> for &'a shuffle::proof::Proof<Scalar, Enc, Comm>
     }
 }
 
-#[wasm_bindgen]
 //pub struct ProofMasking(chaum_pedersen_dl_equality::proof::Proof<Curve>);
 #[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ProofRemasking(
@@ -185,13 +203,24 @@ impl From<ProofRemasking> for chaum_pedersen_dl_equality::proof::Proof<Curve> {
     }
 }
 
-//#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct ShuffleResult {
+    pub tokens: Vec<MaskedCard>,
+    pub proof: ProofShuffle,
+}
+
+impl ShuffleResult {
+    pub fn new(tokens: Vec<MaskedCard>, proof: ProofShuffle) -> Self {
+        Self { tokens, proof }
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct RevealedToken {
-    pub token: RevealToken,
-    pub proof: ProofReveal,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub player: PlayerPublicKey,
+    pub(crate) token: RevealToken,
+    pub(crate) proof: ProofReveal,
+    pub(crate) player: PlayerPublicKey,
 }
 
 fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
