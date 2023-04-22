@@ -19,10 +19,10 @@ num_enum = { version = "0.5.4", default-features = false }
 slices = "0.2.0"
 config = { path = "../../../../../config" }
 num = { version = "0.3", features = ["alloc"] }
-starknet-curve = { git = "https://github.com/geometryresearch/proof-toolbox.git" }
-barnett-smart-card-protocol = { git = "https://github.com/HarryLiIsMe/mental-poker.git", branch = "mercury-fix" }
+starknet-curve = { git = "https://github.com/geometryresearch/proof-toolbox.git", branch = "fix/schnorr_affine" }
+barnett-smart-card-protocol = { git = "https://github.com/FindoraNetwork/mental-poker.git", branch = "mercury-serialize-error-fix" }
 ark-serialize = "0.3.0"
-proof-essentials = { git = "https://github.com/FindoraNetwork/proof-toolbox.git", branch = "findora" }
+proof-essentials = { git = "https://github.com/HarryLiIsMe/findora-proof-toolbox.git", branch = "findora" }
 ark-ec = "0.3.0"
 rand = "0.8"
 ark-std = { version = "0.3.0", features = ["std"] }
