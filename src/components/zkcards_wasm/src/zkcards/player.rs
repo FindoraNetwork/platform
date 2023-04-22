@@ -33,26 +33,22 @@ pub struct Surrogate {
 }
 
 impl Surrogate {
-    pub fn verify(&self, pp: &CardParameters) -> bool {
+    pub fn verify(&self, pp: &CardParameters) -> Result<()> {
         CardProtocol::verify_key_ownership(
             pp.into(),
             &self.pk.0,
             &self.name,
             &self.proof_key.into(),
-        )
-        .is_ok()
+        )?;
+        Ok(())
     }
 }
 
 impl Player {
-    pub fn new<R: Rng>(
-        rng: &mut R,
-        pp: &CardParameters,
-        name: &Vec<u8>,
-    ) -> Result<Self> {
+    pub fn new<R: Rng>(rng: &mut R, pp: &CardParameters, name: &[u8]) -> Result<Self> {
         let (pk, sk) = CardProtocol::player_keygen(rng, pp.into())?;
         Ok(Self {
-            name: name.clone(),
+            name: name.to_owned(),
             sk,
             pk: PlayerPublicKey(pk),
             deck: vec![],
@@ -60,7 +56,7 @@ impl Player {
         })
     }
 
-    pub fn new_surrogate(&self, pp: &CardParameters) -> Surrogate {
+    pub fn new_surrogate(&self, pp: &CardParameters) -> Result<Surrogate> {
         let rng = &mut thread_rng();
         let proof_key = CardProtocol::prove_key_ownership(
             rng,
@@ -68,14 +64,13 @@ impl Player {
             &self.pk.0,
             &self.sk,
             &self.name,
-        )
-        .unwrap();
+        )?;
 
-        Surrogate {
+        Ok(Surrogate {
             name: self.name.clone(),
             pk: self.pk,
             proof_key: proof_key.into(),
-        }
+        })
     }
 
     pub fn shuffle(

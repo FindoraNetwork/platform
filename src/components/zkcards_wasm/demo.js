@@ -1,5 +1,5 @@
 // Call 'wasm-pack build --target nodejs' to build from this directory for this command to work
-const wasm = require('./pkg/wasm.js');
+const wasm = require('./pkg/zkcards_wasm.js');
 const axios = require('axios');
 const HOST = "localhost";
 const SUBMISSION_PORT = "8669";
