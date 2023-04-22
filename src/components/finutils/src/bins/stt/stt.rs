@@ -42,7 +42,7 @@ const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge b
 type Name = String;
 type NameRef<'a> = &'a str;
 
-#[macro_export(crate)]
+#[macro_export]
 macro_rules! sleep_n_block {
     ($n_block: expr, $itv: expr) => {{
         let n = $n_block as f64;

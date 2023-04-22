@@ -13,7 +13,7 @@ use evm_precompile_utils::{
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 use num::Zero;
 use rand::thread_rng;
-use slices::u8_slice;
+// use slices::u8_slice;
 use std::vec;
 use tracing::debug;
 
@@ -56,31 +56,6 @@ type CRevealProof = ProofB<CCurve>;
 type CProof = ProofC<CCurve>;
 type CCard = Card<CCurve>;
 
-/// ZkCard transfer event selector, Keccak256("Transfer(address,address,uint256)")
-///
-/// event Transfer(address indexed from, address indexed to, uint256 value);
-pub const TRANSFER_EVENT_SELECTOR: &[u8; 32] =
-    u8_slice!("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
-
-/// ZkCard approval event selector, Keccak256("Approval(address,address,uint256)")
-///
-/// event Approval(address indexed owner, address indexed spender, uint256 value);
-pub const APPROVAL_EVENT_SELECTOR: &[u8; 32] =
-    u8_slice!("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925");
-
-/// b"Findora"
-pub const ZKCARD_NAME: &[u8; 96] = u8_slice!(
-    "0x00000000000000000000000000000000000000000000000000000000000000200000000000000\
-    00000000000000000000000000000000000000000000000000746696e646f7261000000000000000\
-    00000000000000000000000000000000000"
-);
-
-/// b"FRA"
-pub const ZKCARD_SYMBOL: &[u8; 96] = u8_slice!(
-    "0x00000000000000000000000000000000000000000000000000000000000000200000000000000\
-    00000000000000000000000000000000000000000000000000346524100000000000000000000000\
-    00000000000000000000000000000000000"
-);
 
 // The gas used value is obtained according to the standard erc20 call.
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
