@@ -117,6 +117,12 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_fns_registry")]
     pub fns_registry: String,
+
+    #[serde(default = "def_lowlevel_data_min")]
+    pub lowlevel_data_min: u64,
+
+    #[serde(default = "def_lowlevel_data_max")]
+    pub lowlevel_data_max: u64,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -149,6 +155,14 @@ fn def_remove_fake_staking_hash() -> u64 {
 
 fn def_fns_registry() -> String {
     DEFAULT_CHECKPOINT_CONFIG.fns_registry.clone()
+}
+
+fn def_lowlevel_data_min() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.lowlevel_data_min
+}
+
+fn def_lowlevel_data_max() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.lowlevel_data_max
 }
 
 #[cfg(feature = "debug_env")]
@@ -184,6 +198,8 @@ lazy_static! {
         remove_fake_staking_hash: 0,
         fix_check_replay: 0,
         fns_registry: "".to_owned(),
+        lowlevel_data_min: 0,
+        lowlevel_data_max: 0,
     };
 }
 
@@ -220,6 +236,8 @@ lazy_static! {
         remove_fake_staking_hash: 4033522,
         fix_check_replay: 4033522,
         fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
+        lowlevel_data_min: 3971239,
+        lowlevel_data_max: 4033522,
     };
 }
 
