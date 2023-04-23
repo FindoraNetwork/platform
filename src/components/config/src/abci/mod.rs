@@ -183,7 +183,7 @@ lazy_static! {
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
         fix_check_replay: 0,
-        fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
+        fns_registry: "".to_owned(),
     };
 }
 
@@ -219,7 +219,7 @@ lazy_static! {
         prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
         remove_fake_staking_hash: 4033522,
         fix_check_replay: 4033522,
-        fns_registry: "".to_owned(),
+        fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
     };
 }
 
