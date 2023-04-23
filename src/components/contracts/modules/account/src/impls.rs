@@ -59,7 +59,6 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         let mut from_account =
             Self::account_of(ctx, sender, None).c(d!("sender does not exist"))?;
         let mut to_account = Self::account_of(ctx, dest, None).unwrap_or_default();
-
         from_account.balance = from_account
             .balance
             .checked_sub(balance)
