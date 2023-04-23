@@ -97,6 +97,13 @@ use {
 /// against.
 const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
 
+/// Init noah anon xfr
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn init_noah() -> Result<(), JsValue> {
+    zei::noah_api::anon_xfr::init_anon_xfr().await
+}
+
 #[wasm_bindgen]
 /// Returns the git commit hash and commit date of the commit this library was built against.
 pub fn build_id() -> String {
