@@ -61,9 +61,9 @@ use {
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
-            TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
-        setup::ProverParams,
+        keys::SecretKey,
+        parameters::{AddressFormat, ProverParams},
         xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
@@ -413,17 +413,17 @@ impl TransactionBuilder {
 
         // finish abar to abar
         if !self.abar_abar_cache.is_empty() {
-            let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
+            let mut params: HashMap<(usize, usize, u8), ProverParams> = HashMap::new();
             for pre_note in &self.abar_abar_cache {
-                let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
+                let (af, ak) = match pre_note.input_keypair.get_sk_ref() {
+                    SecretKey::Secp256k1(_) => (AddressFormat::SECP256K1, 0),
+                    SecretKey::Ed25519(_) => (AddressFormat::ED25519, 1),
+                };
+                let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len(), ak);
                 let param = if let Some(key) = params.get(&key) {
                     key
                 } else {
-                    let param = ProverParams::new(
-                        key.0,
-                        key.1,
-                        Option::from(MERKLE_TREE_DEPTH),
-                    )?;
+                    let param = ProverParams::gen_abar_to_abar(key.0, key.1, af)?;
                     params.insert(key, param);
                     params.get(&key).unwrap() // safe, checked.
                 };
@@ -444,11 +444,30 @@ impl TransactionBuilder {
 
         // finish abar to bar
         if !self.abar_bar_cache.is_empty() {
-            let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+            let mut abar_bar_params = [None, None];
             for pre_note in &self.abar_bar_cache {
+                let params = match pre_note.input_keypair.get_sk_ref() {
+                    SecretKey::Secp256k1(_) => {
+                        if abar_bar_params[0].is_none() {
+                            abar_bar_params[0] = Some(ProverParams::gen_abar_to_bar(
+                                AddressFormat::SECP256K1,
+                            )?);
+                        }
+                        abar_bar_params[0].as_ref()
+                    }
+                    SecretKey::Ed25519(_) => {
+                        if abar_bar_params[1].is_none() {
+                            abar_bar_params[1] = Some(ProverParams::gen_abar_to_bar(
+                                AddressFormat::ED25519,
+                            )?);
+                        }
+                        abar_bar_params[1].as_ref()
+                    }
+                };
+
                 let note = finish_abar_to_bar_note(
                     &mut prng,
-                    &params,
+                    params.unwrap(),
                     pre_note.clone(),
                     hasher.clone(),
                 )?;
@@ -468,11 +487,29 @@ impl TransactionBuilder {
 
         // finish abar to ar
         if !self.abar_ar_cache.is_empty() {
-            let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
+            let mut abar_ar_params = [None, None];
             for pre_note in &self.abar_ar_cache {
+                let params = match pre_note.input_keypair.get_sk_ref() {
+                    SecretKey::Secp256k1(_) => {
+                        if abar_ar_params[0].is_none() {
+                            abar_ar_params[0] = Some(ProverParams::gen_abar_to_bar(
+                                AddressFormat::SECP256K1,
+                            )?);
+                        }
+                        abar_ar_params[0].as_ref()
+                    }
+                    SecretKey::Ed25519(_) => {
+                        if abar_ar_params[1].is_none() {
+                            abar_ar_params[1] = Some(ProverParams::gen_abar_to_bar(
+                                AddressFormat::ED25519,
+                            )?);
+                        }
+                        abar_ar_params[1].as_ref()
+                    }
+                };
                 let note = finish_abar_to_ar_note(
                     &mut prng,
-                    &params,
+                    params.unwrap(),
                     pre_note.clone(),
                     hasher.clone(),
                 )?;
@@ -1071,7 +1108,7 @@ fn gen_bar_conv_note(
     let mut prng = ChaChaRng::from_seed(seed);
 
     if is_bar_transparent {
-        let prover_params = ProverParams::ar_to_abar_params()?;
+        let prover_params = ProverParams::gen_ar_to_abar()?;
 
         // generate the BarToAbarNote with the ZKP
         let note = gen_ar_to_abar_note(
@@ -1087,7 +1124,7 @@ fn gen_bar_conv_note(
         Ok((BarAnonConvNote::ArNote(Box::new(note)), c))
     } else {
         // generate params for Bar to Abar conversion
-        let prover_params = ProverParams::bar_to_abar_params()?;
+        let prover_params = ProverParams::gen_bar_to_abar()?;
 
         // generate the BarToAbarNote with the ZKP
         let note = gen_bar_to_abar_note(
@@ -1775,13 +1812,14 @@ impl AnonTransferOperationBuilder {
     /// Add operation to the transaction
     pub fn build_txn(&mut self) -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
-        let param = ProverParams::new(
-            self.inputs.len(),
-            self.outputs.len(),
-            Some(MERKLE_TREE_DEPTH),
-        )?;
-
         let pre_note = self.pre_note.clone().unwrap();
+        let af = match pre_note.input_keypair.get_sk_ref() {
+            SecretKey::Secp256k1(_) => AddressFormat::SECP256K1,
+            SecretKey::Ed25519(_) => AddressFormat::ED25519,
+        };
+        let param =
+            ProverParams::gen_abar_to_abar(self.inputs.len(), self.outputs.len(), af)?;
+
         let mut hasher = Sha512::new();
 
         let mut bytes = self.txn.body.digest();
