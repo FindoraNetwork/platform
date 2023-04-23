@@ -34,7 +34,7 @@ use {
             abar_to_abar::AXfrNote,
             structs::{AnonAssetRecord, Nullifier},
         },
-        setup::BulletproofParams,
+        parameters::bulletproofs::BulletproofParams,
         xfr::{
             structs::{XfrAmount, XfrAssetType},
             verify_xfr_body,
