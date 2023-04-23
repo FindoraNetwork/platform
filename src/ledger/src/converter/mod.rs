@@ -1,22 +1,40 @@
 //! Multi Signer operation for transaction.
 
-use crate::data_model::{
-    NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
-};
-use config::abci::global_cfg::CFG;
-use fp_types::{crypto::MultiSigner, H160};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use zei::xfr::{
-    sig::XfrPublicKey,
-    structs::{AssetType, XfrAmount, XfrAssetType},
+use {
+    crate::{
+        data_model::{
+            NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY_STAKING,
+        },
+        LEDGER_TENDERMINT_BLOCK_HEIGHT,
+    },
+    config::abci::global_cfg::CFG,
+    fp_types::{crypto::MultiSigner, H160},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::sync::atomic::Ordering,
+    zei::xfr::{
+        sig::XfrPublicKey,
+        structs::{AssetType, XfrAmount, XfrAssetType},
+    },
 };
 
 #[inline(always)]
 fn is_empty(x: &Option<Vec<u8>>) -> bool {
-    match x {
-        Some(v) => !v.is_empty(),
-        None => false,
+    let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64;
+
+    if td_height > CFG.checkpoint.lowlevel_data_min
+        && td_height < CFG.checkpoint.lowlevel_data_max
+    {
+        match x {
+            Some(v) => !v.is_empty(),
+            None => false,
+        }
+    } else {
+        match x {
+            Some(v) => v.is_empty(),
+            None => true,
+        }
     }
 }
 /// Use this operation to transfer.

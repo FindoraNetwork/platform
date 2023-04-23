@@ -34,6 +34,7 @@ use {
             api_cache,
             fbnc::{new_mapx, Mapx},
         },
+        LEDGER_TENDERMINT_BLOCK_HEIGHT,
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -84,6 +85,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
+    LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     resp.set_last_block_height(h);
     if 0 < h {
         if CFG.checkpoint.disable_evm_block_height < h
@@ -223,7 +225,7 @@ pub fn begin_block(
 
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
-
+    LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
     *REQ_BEGIN_BLOCK.lock() = req.clone();
 
     let mut la = s.la.write();
