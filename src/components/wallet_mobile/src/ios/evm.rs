@@ -1,22 +1,19 @@
-use std::os::raw::c_char;
-use zei::noah_api::keys::PublicKey;
-
+use super::parse_u64;
 use crate::rust::{
     self, account::EVMTransactionBuilder, c_char_to_string, string_to_c_char,
 };
-
-use super::parse_u64;
-
 use fp_types::U256;
+use std::os::raw::c_char;
+use zei::{noah_api::keys::PublicKey, XfrPublicKey};
 
 #[no_mangle]
 /// Construct a serialzed EVM Transaction that transfer account balance to UTXO.
-/// @param {XfrPublicKey} recipient - UTXO Asset receiver.
+/// @param {PublicKey} recipient - UTXO Asset receiver.
 /// @param {u64} amount - Transfer amount.
 /// @param {string} sk - Ethereum wallet private key.
 /// @param {U256} nonce - Transaction nonce for sender.
 pub extern "C" fn findora_ffi_transfer_to_utxo_from_account(
-    recipient: &XfrPublicKey,
+    recipient: &PublicKey,
     amount: *const c_char,
     sk: *const c_char,
     nonce: *const c_char,
@@ -35,7 +32,7 @@ pub extern "C" fn findora_ffi_transfer_to_utxo_from_account(
     let sk = c_char_to_string(sk);
 
     match EVMTransactionBuilder::new_transfer_to_utxo_from_account(
-        *recipient,
+        XfrPublicKey::from_noah(recipient).unwrap(),
         parse_u64(amount),
         sk,
         nonce,

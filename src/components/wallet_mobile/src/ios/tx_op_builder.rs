@@ -1,9 +1,11 @@
-use std::os::raw::c_char;
-use zei::noah_api::keys::{KeyPair, PublicKey};
-
 use super::parse_u64;
 use crate::rust::TransferOperationBuilder;
 use crate::rust::*;
+use std::os::raw::c_char;
+use zei::{
+    noah_api::keys::{KeyPair, PublicKey},
+    XfrKeyPair, XfrPublicKey,
+};
 
 #[no_mangle]
 /// Create a new transfer operation builder.
@@ -32,7 +34,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_t
     asset_record: *const ClientAssetRecord,
     owner_memo: *const OwnerMemo,
     tracing_policies: *const TracingPolicies,
-    key: *const XfrKeyPair,
+    key: *const KeyPair,
     amount: *const c_char,
 ) -> *mut TransferOperationBuilder {
     let amount = parse_u64(amount);
@@ -46,7 +48,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_t
         (*asset_record).clone(),
         memo,
         &*tracing_policies,
-        &*key,
+        &XfrKeyPair::from_noah(&*key).unwrap(),
         amount,
     ) {
         Box::into_raw(Box::new(info))
@@ -64,7 +66,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
     txo_ref: *const TxoRef,
     asset_record: *const ClientAssetRecord,
     owner_memo: *const OwnerMemo,
-    key: *const XfrKeyPair,
+    key: *const KeyPair,
     amount: *const c_char,
 ) -> *mut TransferOperationBuilder {
     let amount = parse_u64(amount);
@@ -77,7 +79,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
         *txo_ref,
         &*asset_record,
         memo,
-        &*key,
+        &XfrKeyPair::from_noah(&*key).unwrap(),
         amount,
     ) {
         Box::into_raw(Box::new(info))
@@ -93,7 +95,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_tracing(
     builder: *const TransferOperationBuilder,
     amount: *const c_char,
-    recipient: *const XfrPublicKey,
+    recipient: *const PublicKey,
     tracing_policies: *const TracingPolicies,
     code: *const c_char,
     conf_amount: bool,
@@ -102,7 +104,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_
     let amount = parse_u64(amount);
     if let Ok(info) = (*builder).clone().add_output_with_tracing(
         amount,
-        &*recipient,
+        &XfrPublicKey::from_noah(&*recipient).unwrap(),
         &*tracing_policies,
         c_char_to_string(code),
         conf_amount,
@@ -121,7 +123,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tracing(
     builder: *const TransferOperationBuilder,
     amount: *const c_char,
-    recipient: &XfrPublicKey,
+    recipient: &PublicKey,
     code: *const c_char,
     conf_amount: bool,
     conf_type: bool,
@@ -129,7 +131,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tr
     let amount = parse_u64(amount);
     if let Ok(info) = (*builder).clone().add_output_no_tracing(
         amount,
-        &*recipient,
+        &XfrPublicKey::from_noah(&*recipient).unwrap(),
         c_char_to_string(code),
         conf_amount,
         conf_type,
@@ -178,9 +180,12 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_create(
 /// All input owners must sign.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_sign(
     builder: *const TransferOperationBuilder,
-    kp: *const XfrKeyPair,
+    kp: *const KeyPair,
 ) -> *mut TransferOperationBuilder {
-    if let Ok(info) = (*builder).clone().sign(&*kp) {
+    if let Ok(info) = (*builder)
+        .clone()
+        .sign(&XfrKeyPair::from_noah(&*kp).unwrap())
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
