@@ -13,7 +13,7 @@ use rand_core::SeedableRng;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
-use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::{noah_api::xfr::structs::ASSET_TYPE_LENGTH, XfrKeyPair, XfrPublicKey};
 
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.
@@ -60,7 +60,7 @@ pub extern "C" fn findora_ffi_verify_authenticated_txn(
 
 #[no_mangle]
 pub extern "C" fn findora_ffi_get_null_pk() -> *mut types::XfrPublicKey {
-    let pk = get_null_pk().into();
+    let pk = types::XfrPublicKey::from(get_null_pk().into_noah().unwrap());
     Box::into_raw(Box::new(pk))
 }
 
@@ -162,7 +162,11 @@ pub extern "C" fn findora_ffi_keypair_from_str(
     key_pair_str: *const c_char,
 ) -> *mut types::XfrKeyPair {
     assert!(!key_pair_str.is_null());
-    let val = types::XfrKeyPair::from(keypair_from_str(c_char_to_string(key_pair_str)));
+    let val = types::XfrKeyPair::from(
+        keypair_from_str(c_char_to_string(key_pair_str))
+            .into_noah()
+            .unwrap(),
+    );
 
     let boxed_data = Box::new(val);
     Box::into_raw(boxed_data)
@@ -177,7 +181,9 @@ pub unsafe extern "C" fn findora_ffi_public_key_to_bech32(
 ) -> *mut c_char {
     assert!(!key.is_null());
 
-    string_to_c_char(public_key_to_bech32(&*key))
+    string_to_c_char(public_key_to_bech32(
+        &XfrPublicKey::from_noah(&*key).unwrap(),
+    ))
 }
 
 #[no_mangle]
@@ -189,7 +195,7 @@ pub unsafe extern "C" fn findora_ffi_get_pub_key_str(
 ) -> *mut c_char {
     assert!(!key.is_null());
 
-    string_to_c_char(get_pub_key_str(&*key))
+    string_to_c_char(get_pub_key_str(&XfrKeyPair::from_noah(&*key).unwrap()))
 }
 
 #[no_mangle]
@@ -201,7 +207,7 @@ pub unsafe extern "C" fn findora_ffi_get_priv_key_str(
 ) -> *mut c_char {
     assert!(!key.is_null());
 
-    string_to_c_char(get_priv_key_str(&*key))
+    string_to_c_char(get_priv_key_str(&XfrKeyPair::from_noah(&*key).unwrap()))
 }
 
 #[no_mangle]
@@ -217,7 +223,7 @@ pub unsafe extern "C" fn findora_ffi_restore_keypair_from_mnemonic_default(
     if let Ok(info) =
         rs_restore_keypair_from_mnemonic_default(c_char_to_string(phrase).as_str())
     {
-        let boxed_data = Box::new(types::XfrKeyPair::from(info));
+        let boxed_data = Box::new(types::XfrKeyPair::from(info.into_noah().unwrap()));
         Box::into_raw(boxed_data)
     } else {
         ptr::null_mut()
@@ -234,7 +240,7 @@ pub unsafe extern "C" fn findora_ffi_keypair_to_str(
 ) -> *mut c_char {
     // assert!(!key_pair.is_null());
 
-    string_to_c_char(keypair_to_str(&*key_pair))
+    string_to_c_char(keypair_to_str(&XfrKeyPair::from_noah(&*key_pair).unwrap()))
 }
 
 #[no_mangle]
@@ -246,7 +252,7 @@ pub unsafe extern "C" fn findora_ffi_create_keypair_from_secret(
     assert!(!sk_str.is_null());
 
     if let Some(info) = create_keypair_from_secret(c_char_to_string(sk_str)) {
-        let boxed_data = Box::new(types::XfrKeyPair::from(info));
+        let boxed_data = Box::new(types::XfrKeyPair::from(info.into_noah().unwrap()));
         Box::into_raw(boxed_data)
     } else {
         ptr::null_mut()
@@ -261,8 +267,11 @@ pub unsafe extern "C" fn findora_ffi_get_pk_from_keypair(
 ) -> *mut types::XfrPublicKey {
     assert!(!key_pair.is_null());
 
-    let boxed_data =
-        Box::new(types::XfrPublicKey::from(get_pk_from_keypair(&*key_pair)));
+    let boxed_data = Box::new(types::XfrPublicKey::from(
+        get_pk_from_keypair(&XfrKeyPair::from_noah(&*key_pair).unwrap())
+            .into_noah()
+            .unwrap(),
+    ));
     Box::into_raw(boxed_data)
 }
 
@@ -271,7 +280,8 @@ pub unsafe extern "C" fn findora_ffi_get_pk_from_keypair(
 ///
 /// Creates a new transfer key pair.
 pub unsafe extern "C" fn findora_ffi_new_keypair() -> *mut types::XfrKeyPair {
-    let boxed_data = Box::new(types::XfrKeyPair::from(new_keypair()));
+    let boxed_data =
+        Box::new(types::XfrKeyPair::from(new_keypair().into_noah().unwrap()));
     Box::into_raw(boxed_data)
 }
 
@@ -334,7 +344,9 @@ pub unsafe extern "C" fn findora_ffi_public_key_from_base64(
 ) -> *mut types::XfrPublicKey {
     let pk = CStr::from_ptr(pk);
     if let Ok(info) = rs_public_key_from_base64(pk.to_str().unwrap_or("")) {
-        Box::into_raw(Box::new(types::XfrPublicKey::from(info)))
+        Box::into_raw(Box::new(types::XfrPublicKey::from(
+            info.into_noah().unwrap(),
+        )))
     } else {
         ptr::null_mut()
     }
@@ -387,7 +399,11 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record(
     } else {
         Some((*owner_memo).clone())
     };
-    if let Ok(info) = rs_open_client_asset_record(&*record, memo, &**keypair) {
+    if let Ok(info) = rs_open_client_asset_record(
+        &*record,
+        memo,
+        &XfrKeyPair::from_noah(&*keypair).unwrap(),
+    ) {
         Box::into_raw(Box::new(info.into()))
     } else {
         std::ptr::null_mut()

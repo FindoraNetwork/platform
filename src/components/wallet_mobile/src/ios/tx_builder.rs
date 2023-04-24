@@ -6,15 +6,18 @@ use crate::rust::{
 
 use ledger::data_model::AssetTypeCode;
 use std::os::raw::c_char;
-use zei::noah_api::keys::KeyPair;
+use zei::{noah_api::keys::KeyPair, XfrKeyPair};
 
 #[no_mangle]
-/// @param kp: owner's XfrKeyPair
+/// @param kp: owner's KeyPair
 pub extern "C" fn findora_ffi_transaction_builder_add_fee_relative_auto(
     builder: &TransactionBuilder,
-    kp: &XfrKeyPair,
+    kp: &KeyPair,
 ) -> *mut TransactionBuilder {
-    if let Ok(info) = builder.clone().add_fee_relative_auto(kp.clone()) {
+    if let Ok(info) = builder
+        .clone()
+        .add_fee_relative_auto(XfrKeyPair::from_noah(kp).unwrap())
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -73,7 +76,7 @@ pub extern "C" fn findora_ffi_transaction_builder_new(
 ///     console.log(err)
 /// }
 ///
-/// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair.
+/// @param {KeyPair} key_pair -  Issuer KeyPair.
 /// @param {string} memo - Text field for asset definition.
 /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued.
 /// If empty, a token code will be chosen at random.
@@ -82,13 +85,13 @@ pub extern "C" fn findora_ffi_transaction_builder_new(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_create_asset(
     builder: &TransactionBuilder,
-    key_pair: &XfrKeyPair,
+    key_pair: &KeyPair,
     memo: *const c_char,
     token_code: *const c_char,
     asset_rules: &AssetRules,
 ) -> *mut TransactionBuilder {
     if let Ok(info) = builder.clone().add_operation_create_asset(
-        key_pair,
+        &XfrKeyPair::from_noah(key_pair).unwrap(),
         c_char_to_string(memo),
         c_char_to_string(token_code),
         asset_rules.clone(),
@@ -103,7 +106,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_create_asset(
 ///
 /// Use this function for simple one-shot issuances.
 ///
-/// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
+/// @param {KeyPair} key_pair  - Issuer KeyPair.
 /// and types of traced assets.
 /// @param {string} code - base64 string representing the token code of the asset to be issued.
 /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
@@ -112,7 +115,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_create_asset(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
     builder: &TransactionBuilder,
-    key_pair: &XfrKeyPair,
+    key_pair: &KeyPair,
     code: *const c_char,
     seq_num: u64,
     amount: *const c_char,
@@ -120,7 +123,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
 ) -> *mut TransactionBuilder {
     let amount = parse_u64(amount);
     if let Ok(info) = builder.clone().add_basic_issue_asset(
-        key_pair,
+        &XfrKeyPair::from_noah(key_pair).unwrap(),
         c_char_to_string(code),
         seq_num,
         amount,
@@ -134,7 +137,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
 
 /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
 /// store.
-/// @param {XfrKeyPair} auth_key_pair - Asset creator key pair.
+/// @param {KeyPair} auth_key_pair - Asset creator key pair.
 /// @param {String} code - base64 string representing token code of the asset whose memo will be updated.
 /// transaction validates.
 /// @param {String} new_memo - The new asset memo.
@@ -143,12 +146,12 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_update_memo(
     builder: &TransactionBuilder,
-    auth_key_pair: &XfrKeyPair,
+    auth_key_pair: &KeyPair,
     code: *const c_char,
     new_memo: *const c_char,
 ) -> *mut TransactionBuilder {
     if let Ok(info) = builder.clone().add_operation_update_memo(
-        auth_key_pair,
+        &XfrKeyPair::from_noah(auth_key_pair).unwrap(),
         c_char_to_string(code),
         c_char_to_string(new_memo),
     ) {
@@ -161,13 +164,13 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_update_memo(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_delegate(
     builder: &TransactionBuilder,
-    keypair: &XfrKeyPair,
+    keypair: &KeyPair,
     amount: *const c_char,
     validator: *const c_char,
 ) -> *mut TransactionBuilder {
     let amount = parse_u64(amount);
     if let Ok(info) = builder.clone().add_operation_delegate(
-        keypair,
+        &XfrKeyPair::from_noah(keypair).unwrap(),
         amount,
         c_char_to_string(validator),
     ) {
@@ -180,9 +183,12 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_delegate(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate(
     builder: &TransactionBuilder,
-    keypair: &XfrKeyPair,
+    keypair: &KeyPair,
 ) -> *mut TransactionBuilder {
-    if let Ok(info) = builder.clone().add_operation_undelegate(keypair) {
+    if let Ok(info) = builder
+        .clone()
+        .add_operation_undelegate(&XfrKeyPair::from_noah(keypair).unwrap())
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -192,13 +198,13 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate_partially(
     builder: &TransactionBuilder,
-    keypair: &XfrKeyPair,
+    keypair: &KeyPair,
     am: *const c_char,
     target_validator: *const c_char,
 ) -> *mut TransactionBuilder {
     let am = parse_u64(am);
     if let Ok(info) = builder.clone().add_operation_undelegate_partially(
-        keypair,
+        &XfrKeyPair::from_noah(keypair).unwrap(),
         am,
         c_char_to_string(target_validator),
     ) {
@@ -211,9 +217,12 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate_parti
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
     builder: &TransactionBuilder,
-    keypair: &XfrKeyPair,
+    keypair: &KeyPair,
 ) -> *mut TransactionBuilder {
-    if let Ok(info) = builder.clone().add_operation_claim(keypair) {
+    if let Ok(info) = builder
+        .clone()
+        .add_operation_claim(&XfrKeyPair::from_noah(keypair).unwrap())
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -223,11 +232,14 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim_custom(
     builder: &TransactionBuilder,
-    keypair: &XfrKeyPair,
+    keypair: &KeyPair,
     am: *const c_char,
 ) -> *mut TransactionBuilder {
     let am = parse_u64(am);
-    if let Ok(info) = builder.clone().add_operation_claim_custom(keypair, am) {
+    if let Ok(info) = builder
+        .clone()
+        .add_operation_claim_custom(&XfrKeyPair::from_noah(keypair).unwrap(), am)
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -253,14 +265,14 @@ pub extern "C" fn findora_ffi_transaction_builder_add_transfer_operation(
 /// Adds a serialized transfer account operation to a transaction builder instance.
 /// @param {string} address - a String which is hex-encoded EVM address or base64 encoded xfr public key or bech32 encoded xfr public key.
 /// @param {unsigned long long} amount - Amount to be transfered.
-/// @param {XfrKeyPair} kp - Fra ownner key pair.
+/// @param {KeyPair} kp - Fra ownner key pair.
 /// @return null if `address` or 'kp' is incorrect.
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
     builder: &TransactionBuilder,
     address: *const c_char,
     amount: *const c_char,
-    kp: &XfrKeyPair,
+    kp: &KeyPair,
     asset: *const c_char,
     lowlevel_data: *const c_char,
 ) -> *mut TransactionBuilder {
@@ -288,7 +300,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
     if let Ok(builder) = builder.clone().add_transfer_to_account_operation(
         amount,
         addr,
-        kp,
+        &XfrKeyPair::from_noah(kp).unwrap(),
         asset,
         lowlevel_data,
     ) {
@@ -301,9 +313,9 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_sign(
     builder: &TransactionBuilder,
-    kp: &XfrKeyPair,
+    kp: &KeyPair,
 ) -> *mut TransactionBuilder {
-    if let Ok(info) = builder.clone().sign(kp) {
+    if let Ok(info) = builder.clone().sign(&XfrKeyPair::from_noah(kp).unwrap()) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -313,7 +325,7 @@ pub extern "C" fn findora_ffi_transaction_builder_sign(
 /// Extracts the serialized form of a transaction.
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_transaction(
-    builder: &TransactionBuilder,
+    builder: &mut TransactionBuilder,
 ) -> *mut c_char {
     string_to_c_char(builder.transaction())
 }

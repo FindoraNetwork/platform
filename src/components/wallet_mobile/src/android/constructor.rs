@@ -2,10 +2,10 @@ use crate::rust::types;
 use jni::objects::JClass;
 use jni::sys::{jbyteArray, jlong};
 use jni::JNIEnv;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use zei::noah_api::keys::KeyPair as RawXfrKeyPair;
-use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::{
+    keys::KeyPair as RawXfrKeyPair, parameters::AddressFormat,
+    xfr::structs::ASSET_TYPE_LENGTH,
+};
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_findora_JniApi_xfrKeyPairNew(
@@ -16,8 +16,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_xfrKeyPairNew(
     let input = env.convert_byte_array(seed).unwrap();
     let mut buf = [0u8; ASSET_TYPE_LENGTH];
     buf.copy_from_slice(input.as_ref());
-    let mut prng = ChaChaRng::from_seed(buf);
-    let val = types::XfrKeyPair::from(RawXfrKeyPair::generate_ed25519(&mut prng));
+    let val = types::XfrKeyPair::from(RawXfrKeyPair::default(AddressFormat::ED25519));
     Box::into_raw(Box::new(val)) as jlong
 }
 

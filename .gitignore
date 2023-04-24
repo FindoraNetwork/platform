@@ -37,4 +37,4 @@ checkpoint*
 proof_tree
 proof_tree.1
 
-wallet_mobile_ffi.h
+src/components/wallet_mobile/wallet_mobile_ffi.h

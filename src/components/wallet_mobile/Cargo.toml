@@ -41,7 +41,7 @@ globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", bran
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
 
-ledger = { path = "../../ledger" }
+ledger = { path = "../../ledger", default-features = false, features = [] }
 
 [dependencies.web-sys]
 version = "0.3.4"
