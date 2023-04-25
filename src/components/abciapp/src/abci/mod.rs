@@ -15,11 +15,15 @@ use {
     config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
+    ledger::converter::{LOWLEVEL_DATA_MAX, LOWLEVEL_DATA_MIN},
     ruc::*,
     std::{
         env, fs, mem,
         net::SocketAddr,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread,
     },
 };
@@ -46,6 +50,8 @@ pub fn run() -> Result<()> {
 
     env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
 
+    LOWLEVEL_DATA_MIN.swap(CFG.checkpoint.lowlevel_data_min as i64, Ordering::Relaxed);
+    LOWLEVEL_DATA_MAX.swap(CFG.checkpoint.lowlevel_data_max as i64, Ordering::Relaxed);
     if CFG.enable_query_service {
         env::set_var("FINDORAD_KEEP_HIST", "1");
     }
