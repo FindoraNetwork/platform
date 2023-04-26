@@ -231,12 +231,10 @@ impl<C: Config> App<C> {
             Some(transaction.nonce),
             transaction.action,
         );
-        let mut flag = true;
 
         let (ar_code, info, to, contract_address, reason, data, status, used_gas) =
             match execute_ret {
                 Err(e) => {
-                    flag = false;
                     let to = if let ethereum::TransactionAction::Call(target) =
                         transaction.action
                     {
@@ -373,7 +371,7 @@ impl<C: Config> App<C> {
         };
 
         if !just_check {
-            if flag {
+            if code == 0 {
                 let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
                 pending_txs.push((transaction, status, receipt));
             }
