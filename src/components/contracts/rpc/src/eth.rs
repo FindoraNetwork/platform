@@ -1006,11 +1006,7 @@ impl EthApi for EthApiImpl {
                         }
                     }
                     Ok(block.transactions.get(index).cloned().map(|tx| {
-                        transaction_build(
-                            tx.clone(),
-                            Some(block),
-                            Some(statuses[index].clone()),
-                        )
+                        transaction_build(tx, Some(block), Some(statuses[index].clone()))
                     }))
                 }
                 _ => Ok(None),
@@ -1048,11 +1044,7 @@ impl EthApi for EthApiImpl {
                         return Ok(None);
                     }
                     Ok(block.transactions.get(index).cloned().map(|tx| {
-                        transaction_build(
-                            tx.clone(),
-                            Some(block),
-                            Some(statuses[index].clone()),
-                        )
+                        transaction_build(tx, Some(block), Some(statuses[index].clone()))
                     }))
                 }
                 _ => Ok(None),
@@ -1087,11 +1079,7 @@ impl EthApi for EthApiImpl {
                         return Ok(None);
                     }
                     Ok(block.transactions.get(index).cloned().map(|tx| {
-                        transaction_build(
-                            tx.clone(),
-                            Some(block),
-                            Some(statuses[index].clone()),
-                        )
+                        transaction_build(tx, Some(block), Some(statuses[index].clone()))
                     }))
                 }
                 _ => Ok(None),
@@ -1137,7 +1125,7 @@ impl EthApi for EthApiImpl {
                         }
                     }
 
-                    if index >= receipts.len(){
+                    if index >= receipts.len() {
                         return Ok(None);
                     }
                     let block_hash = H256::from_slice(
