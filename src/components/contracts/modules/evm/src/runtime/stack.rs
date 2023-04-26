@@ -1,5 +1,10 @@
 use crate::{storage::*, AddressMapping, App, Config};
 use config::abci::global_cfg::CFG;
+use enterprise_web3::{
+    State as Web3State, CODE_MAP, NONCE_MAP, PENDING_CODE_MAP,
+    PENDING_STATE_UPDATE_LIST, REMOVE_PENDING_CODE_MAP,
+    REMOVE_PENDING_STATE_UPDATE_LIST, STATE_UPDATE_LIST, WEB3_SERVICE_START_HEIGHT,
+};
 use ethereum_types::{H160, H256, U256};
 use evm::{
     backend::Backend,
@@ -7,6 +12,7 @@ use evm::{
     ExitError, Transfer,
 };
 use fin_db::FinDB;
+use fp_core::context::RunTxMode;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
 use fp_storage::{BorrowMut, DerefMut};
@@ -18,7 +24,6 @@ use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
 use storage::state::State;
 use tracing::{debug, error, info};
-
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
     pub metadata: StackSubstateMetadata<'config>,
@@ -312,9 +317,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
         let account_id = C::AddressMapping::convert_to_account_id(address);
         let _nonce = C::AccountAsset::inc_nonce(self.ctx, &account_id);
 
-        #[cfg(feature = "enterprise-web3")]
-        {
-            use enterprise_web3::{NONCE_MAP, WEB3_SERVICE_START_HEIGHT};
+        if CFG.enable_enterprise_web3 {
             if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                 let mut nonce_map = NONCE_MAP.lock().expect("get nonce map error");
                 if let Ok(nonce) = _nonce {
@@ -362,13 +365,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             }
         }
 
-        #[cfg(feature = "enterprise-web3")]
-        {
-            use enterprise_web3::{
-                State, PENDING_STATE_UPDATE_LIST, REMOVE_PENDING_STATE_UPDATE_LIST,
-                STATE_UPDATE_LIST, WEB3_SERVICE_START_HEIGHT,
-            };
-            use fp_core::context::RunTxMode;
+        if CFG.enable_enterprise_web3 {
             if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                 if RunTxMode::Deliver == self.ctx.run_mode {
                     let mut remove_pending_state_list = REMOVE_PENDING_STATE_UPDATE_LIST
@@ -377,7 +374,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                     remove_pending_state_list.push((address, index));
 
                     if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
-                        state_list.push(State {
+                        state_list.push(Web3State {
                             height: self.ctx.header.height as u32,
                             address,
                             index,
@@ -395,7 +392,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 } else {
                     let mut state_list =
                         PENDING_STATE_UPDATE_LIST.lock().expect("get code map fail");
-                    state_list.push(State {
+                    state_list.push(Web3State {
                         height: 0,
                         address,
                         index,
@@ -434,10 +431,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
            code_len,
             address
         );
-        #[cfg(feature = "enterprise-web3")]
-        let code_clone = code.clone();
 
-        let result = App::<C>::create_account(self.ctx, address.into(), code);
+        let result = App::<C>::create_account(self.ctx, address.into(), code.clone());
 
         if let Err(e) = result {
             error!(
@@ -448,24 +443,18 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                     e
             );
         } else {
-            #[cfg(feature = "enterprise-web3")]
-            {
-                use enterprise_web3::{
-                    CODE_MAP, PENDING_CODE_MAP, REMOVE_PENDING_CODE_MAP,
-                    WEB3_SERVICE_START_HEIGHT,
-                };
-                use fp_core::context::RunTxMode;
+            if CFG.enable_enterprise_web3 {
                 if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                     if RunTxMode::Deliver == self.ctx.run_mode {
                         let mut code_map = CODE_MAP.lock().expect("get code map fail");
-                        code_map.insert(address, code_clone.clone());
+                        code_map.insert(address, code.clone());
                         let mut remove_pending_code_map =
                             REMOVE_PENDING_CODE_MAP.lock().expect("get code map fail");
                         remove_pending_code_map.push(address);
                     } else {
                         let mut code_map =
                             PENDING_CODE_MAP.lock().expect("get code map fail");
-                        code_map.insert(address, code_clone);
+                        code_map.insert(address, code);
                     }
                 }
             }
