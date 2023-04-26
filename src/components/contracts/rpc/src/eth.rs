@@ -1005,12 +1005,13 @@ impl EthApi for EthApiImpl {
                             return Ok(None);
                         }
                     }
-
-                    Ok(Some(transaction_build(
-                        block.transactions[index].clone(),
-                        Some(block),
-                        Some(statuses[index].clone()),
-                    )))
+                    Ok(block.transactions.get(index).cloned().map(|tx| {
+                        transaction_build(
+                            tx.clone(),
+                            Some(block),
+                            Some(statuses[index].clone()),
+                        )
+                    }))
                 }
                 _ => Ok(None),
             }
@@ -1046,12 +1047,13 @@ impl EthApi for EthApiImpl {
                     if index >= block.transactions.len() {
                         return Ok(None);
                     }
-
-                    Ok(Some(transaction_build(
-                        block.transactions[index].clone(),
-                        Some(block),
-                        Some(statuses[index].clone()),
-                    )))
+                    Ok(block.transactions.get(index).cloned().map(|tx| {
+                        transaction_build(
+                            tx.clone(),
+                            Some(block),
+                            Some(statuses[index].clone()),
+                        )
+                    }))
                 }
                 _ => Ok(None),
             }
@@ -1084,12 +1086,13 @@ impl EthApi for EthApiImpl {
                     if index >= block.transactions.len() {
                         return Ok(None);
                     }
-
-                    Ok(Some(transaction_build(
-                        block.transactions[index].clone(),
-                        Some(block),
-                        Some(statuses[index].clone()),
-                    )))
+                    Ok(block.transactions.get(index).cloned().map(|tx| {
+                        transaction_build(
+                            tx.clone(),
+                            Some(block),
+                            Some(statuses[index].clone()),
+                        )
+                    }))
                 }
                 _ => Ok(None),
             }
