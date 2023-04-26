@@ -14,7 +14,7 @@ use chaindev::tm_ddev::{
 };
 use init::{BankAccount, InitialValidator};
 use lazy_static::lazy_static;
-use rucv3::*;
+use rucv4::*;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt::Write, thread};
 
