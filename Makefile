@@ -7,8 +7,6 @@ all: build_release_goleveldb
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export STATIC_CHAIN_DEV_BASE_DIR_SUFFIX = findora
 
-export PROTOC = $(shell which protoc)
-
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
 
@@ -34,7 +32,7 @@ define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp -f \
+	cp --remove-destination \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
@@ -42,14 +40,14 @@ define pack
 		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cp --remove-destination $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && ./findorad pack
-	cp -f /tmp/findorad $(1)/$(bin_dir)/
-	cp -f /tmp/findorad ~/.cargo/bin/
+	cp --remove-destination /tmp/findorad $(1)/$(bin_dir)/
+	cp --remove-destination /tmp/findorad ~/.cargo/bin/
 endef
 
 install: stop_all build_release_goleveldb
-	cp -f release/bin/* /usr/local/bin/
+	cp --remove-destination release/bin/* /usr/local/bin/
 	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
 
 stop_all:

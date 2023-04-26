@@ -20,25 +20,27 @@ source "utils.sh"
 cnt=$1
 is_dbench=$2 # is dbench or not
 
-addr_file="/tmp/gsc_bench.addr.list"
-phrase_file="/tmp/gsc_bench.phrase.list"
-target_file="/tmp/gsc_target_list.json"
+cliproj="asc"
+
+addr_file="/tmp/${cliproj}_bench.addr.list"
+phrase_file="/tmp/${cliproj}_bench.phrase.list"
+target_file="/tmp/${cliproj}_target_list.json"
 
 ROOT_PHRASE="$(cat static/root.phrase)"
 
-which gsc >/dev/null 2>&1
+which asc >/dev/null 2>&1
 if [[ 0 -ne $? ]]; then
-    codebase=/tmp/__gsc_${RANDOM}_${RANDOM}__
+    codebase=/tmp/__${cliproj}_${RANDOM}_${RANDOM}__
     rm -rf $codebase 2>/dev/null
-    git clone --depth 1 git@github.com:FindoraNetwork/gsc.git $codebase
-    cargo install --path $codebase --bin gsc
+    git clone --depth 1 git@github.com:FindoraNetwork/asc.git $codebase
+    cargo install --path $codebase --bin asc
     rm -rf $codebase
     export PATH=~/.cargo/bin:$PATH
 fi
 
-which gsc >/dev/null 2>&1
+which asc >/dev/null 2>&1
 if [[ 0 -ne $? ]]; then
-    die "$0 Line $LINENO: gsc binary not found!"
+    die "$0 Line $LINENO: asc binary not found!"
 fi
 
 function check_cnt() {
@@ -55,7 +57,7 @@ function check_cnt() {
 function gen_accounts() {
     rm -rf $addr_file $phrase_file 2>/dev/null
     local tmpfile="/tmp/.${RANDOM}.${RANDOM}.${RANDOM}"
-    gsc cli gen -n $[${cnt} * 5 / 4] >${tmpfile} || die "$0 Line $LINENO"
+    asc cli gen -n $[${cnt} * 5 / 4] >${tmpfile} || die "$0 Line $LINENO"
     awk 'NR%3==1 {print $0}' ${tmpfile} | grep -o '0x.*' | sort | uniq > ${addr_file}
     awk 'NR%3==2 {print $0}' ${tmpfile} | grep 'Phrase' | sed -r 's/^[^ ]+ //g' | sort | uniq > ${phrase_file}
     rm $tmpfile || die "$0 Line $LINENO"
@@ -110,17 +112,17 @@ function run() {
     # 31 async tasks
     for i in {1..31}; do
         if [[ "" == ${contract} ]]; then
-            gsc cli transfer -x "${SERV}" -b -D -f ${target_file}${i} 2>/dev/null 1>&2 &
+            asc cli transfer -x "${SERV}" -b -D -f ${target_file}${i} 2>/dev/null 1>&2 &
         else
-            gsc cli transfer -x "${SERV}" -b -D -f ${target_file}${i} -C $contract 2>/dev/null 1>&2 &
+            asc cli transfer -x "${SERV}" -b -D -f ${target_file}${i} -C $contract 2>/dev/null 1>&2 &
         fi
     done
 
     # 1 sync task
     if [[ "" == ${contract} ]]; then
-        gsc cli transfer -x "${SERV}" -b -D -f "${target_file}0" >/dev/null || log "ERROR $0 Line $LINENO"
+        asc cli transfer -x "${SERV}" -b -D -f "${target_file}0" >/dev/null || log "ERROR $0 Line $LINENO"
     else
-        gsc cli transfer -x "${SERV}" -b -D -f "${target_file}0" -C $contract >/dev/null || log "ERROR $0 Line $LINENO"
+        asc cli transfer -x "${SERV}" -b -D -f "${target_file}0" -C $contract >/dev/null || log "ERROR $0 Line $LINENO"
     fi
 }
 
@@ -131,7 +133,7 @@ if [[ "" == ${is_dbench} ]]; then
     log "Waiting RPC-server, sleep 6 seconds"
     sleep 6
 
-    phrase_path=/tmp/gsc_bench_root.phrase
+    phrase_path=/tmp/${cliproj}_bench_root.phrase
     fn dev \
         | jq '.meta.custom_data.bank_account.mnemonic_words' \
         | sed 's/"//g' > $phrase_path || exit 1
@@ -156,8 +158,12 @@ if [[ "" == ${is_dbench} ]]; then
         die "deposit failed! $0 Line $LINENO"
     fi
 
-    web3_port=$(fn dev | jq '.meta.validator_or_full_nodes."1"."ports"."web3_http_service"')
-    export SERV="http://localhost:${web3_port}"
+    serv=""
+    for i in $(fn dev | jq '.meta.validator_or_full_nodes | keys.[]'); do
+        port=$(fn dev | jq ".meta.validator_or_full_nodes.${i}.ports.web3_http_service" | sed 's/"//g')
+        serv="http://localhost:${port},${serv}"
+    done
+    export SERV=$serv
 
 else
 
@@ -185,10 +191,9 @@ else
     done
 
     serv=""
-    # 3 nodes will be created at least
-    for i in {1..3}; do
-        addr=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".host.\"addr\"" | sed 's/"//g')
-        port=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".ports.web3_http_service" | sed 's/"//g')
+    for i in $(fn ddev | jq '.meta.validator_or_full_nodes | keys.[]'); do
+        addr=$(fn ddev | jq ".meta.validator_or_full_nodes.${i}.host.\"addr\"" | sed 's/"//g')
+        port=$(fn ddev | jq ".meta.validator_or_full_nodes.${i}.ports.web3_http_service" | sed 's/"//g')
         serv="http://${addr}:${port},${serv}"
     done
     export SERV=$serv
@@ -200,7 +205,7 @@ gen_accounts
 prepare_run
 
 log "Deploying ERC20 contract ..."
-contract_addr=$(gsc cli deploy-erc20 -x $SERV -O "${ROOT_PHRASE}")
+contract_addr=$(asc cli deploy-erc20 -x $SERV -O "${ROOT_PHRASE}")
 for i in {0..4}; do
     sleep $block_itv
 done
@@ -223,7 +228,9 @@ function start_cnter() {
 }
 
 function get_results() {
-    let cnter=6
+    local cnter_initail_value=16
+
+    let cnter=$cnter_initail_value
     while :; do
         curl_post eth_getBlockTransactionCountByNumber \"latest\"
         n=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
@@ -238,15 +245,15 @@ function get_results() {
                 sleep $block_itv
             fi
         else
-            let cnter=6
+            let cnter=$cnter_initail_value
             sleep $block_itv
         fi
     done
 
-    ts=$(cat /tmp/gsc_cli_batch.start.timestamp)
+    ts=$(cat /tmp/${cliproj}_cli_batch.start.timestamp)
     ts=$[2 + $ts]
     log "Timestamp before sending: ${ts}"
-    ts2=$[$(date +%s) - 2]
+    ts2=$[$(date +%s) - $cnter * $block_itv]
     log "Timestamp after sending: ${ts2}"
 
     curl_post eth_blockNumber
@@ -275,7 +282,6 @@ run
 get_results
 
 echo
-sleep 10 # avoid data tail
 log "Transfering erc20 token ..."
 echo
 
@@ -283,11 +289,15 @@ start_cnter
 run $contract_addr
 get_results
 
-echo
-sleep 10 # avoid data tail
-log "Transfering erc20 token **again** ..."
-echo
+let nth=0
+while :; do
+    let nth+=1
 
-start_cnter
-run $contract_addr
-get_results
+    echo
+    log "Transfering erc20 token **again nth-${nth}** ..."
+    echo
+
+    start_cnter
+    run $contract_addr
+    get_results
+done
