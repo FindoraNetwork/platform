@@ -1137,7 +1137,9 @@ impl EthApi for EthApiImpl {
                         }
                     }
 
-                    let _leng = receipts.len();
+                    if index >= receipts.len(){
+                        return Ok(None);
+                    }
                     let block_hash = H256::from_slice(
                         Keccak256::digest(&rlp::encode(&block.header)).as_slice(),
                     );
