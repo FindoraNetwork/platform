@@ -90,10 +90,6 @@ build_release_debug: tendermint_goleveldb
 	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
-build_release_web3: tendermint_cleveldb
-	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
-	$(call pack,release)
-
 build_bench_release: tendermint_goleveldb
 	cargo build --features="debug_env benchmark" --release --bins -p abciapp -p finutils
 	$(call pack,release)
@@ -319,27 +315,6 @@ ci_build_image_dockerhub_arm:
 	@ docker rm -f findorad-binary
 	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	@ docker buildx build --platform linux/arm64/v8 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
-
-
-# ========================== build RPC node===========================
-
-build_release_web3_goleveldb: tendermint_goleveldb
-	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
-	$(call pack,release)
-
-ci_build_release_web3_binary_image:
-	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-enterprise-web3
-	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-enterprise-web3 .
-
-ci_build_image_web3:
-	@ if [ -d "./binary" ]; then \
-		rm -rf ./binary || true; \
-	fi
-	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
-	@ docker cp findorad-binary:/binary ./binary
-	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
-
 
 # ========================== push image and clean up===========================
 
