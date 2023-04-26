@@ -12,20 +12,24 @@ use {
     fp_types::{crypto::MultiSigner, H160},
     ruc::*,
     serde::{Deserialize, Serialize},
-    std::sync::atomic::Ordering,
+    std::sync::atomic::{AtomicI64, Ordering},
     zei::xfr::{
         sig::XfrPublicKey,
         structs::{AssetType, XfrAmount, XfrAssetType},
     },
 };
+#[allow(missing_docs)]
+pub static LOWLEVEL_DATA_MIN: AtomicI64 = AtomicI64::new(0);
+#[allow(missing_docs)]
+pub static LOWLEVEL_DATA_MAX: AtomicI64 = AtomicI64::new(0);
 
 #[inline(always)]
 fn is_empty(x: &Option<Vec<u8>>) -> bool {
-    let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64;
+    let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    let lowlevel_data_min = LOWLEVEL_DATA_MIN.load(Ordering::Relaxed);
+    let lowlevel_data_max = LOWLEVEL_DATA_MAX.load(Ordering::Relaxed);
 
-    if td_height > CFG.checkpoint.lowlevel_data_min
-        && td_height < CFG.checkpoint.lowlevel_data_max
-    {
+    if td_height > lowlevel_data_min && td_height < lowlevel_data_max {
         match x {
             Some(v) => !v.is_empty(),
             None => false,

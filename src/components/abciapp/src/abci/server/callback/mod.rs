@@ -86,6 +86,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
+
     resp.set_last_block_height(h);
     if 0 < h {
         if CFG.checkpoint.disable_evm_block_height < h
