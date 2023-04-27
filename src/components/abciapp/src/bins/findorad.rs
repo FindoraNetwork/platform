@@ -14,6 +14,7 @@ use {
         sys::signal::{kill, Signal},
         unistd::{truncate, Pid},
     },
+    regex::Regex,
     ruc::*,
     std::{
         convert::TryFrom,
@@ -112,6 +113,42 @@ fn node_command() -> Result<()> {
         || CFG.snapshot_rollback_to_exact.is_some()
     {
         return Ok(());
+    }
+
+    {
+        let src_cfg = [
+            "timeout_propose = \"\\d{1,2}s\"",
+            "timeout_propose_delta = \"\\d+ms\"",
+            "timeout_prevote = \"\\d{1,2}s\"",
+            "timeout_prevote_delta = \"\\d+ms\"",
+            "timeout_precommit = \"\\d{1,2}s\"",
+            "timeout_precommit_delta = \"\\d+ms\"",
+            "timeout_commit = \"\\d{1,2}s\"",
+        ];
+
+        let target_cfg = [
+            "timeout_propose = \"3s\"",
+            "timeout_propose_delta = \"500ms\"",
+            "timeout_prevote = \"1s\"",
+            "timeout_prevote_delta = \"500ms\"",
+            "timeout_precommit = \"1s\"",
+            "timeout_precommit_delta = \"500ms\"",
+            "timeout_commit = \"15s\"",
+        ];
+        let path = format!("{}/config/config.toml", CFG.tendermint_home);
+        fs::read_to_string(&path)
+            .and_then(|config| {
+                let cfg = src_cfg.iter().zip(target_cfg.iter()).fold(
+                    config,
+                    |acc, (src, target)| {
+                        let re = Regex::new(src).unwrap();
+                        println!("{:?}", re.find(&acc).unwrap().as_str());
+                        acc.replace(re.find(&acc).unwrap().as_str(), target)
+                    },
+                );
+                fs::write(path, cfg)
+            })
+            .unwrap();
     }
 
     let mut tendermint = Command::new(format!("/tmp/tendermint_{}", *SUFFIX));
