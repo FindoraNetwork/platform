@@ -228,16 +228,16 @@ lazy_static! {
         evm_substate_v2_height: 3351349,
         disable_delegate_frc20: 3401450,
         fix_exec_code: 3401450,
-        check_signatures_num: 4033522,
-        fix_deliver_tx_revert_nonce_height: 4033522,
-        utxo_asset_prefix_height: 4033522,
-        prismxx_inital_height: 4033522,
+        check_signatures_num: 4004430,
+        fix_deliver_tx_revert_nonce_height: 4004430,
+        utxo_asset_prefix_height: 4004430,
+        prismxx_inital_height: 4004430,
         prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
-        remove_fake_staking_hash: 4033522,
-        fix_check_replay: 4033522,
+        remove_fake_staking_hash: 4004430,
+        fix_check_replay: 4004430,
         fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
         lowlevel_data_min: 3971239,
-        lowlevel_data_max: 4033522,
+        lowlevel_data_max: 4004430,
     };
 }
 
