@@ -142,7 +142,6 @@ fn node_command() -> Result<()> {
                     config,
                     |acc, (src, target)| {
                         let re = Regex::new(src).unwrap();
-                        println!("{:?}", re.find(&acc).unwrap().as_str());
                         acc.replace(re.find(&acc).unwrap().as_str(), target)
                     },
                 );
