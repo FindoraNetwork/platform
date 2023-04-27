@@ -14,7 +14,7 @@ use fp_utils::tx::EvmRawTxWrapper;
 use module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event};
 use primitive_types::U256;
 use ruc::*;
-use std::{collections::HashMap, mem::replace, ops::DerefMut};
+use std::{mem::take, ops::DerefMut};
 use tracing::{debug, error, info};
 impl crate::BaseApp {
     /// info implements the ABCI interface.
@@ -94,17 +94,15 @@ impl crate::BaseApp {
                         if CFG.enable_enterprise_web3 {
                             let code_map =
                                 if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
-                                    replace(&mut *code_map, HashMap::new())
+                                    take(&mut *code_map)
                                 } else {
-                                    error!("{}", "");
                                     Default::default()
                                 };
                             let state_list = if let Ok(mut state_list) =
                                 PENDING_STATE_UPDATE_LIST.lock()
                             {
-                                replace(&mut *state_list, vec![])
+                                take(&mut *state_list)
                             } else {
-                                error!("{}", "");
                                 Default::default()
                             };
                             if 0 == ar.code {
@@ -132,9 +130,9 @@ impl crate::BaseApp {
                                     for state in state_list.iter() {
                                         setter
                                             .set_pending_state(
-                                                state.address.clone(),
-                                                state.index.clone(),
-                                                state.value.clone(),
+                                                state.address,
+                                                state.index,
+                                                state.value,
                                             )
                                             .map_err(|e| error!("{e:?}"))
                                             .unwrap_or(());
@@ -224,20 +222,16 @@ impl crate::BaseApp {
                         let code_map =
                             if let Ok(mut code_map) = REMOVE_PENDING_CODE_MAP.lock() {
                                 let m = code_map.deref_mut();
-                                let map = replace(m, vec![]);
-                                map.clone()
+                                take(m)
                             } else {
-                                error!("{}", "");
                                 Default::default()
                             };
                         let state_list = if let Ok(mut state_list) =
                             REMOVE_PENDING_STATE_UPDATE_LIST.lock()
                         {
                             let v = state_list.deref_mut();
-                            let v2 = replace(v, vec![]);
-                            v2.clone()
+                            take(v)
                         } else {
-                            error!("{}", "");
                             Default::default()
                         };
                         if 0 == ar.code {
@@ -266,10 +260,7 @@ impl crate::BaseApp {
 
                                 for (address, index) in state_list.iter() {
                                     setter
-                                        .remove_pending_state(
-                                            address.clone(),
-                                            index.clone(),
-                                        )
+                                        .remove_pending_state(*address, *index)
                                         .map_err(|e| error!("{:?}", e))
                                         .unwrap_or(());
                                 }

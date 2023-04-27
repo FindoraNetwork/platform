@@ -317,12 +317,12 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
         let account_id = C::AddressMapping::convert_to_account_id(address);
         let _nonce = C::AccountAsset::inc_nonce(self.ctx, &account_id);
 
-        if CFG.enable_enterprise_web3 {
-            if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut nonce_map = NONCE_MAP.lock().expect("get nonce map error");
-                if let Ok(nonce) = _nonce {
-                    nonce_map.insert(address, nonce);
-                }
+        if CFG.enable_enterprise_web3
+            && self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut nonce_map = NONCE_MAP.lock().expect("get nonce map error");
+            if let Ok(nonce) = _nonce {
+                nonce_map.insert(address, nonce);
             }
         }
     }
@@ -365,40 +365,40 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             }
         }
 
-        if CFG.enable_enterprise_web3 {
-            if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                if RunTxMode::Deliver == self.ctx.run_mode {
-                    let mut remove_pending_state_list = REMOVE_PENDING_STATE_UPDATE_LIST
-                        .lock()
-                        .expect("get code map fail");
-                    remove_pending_state_list.push((address, index));
+        if CFG.enable_enterprise_web3
+            && self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            if RunTxMode::Deliver == self.ctx.run_mode {
+                let mut remove_pending_state_list = REMOVE_PENDING_STATE_UPDATE_LIST
+                    .lock()
+                    .expect("get code map fail");
+                remove_pending_state_list.push((address, index));
 
-                    if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
-                        state_list.push(Web3State {
-                            height: self.ctx.header.height as u32,
-                            address,
-                            index,
-                            value,
-                        });
-                    } else {
-                        error!(
-                            target: "evm",
-                            "Failed push state update to STATE_UPDATE_LIST for {:?} [index: {:?}, value: {:?}]",
-                            address,
-                            index,
-                            value,
-                        )
-                    }
-                } else {
-                    let mut state_list =
-                        PENDING_STATE_UPDATE_LIST.lock().expect("get code map fail");
+                if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
                     state_list.push(Web3State {
-                        height: 0,
+                        height: self.ctx.header.height as u32,
                         address,
                         index,
                         value,
                     });
+                } else {
+                    error!(
+                        target: "evm",
+                        "Failed push state update to STATE_UPDATE_LIST for {:?} [index: {:?}, value: {:?}]",
+                        address,
+                        index,
+                        value,
+                    )
                 }
+            } else {
+                let mut state_list =
+                    PENDING_STATE_UPDATE_LIST.lock().expect("get code map fail");
+                state_list.push(Web3State {
+                    height: 0,
+                    address,
+                    index,
+                    value,
+                });
             }
         }
     }
@@ -442,21 +442,18 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 address,
                     e
             );
-        } else {
-            if CFG.enable_enterprise_web3 {
-                if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                    if RunTxMode::Deliver == self.ctx.run_mode {
-                        let mut code_map = CODE_MAP.lock().expect("get code map fail");
-                        code_map.insert(address, code.clone());
-                        let mut remove_pending_code_map =
-                            REMOVE_PENDING_CODE_MAP.lock().expect("get code map fail");
-                        remove_pending_code_map.push(address);
-                    } else {
-                        let mut code_map =
-                            PENDING_CODE_MAP.lock().expect("get code map fail");
-                        code_map.insert(address, code);
-                    }
-                }
+        } else if CFG.enable_enterprise_web3
+            && self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            if RunTxMode::Deliver == self.ctx.run_mode {
+                let mut code_map = CODE_MAP.lock().expect("get code map fail");
+                code_map.insert(address, code);
+                let mut remove_pending_code_map =
+                    REMOVE_PENDING_CODE_MAP.lock().expect("get code map fail");
+                remove_pending_code_map.push(address);
+            } else {
+                let mut code_map = PENDING_CODE_MAP.lock().expect("get code map fail");
+                code_map.insert(address, code);
             }
         }
     }

@@ -549,28 +549,24 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
             take(&mut *nonce_map)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
         let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
             take(&mut *code_map)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
         let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
             take(&mut *balance_map)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
         let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
             take(&mut *state_list)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
@@ -583,14 +579,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         let txs = if let Ok(mut txs) = TXS.lock() {
             take(&mut *txs)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
         let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
             take(&mut *receipts)
         } else {
-            error!("{}", "");
             Default::default()
         };
 
