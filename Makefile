@@ -2,7 +2,7 @@
 #
 #
 
-all: build_release_goleveldb
+all: fmt lint build_release_goleveldb
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export STATIC_CHAIN_DEV_BASE_DIR_SUFFIX = findora
@@ -28,11 +28,19 @@ subdirs = $(bin_dir) $(lib_dir)
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S), Linux)
+	CP := cp --remove-destination
+else
+	CP := cp -f
+endif
+
 define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp --remove-destination \
+	$(CP) \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
@@ -40,14 +48,14 @@ define pack
 		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp --remove-destination $(1)/$(bin_dir)/* ~/.cargo/bin/
+	$(CP) $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && ./findorad pack
-	cp --remove-destination /tmp/findorad $(1)/$(bin_dir)/
-	cp --remove-destination /tmp/findorad ~/.cargo/bin/
+	$(CP) /tmp/findorad $(1)/$(bin_dir)/
+	$(CP) /tmp/findorad ~/.cargo/bin/
 endef
 
 install: stop_all build_release_goleveldb
-	cp --remove-destination release/bin/* /usr/local/bin/
+	$(CP) release/bin/* /usr/local/bin/
 	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
 
 stop_all:
