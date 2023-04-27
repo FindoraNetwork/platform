@@ -1,6 +1,10 @@
 use crate::extensions::SignedExtra;
 use abci::*;
 use config::abci::global_cfg::CFG;
+use enterprise_web3::{
+    Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST, REDIS_CLIENT,
+    REMOVE_PENDING_CODE_MAP, REMOVE_PENDING_STATE_UPDATE_LIST,
+};
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::{
@@ -10,8 +14,8 @@ use fp_utils::tx::EvmRawTxWrapper;
 use module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event};
 use primitive_types::U256;
 use ruc::*;
+use std::{mem::take, ops::DerefMut};
 use tracing::{debug, error, info};
-
 impl crate::BaseApp {
     /// info implements the ABCI interface.
     /// - Returns chain info (las height and hash where the node left off)
@@ -78,43 +82,33 @@ impl crate::BaseApp {
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
-            #[cfg(feature = "enterprise-web3")]
-            let tmp_tx = tx.clone();
             let check_fn = |mode: RunTxMode| {
                 let ctx = {
                     let mut ctx = self.check_state.clone();
                     ctx.run_mode = mode;
                     ctx
                 };
-                let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
+                let result = self.modules.process_tx::<SignedExtra>(ctx, tx.clone());
                 match result {
                     Ok(ar) => {
-                        #[cfg(feature = "enterprise-web3")]
-                        {
-                            use enterprise_web3::{
-                                Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
-                                REDIS_CLIENT,
-                            };
-                            use std::{collections::HashMap, mem::replace};
+                        if CFG.enable_enterprise_web3 {
                             let code_map =
                                 if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
-                                    replace(&mut *code_map, HashMap::new())
+                                    take(&mut *code_map)
                                 } else {
-                                    error!("{}", "");
                                     Default::default()
                                 };
                             let state_list = if let Ok(mut state_list) =
                                 PENDING_STATE_UPDATE_LIST.lock()
                             {
-                                replace(&mut *state_list, vec![])
+                                take(&mut *state_list)
                             } else {
-                                error!("{}", "");
                                 Default::default()
                             };
                             if 0 == ar.code {
                                 if let fp_types::actions::Action::Ethereum(
                                     fp_types::actions::ethereum::Action::Transact(tx),
-                                ) = tmp_tx.function
+                                ) = tx.function
                                 {
                                     let redis_pool =
                                         REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
@@ -136,9 +130,9 @@ impl crate::BaseApp {
                                     for state in state_list.iter() {
                                         setter
                                             .set_pending_state(
-                                                state.address.clone(),
-                                                state.index.clone(),
-                                                state.value.clone(),
+                                                state.address,
+                                                state.index,
+                                                state.value,
                                             )
                                             .map_err(|e| error!("{e:?}"))
                                             .unwrap_or(());
@@ -220,41 +214,30 @@ impl crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
-            #[cfg(feature = "enterprise-web3")]
-            let tmp_tx = tx.clone();
-            let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
+
+            let ret = self.modules.process_tx::<SignedExtra>(ctx, tx.clone());
             match ret {
                 Ok(ar) => {
-                    #[cfg(feature = "enterprise-web3")]
-                    {
-                        use enterprise_web3::{
-                            Setter, REDIS_CLIENT, REMOVE_PENDING_CODE_MAP,
-                            REMOVE_PENDING_STATE_UPDATE_LIST,
-                        };
-                        use std::{mem::replace, ops::DerefMut};
+                    if CFG.enable_enterprise_web3 {
                         let code_map =
                             if let Ok(mut code_map) = REMOVE_PENDING_CODE_MAP.lock() {
                                 let m = code_map.deref_mut();
-                                let map = replace(m, vec![]);
-                                map.clone()
+                                take(m)
                             } else {
-                                error!("{}", "");
                                 Default::default()
                             };
                         let state_list = if let Ok(mut state_list) =
                             REMOVE_PENDING_STATE_UPDATE_LIST.lock()
                         {
                             let v = state_list.deref_mut();
-                            let v2 = replace(v, vec![]);
-                            v2.clone()
+                            take(v)
                         } else {
-                            error!("{}", "");
                             Default::default()
                         };
                         if 0 == ar.code {
                             if let fp_types::actions::Action::Ethereum(
                                 fp_types::actions::ethereum::Action::Transact(tx),
-                            ) = tmp_tx.function
+                            ) = tx.function
                             {
                                 let redis_pool =
                                     REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
@@ -277,10 +260,7 @@ impl crate::BaseApp {
 
                                 for (address, index) in state_list.iter() {
                                     setter
-                                        .remove_pending_state(
-                                            address.clone(),
-                                            index.clone(),
-                                        )
+                                        .remove_pending_state(*address, *index)
                                         .map_err(|e| error!("{:?}", e))
                                         .unwrap_or(());
                                 }
