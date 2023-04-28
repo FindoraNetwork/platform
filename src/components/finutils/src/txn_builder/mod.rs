@@ -492,7 +492,7 @@ impl TransactionBuilder {
                 let params = match pre_note.input_keypair.get_sk_ref() {
                     SecretKey::Secp256k1(_) => {
                         if abar_ar_params[0].is_none() {
-                            abar_ar_params[0] = Some(ProverParams::gen_abar_to_bar(
+                            abar_ar_params[0] = Some(ProverParams::gen_abar_to_ar(
                                 AddressFormat::SECP256K1,
                             )?);
                         }
@@ -500,7 +500,7 @@ impl TransactionBuilder {
                     }
                     SecretKey::Ed25519(_) => {
                         if abar_ar_params[1].is_none() {
-                            abar_ar_params[1] = Some(ProverParams::gen_abar_to_bar(
+                            abar_ar_params[1] = Some(ProverParams::gen_abar_to_ar(
                                 AddressFormat::ED25519,
                             )?);
                         }
