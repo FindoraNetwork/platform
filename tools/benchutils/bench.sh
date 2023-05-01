@@ -139,9 +139,9 @@ if [[ "" == ${is_dbench} ]]; then
         | sed 's/"//g' > $phrase_path || exit 1
     fn setup -O $phrase_path || exit 1
 
-    # seed node[0] has the default ports,
+    # bootstrap node[0] has the default ports,
     # needed by the following `fn` operations
-    addr=$(fn dev | jq '.meta.seed_nodes."0".host."addr"' | sed 's/"//g')
+    addr=$(fn dev | jq '.meta.bootstrap_nodes."0".host."addr"' | sed 's/"//g')
     fn setup -S "http://${addr}" || exit 1
 
     block_itv=$(fn dev | jq '.meta.block_interval_in_seconds')
@@ -181,9 +181,9 @@ else
         | sed 's/"//g' > $phrase_path || exit 1
     fn setup -O $phrase_path || exit 1
 
-    # seed node[0] has the default ports
+    # bootstrap node[0] has the default ports
     # needed by the following `fn` operations
-    addr=$(fn ddev | jq '.meta.seed_nodes."0".host."addr"' | sed 's/"//g')
+    addr=$(fn ddev | jq '.meta.bootstrap_nodes."0".host."addr"' | sed 's/"//g')
     fn setup -S "http://${addr}" || exit 1
 
     block_itv=$(fn ddev | jq '.meta.block_interval_in_seconds')
