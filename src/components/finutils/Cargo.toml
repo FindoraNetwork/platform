@@ -41,7 +41,7 @@ tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", feat
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
-chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "tm33v19", default-features = false, features = ["tendermint_based", "vsdb_sled_engine"] }
+chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "tm33v20", default-features = false, features = ["tendermint_based", "vsdb_sled_engine"] }
 
 [dev-dependencies]
 

@@ -141,8 +141,7 @@ if [[ "" == ${is_dbench} ]]; then
 
     # bootstrap node[0] has the default ports,
     # needed by the following `fn` operations
-    addr=$(fn dev | jq '.meta.bootstrap_nodes."0".host."addr"' | sed 's/"//g')
-    fn setup -S "http://${addr}" || exit 1
+    fn setup -S "http://localhost" || exit 1
 
     block_itv=$(fn dev | jq '.meta.block_interval_in_seconds')
 

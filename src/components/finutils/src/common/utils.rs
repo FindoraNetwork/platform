@@ -533,14 +533,14 @@ fn get_seq_id() -> Result<u64> {
 
     let url = format!("{}:8668/global_state", get_serv_addr().c(d!())?);
 
-    attohttpc::get(url)
+    attohttpc::get(&url)
         .send()
-        .c(d!())?
+        .c(d!(url))?
         .error_for_status()
-        .c(d!())?
+        .c(d!(url))?
         .bytes()
-        .c(d!())
-        .and_then(|b| serde_json::from_slice::<Resp>(&b).c(d!()))
+        .c(d!(url))
+        .and_then(|b| serde_json::from_slice::<Resp>(&b).c(d!(url)))
         .map(|resp| resp.1)
 }
 
