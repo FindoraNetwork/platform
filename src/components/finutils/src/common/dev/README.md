@@ -87,12 +87,12 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
     "tendermint_bin_path": "/tmp/tendermint-v0.33.8",
     "tendermint_extra_opts": "validator",
     "block_interval_in_seconds": 1.0,
-    "seed_nodes": {
+    "bootstrap_nodes": {
       "0": {
         "id": 0,
         "tendermint_node_id": "4663d3cb408a56218cbc470a3ef5b3756ae865a7",
         "node_home_dir": "/tmp/__CHAIN_DEV__/7773x/fh/__DEV__/envs/MyEnv/0",
-        "kind": "Seed",
+        "kind": "Bootstrap",
         "ports": {
           "web3_http_service": 40490,
           "web3_websocket_service": 28126,
@@ -312,7 +312,7 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
             "pub_key": "yU5Uw5XHeQ5ZJ7KP2U48T3qhD1pPhtm0dbPxmcjB9UA=",
             "sec_key": "v1Tyw6TUhgpYbU_j0EArUSA_GQaufem4lnbOjoG-uBw="
           },
-          "xfr_mnemonic": "sister talk breeze brave mammal laundry clinic age mutual quarter never coffee witness fiscal school mom ancient rival erode raccoon seed addict unknown balcony",
+          "xfr_mnemonic": "sister talk breeze brave mammal laundry clinic age mutual quarter never coffee witness fiscal school mom ancient rival erode raccoon bootstrap addict unknown balcony",
           "xfr_wallet_addr": "fra1e989fsu4causukf8k28ajn3ufaa2zr66f7rdndr4k0cenjxp74qqqhf5e5"
         },
         {
@@ -490,7 +490,7 @@ We can use `tree -F -L 2 /tmp/__FINDORA_DEV__` to check their structures:
 Let's check the inner structure of 'DEFAULT', `tree -F -L 1 /tmp/__CHAIN_DEV__/ubuntu/bob/__DEV__/envs/DEFAULT`:
 ```
 /tmp/__CHAIN_DEV__/ubuntu/bob/__DEV__/envs/DEFAULT/
-├── 0/           # seed node of this ENV, can *not* be removed dynamicly
+├── 0/           # bootstrap node of this ENV, can *not* be removed dynamicly
 ├── 1/           # the first validator node of this ENV, can *not* be removed dynamicly
 ├── 2/           # the second validator node of this ENV, can be removed dynamicly
 ├── 3/           # the third validator node, similar with the second one

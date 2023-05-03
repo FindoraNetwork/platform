@@ -14,7 +14,7 @@ use chaindev::tm_dev::{
     self, CustomOps, EnvMeta, EnvName, EnvOpts, Node, NodeOptsGenerator, Op,
 };
 use init::{BankAccount, InitialValidator};
-use rucv3::*;
+use rucv4::*;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Write, thread};
 

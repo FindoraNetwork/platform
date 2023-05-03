@@ -82,7 +82,7 @@ and you have set the ssh public key of your local machine on each of them:
 
 Create and start a distributed cluster:
 ```shell
-# this distributed cluster has 4 validator nodes and 1 seed node
+# this distributed cluster has 4 validator nodes and 1 bootstrap node
 fn ddev create --hosts '10.0.0.2#alice,10.0.0.3#bob,10.0.0.4#jack'
 ```
 
@@ -158,7 +158,7 @@ We can use `tree -F -L 2 /tmp/__CHAIN_DEV__/ubuntu/bob/__D_DEV__` to check their
 Let's check the inner structure of 'DEFAULT', `tree -F -L 1 /tmp/__CHAIN_DEV__/ubuntu/bob/__D_DEV__/envs/DEFAULT`:
 ```
 /tmp/__CHAIN_DEV__/ubuntu/bob/__D_DEV__/envs/DEFAULT/
-├── 0/           # seed node of this ENV, can *not* be removed dynamicly
+├── 0/           # bootstrap node of this ENV, can *not* be removed dynamicly
 ├── 1/           # the first validator node of this ENV, can *not* be removed dynamicly
 ├── 2/           # the second validator node of this ENV, can be removed dynamicly
 ├── 8/           # ...
