@@ -7,8 +7,8 @@ all: fmt lint build_release_goleveldb
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export STATIC_CHAIN_DEV_BASE_DIR_SUFFIX = findora
 
-export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
+export STAKING_INITIAL_VALIDATOR_CONFIG := $(shell pwd)/src/ledger/src/staking/init/staking_config.json
+export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV := $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
 
 FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
