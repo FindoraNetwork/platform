@@ -1,5 +1,5 @@
 use core::str::FromStr;
-use ledger::data_model::ASSET_TYPE_FRA;
+use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA};
 use ruc::{d, Result, RucResult};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
@@ -42,6 +42,8 @@ impl TransactionBuilder {
         amount: u64,
         address: Option<String>,
         keypair: &XfrKeyPair,
+        asset: Option<AssetTypeCode>,
+        lowlevel_data: Option<Vec<u8>>,
     ) -> Result<Self> {
         let target_address = match address {
             Some(s) => MultiSigner::from_str(&s)?,
@@ -49,7 +51,13 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, target_address, amount, None, None)?
+            .add_operation_convert_account(
+                keypair,
+                target_address,
+                amount,
+                asset,
+                lowlevel_data,
+            )?
             .sign(keypair);
 
         Ok(self)

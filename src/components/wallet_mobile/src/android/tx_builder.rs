@@ -1,11 +1,10 @@
+use super::parseU64;
 use crate::rust::*;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, JNI_TRUE};
 use jni::JNIEnv;
+use ledger::data_model::AssetTypeCode;
 use zei::xfr::sig::XfrKeyPair;
-
-use super::parseU64;
-
 #[no_mangle]
 /// # Safety
 /// @param kp: owner's XfrKeyPair
@@ -341,6 +340,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     amount: JString,
     keypair: jlong,
     address: JString,
+    asset: JString,
+    lowlevel_data: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
     let addr: String = env
@@ -349,10 +350,36 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .into();
 
     let fra_kp = &*(keypair as *mut XfrKeyPair);
+    let asset_str: String = env
+        .get_string(asset)
+        .expect("Couldn't get java string!")
+        .into();
 
+    let asset = if asset_str.is_empty() {
+        None
+    } else {
+        Some(AssetTypeCode::new_from_base64(&asset_str).unwrap())
+    };
+
+    let lowlevel_data_str: String = env
+        .get_string(lowlevel_data)
+        .expect("Couldn't get java string!")
+        .into();
+
+    let lowlevel_data = if lowlevel_data_str.is_empty() {
+        None
+    } else {
+        Some(hex::decode(lowlevel_data_str).unwrap())
+    };
     builder
         .clone()
-        .add_transfer_to_account_operation(parseU64(env, amount), Some(addr), fra_kp)
+        .add_transfer_to_account_operation(
+            parseU64(env, amount),
+            Some(addr),
+            fra_kp,
+            asset,
+            lowlevel_data,
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
