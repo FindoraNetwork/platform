@@ -1,11 +1,11 @@
-use std::os::raw::c_char;
-use zei::xfr::sig::XfrKeyPair;
-
 use super::parse_u64;
 use crate::rust::{
     c_char_to_string, string_to_c_char, AssetRules, ClientAssetRecord, FeeInputs,
     OwnerMemo, PublicParams, TransactionBuilder,
 };
+use ledger::data_model::AssetTypeCode;
+use std::os::raw::c_char;
+use zei::xfr::sig::XfrKeyPair;
 
 #[no_mangle]
 /// @param kp: owner's XfrKeyPair
@@ -263,6 +263,8 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
     address: *const c_char,
     amount: *const c_char,
     kp: &XfrKeyPair,
+    asset: *const c_char,
+    lowlevel_data: *const c_char,
 ) -> *mut TransactionBuilder {
     let amount = parse_u64(amount);
     let addr_stirng = c_char_to_string(address);
@@ -271,10 +273,27 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
     } else {
         Some(addr_stirng)
     };
-    if let Ok(builder) = builder
-        .clone()
-        .add_transfer_to_account_operation(amount, addr, kp)
-    {
+    let asset_str = c_char_to_string(asset);
+    let asset = if asset_str.is_empty() {
+        None
+    } else {
+        Some(AssetTypeCode::new_from_base64(&asset_str).unwrap())
+    };
+
+    let lowlevel_data_str = c_char_to_string(lowlevel_data);
+    let lowlevel_data = if lowlevel_data_str.is_empty() {
+        None
+    } else {
+        Some(hex::decode(lowlevel_data_str).unwrap())
+    };
+
+    if let Ok(builder) = builder.clone().add_transfer_to_account_operation(
+        amount,
+        addr,
+        kp,
+        asset,
+        lowlevel_data,
+    ) {
         Box::into_raw(Box::new(builder))
     } else {
         std::ptr::null_mut()
