@@ -117,13 +117,13 @@ fn node_command() -> Result<()> {
 
     {
         let src_cfg = [
-            "timeout_propose = \"\\d{1,2}s\"",
-            "timeout_propose_delta = \"\\d+ms\"",
-            "timeout_prevote = \"\\d{1,2}s\"",
-            "timeout_prevote_delta = \"\\d+ms\"",
-            "timeout_precommit = \"\\d{1,2}s\"",
-            "timeout_precommit_delta = \"\\d+ms\"",
-            "timeout_commit = \"\\d{1,2}s\"",
+            "timeout_propose(.*)\"(.*)\"",
+            "timeout_propose_delta(.*)\"(.*)\"",
+            "timeout_prevote(.*)\"(.*)\"",
+            "timeout_prevote_delta(.*)\"(.*)\"",
+            "timeout_precommit(.*)\"(.*)\"",
+            "timeout_precommit_delta(.*)\"(.*)\"",
+            "timeout_commit(.*)\"(.*)\"",
         ];
 
         let target_cfg = [
