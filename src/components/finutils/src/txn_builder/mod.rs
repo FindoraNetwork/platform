@@ -2408,6 +2408,436 @@ mod tests {
         assert!(txn_sid_result.is_ok());
     }
 
+    #[test]
+    fn test_nullifier_for_anon_transfer() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let amount_inputs = vec![6000000u64, 5000000u64];
+        let amount_outputs = vec![1000000u64, 2000000u64];
+
+        let mut oabars_in = vec![];
+        let mut oabars_out = vec![];
+        let mut uids = vec![];
+
+        let mut ledger_state = LedgerState::tmp_ledger();
+
+        let keypair_in = AXfrKeyPair::generate(&mut prng);
+        for amount in amount_inputs.into_iter() {
+            let oabar = gen_oabar(
+                &mut prng,
+                amount,
+                ASSET_TYPE_FRA,
+                &keypair_in.get_public_key(),
+            );
+            let abar = AnonAssetRecord::from_oabar(&oabar);
+            let uid = ledger_state.add_abar(&abar).unwrap();
+            oabars_in.push(oabar);
+            uids.push(uid);
+        }
+
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        ledger_state.compute_and_save_state_commitment_data(1);
+
+        for (oabar, uid) in oabars_in.iter_mut().zip(uids.into_iter()) {
+            let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+            oabar.update_mt_leaf_info(mt_leaf_info);
+        }
+
+        for amount in amount_outputs.into_iter() {
+            let (oabar_out, _keypair_out) =
+                gen_oabar_and_keys(&mut prng, amount, ASSET_TYPE_FRA);
+            oabars_out.push(oabar_out);
+        }
+
+        // 1. nullifier is created twice in the same transaction builder and in the same operation
+        {
+            let vec_inputs = vec![oabars_in[0].clone(), oabars_in[0].clone()];
+            let vec_outputs = vec![oabars_out[0].clone(), oabars_out[1].clone()];
+            let mut builder = TransactionBuilder::from_seq_id(1);
+            let _ = builder.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs,
+                &vec_outputs,
+                &keypair_in,
+            );
+            let txn = builder.build_and_take_transaction().unwrap();
+            let compute_effect = TxnEffect::compute_effect(txn).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect);
+            assert!(block_result.is_ok());
+
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+
+        // 2. nullifier is created twice in the same transaction builder, but in different operations
+        {
+            let vec_inputs1 = vec![oabars_in[0].clone()];
+            let vec_outputs1 = vec![oabars_out[0].clone()];
+            let mut builder = TransactionBuilder::from_seq_id(1);
+            let _ = builder.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs1,
+                &vec_outputs1,
+                &keypair_in,
+            );
+
+            let vec_inputs2 = vec![oabars_in[0].clone()];
+            let vec_outputs2 = vec![oabars_out[1].clone()];
+            let _ = builder.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs2,
+                &vec_outputs2,
+                &keypair_in,
+            );
+
+            let txn = builder.build_and_take_transaction().unwrap();
+            let compute_effect = TxnEffect::compute_effect(txn);
+            assert!(compute_effect.is_err());
+        }
+
+        // 3. the error in test 1 caused this error
+        {
+            let vec_inputs = vec![oabars_in[0].clone()];
+            let vec_outputs = vec![oabars_out[0].clone()];
+            let mut builder = TransactionBuilder::from_seq_id(1);
+            let _ = builder.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs,
+                &vec_outputs,
+                &keypair_in,
+            );
+            let txn = builder.build_and_take_transaction().unwrap();
+            let compute_effect = TxnEffect::compute_effect(txn).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect);
+            assert!(block_result.is_ok());
+
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+
+        // 4. nullifier is created twice in different transaction builders and added to the same block
+        {
+            let vec_inputs1 = vec![oabars_in[0].clone()];
+            let vec_outputs1 = vec![oabars_out[0].clone()];
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs1,
+                &vec_outputs1,
+                &keypair_in,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let vec_inputs2 = vec![oabars_in[0].clone()];
+            let vec_outputs2 = vec![oabars_out[1].clone()];
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs2,
+                &vec_outputs2,
+                &keypair_in,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            // add the same transaction effect to the block twice
+            {
+                let mut block = BlockEffect::default();
+                let block_result = block.add_txn_effect(compute_effect1.clone());
+                assert!(block_result.is_ok());
+
+                let block_result = block.add_txn_effect(compute_effect1.clone());
+                assert!(block_result.is_err());
+            }
+
+            // add different transaction effects to the block
+            {
+                let mut block = BlockEffect::default();
+                let block_result = block.add_txn_effect(compute_effect1);
+                assert!(block_result.is_ok());
+
+                let block_result = block.add_txn_effect(compute_effect2);
+                assert!(block_result.is_err());
+            }
+        }
+
+        // 5. nullifier is created twice in different transaction builders and added to different blocks
+        {
+            let vec_inputs1 = vec![oabars_in[1].clone()];
+            let vec_outputs1 = vec![oabars_out[1].clone()];
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs1,
+                &vec_outputs1,
+                &keypair_in,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let vec_inputs2 = vec![oabars_in[1].clone()];
+            let vec_outputs2 = vec![oabars_out[1].clone()];
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs2,
+                &vec_outputs2,
+                &keypair_in,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect1);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_ok());
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect2);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_nullifier_for_abar_to_bar() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let amount_input = 6000000u64;
+
+        let keypair_in = AXfrKeyPair::generate(&mut prng);
+        let mut oabar_input = gen_oabar(
+            &mut prng,
+            amount_input,
+            ASSET_TYPE_FRA,
+            &keypair_in.get_public_key(),
+        );
+        let abar_input = AnonAssetRecord::from_oabar(&oabar_input);
+        let mut ledger_state = LedgerState::tmp_ledger();
+        let uid = ledger_state.add_abar(&abar_input).unwrap();
+
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        ledger_state.compute_and_save_state_commitment_data(1);
+
+        let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        oabar_input.update_mt_leaf_info(mt_leaf_info);
+
+        let to = XfrKeyPair::generate(&mut prng);
+
+        // 1. nullifier is created twice in different transaction builders and added to the same block
+        {
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_abar_to_bar(
+                &oabar_input.clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_abar_to_bar(
+                &oabar_input.clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            // add the same transaction effect to the block twice
+            {
+                let mut block = BlockEffect::default();
+                let block_result = block.add_txn_effect(compute_effect1.clone());
+                assert!(block_result.is_ok());
+
+                let block_result = block.add_txn_effect(compute_effect1.clone());
+                assert!(block_result.is_err());
+            }
+
+            // add different transaction effects to the block
+            {
+                let mut block = BlockEffect::default();
+                let block_result = block.add_txn_effect(compute_effect1);
+                assert!(block_result.is_ok());
+
+                let block_result = block.add_txn_effect(compute_effect2);
+                assert!(block_result.is_err());
+            }
+        }
+
+        // 2. nullifier is created twice in different transaction builders and added to different blocks
+        {
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_abar_to_bar(
+                &oabar_input.clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_abar_to_bar(
+                &oabar_input.clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect1);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_ok());
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect2);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_nullifier_for_diff_operations() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let amount_inputs = vec![6000000u64, 5000000u64];
+        let amount_outputs = vec![1000000u64, 2000000u64];
+        let asset_type = ASSET_TYPE_FRA;
+
+        let mut oabars_in = vec![];
+        let mut oabars_out = vec![];
+        let mut uids = vec![];
+
+        let mut ledger_state = LedgerState::tmp_ledger();
+
+        let keypair_in = AXfrKeyPair::generate(&mut prng);
+        for amount in amount_inputs.into_iter() {
+            let oabar =
+                gen_oabar(&mut prng, amount, asset_type, &keypair_in.get_public_key());
+            let abar = AnonAssetRecord::from_oabar(&oabar);
+            let uid = ledger_state.add_abar(&abar).unwrap();
+            oabars_in.push(oabar);
+            uids.push(uid);
+        }
+
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        ledger_state.compute_and_save_state_commitment_data(1);
+
+        for (oabar, uid) in oabars_in.iter_mut().zip(uids.into_iter()) {
+            let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+            oabar.update_mt_leaf_info(mt_leaf_info);
+        }
+
+        for amount in amount_outputs.into_iter() {
+            let (oabar_out, _keypair_out) =
+                gen_oabar_and_keys(&mut prng, amount, asset_type);
+            oabars_out.push(oabar_out);
+        }
+
+        let to = XfrKeyPair::generate(&mut prng);
+
+        // 1. nullifier is created twice in the same transaction builder, but in different operations
+        {
+            let vec_inputs = vec![oabars_in[0].clone()];
+            let vec_outputs = vec![oabars_out[0].clone()];
+
+            let mut builder = TransactionBuilder::from_seq_id(1);
+            let _ = builder.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs,
+                &vec_outputs,
+                &keypair_in,
+            );
+            let _ = builder.add_operation_abar_to_bar(
+                &oabars_in[0].clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn = builder.build_and_take_transaction().unwrap();
+            let compute_effect = TxnEffect::compute_effect(txn);
+            assert!(compute_effect.is_ok());
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect.unwrap());
+            assert!(block_result.is_ok());
+
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+
+        // 2. nullifier is created twice in different transaction builders and added to the same block
+        {
+            let vec_inputs = vec![oabars_in[0].clone()];
+            let vec_outputs = vec![oabars_out[0].clone()];
+
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs,
+                &vec_outputs,
+                &keypair_in,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_abar_to_bar(
+                &oabars_in[0].clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect1);
+            assert!(block_result.is_ok());
+
+            let block_result = block.add_txn_effect(compute_effect2);
+            assert!(block_result.is_err());
+        }
+
+        // 3. nullifier is created twice in different transaction builders and added to different blocks
+        {
+            let vec_inputs = vec![oabars_in[1].clone()];
+            let vec_outputs = vec![oabars_out[1].clone()];
+
+            let mut builder1 = TransactionBuilder::from_seq_id(1);
+            let _ = builder1.add_operation_anon_transfer_fees_remainder(
+                &vec_inputs,
+                &vec_outputs,
+                &keypair_in,
+            );
+            let txn1 = builder1.build_and_take_transaction().unwrap();
+            let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+
+            let mut builder2 = TransactionBuilder::from_seq_id(1);
+            let _ = builder2.add_operation_abar_to_bar(
+                &oabars_in[1].clone(),
+                &keypair_in,
+                &to.get_pk(),
+                AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            );
+            let txn2 = builder2.build_and_take_transaction().unwrap();
+            let compute_effect2 = TxnEffect::compute_effect(txn2).unwrap();
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect1);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_ok());
+
+            let mut block = BlockEffect::default();
+            let block_result = block.add_txn_effect(compute_effect2);
+            assert!(block_result.is_ok());
+            let ledger_result = ledger_state.finish_block(block);
+            assert!(ledger_result.is_err());
+        }
+    }
+
     // Negative tests added
     #[test]
     #[ignore]
@@ -2514,6 +2944,22 @@ mod tests {
             .build()
             .unwrap();
         (oabar, keypair)
+    }
+
+    fn gen_oabar<R: CryptoRng + RngCore>(
+        prng: &mut R,
+        amount: u64,
+        asset_type: AT,
+        pub_key: &AXfrPubKey,
+    ) -> OpenAnonAssetRecord {
+        OpenAnonAssetRecordBuilder::new()
+            .amount(amount)
+            .asset_type(asset_type)
+            .pub_key(pub_key)
+            .finalize(prng)
+            .unwrap()
+            .build()
+            .unwrap()
     }
 
     #[test]
