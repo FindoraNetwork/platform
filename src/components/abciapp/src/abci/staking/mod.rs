@@ -45,7 +45,8 @@ use {
 const VALIDATOR_LIMIT: usize = 58;
 // Modify the validator's validator line to 100
 const VALIDATOR_LIMIT_V2: usize = 100;
-
+// Modify the validator's validator line to 95
+const VALIDATOR_LIMIT_V3: usize = 95;
 lazy_static! {
     /// Tendermint node address, sha256(pubkey)[:20]
     pub static ref TD_NODE_SELF_ADDR: Vec<u8> = pnk!(whoami::get_self_addr());
@@ -98,30 +99,40 @@ pub fn get_validators(
 
     // The logic of the context guarantees:
     // - current entries == last entries
-    let cur_entries = last_entries;
-
-    let mut vs = staking
-        .validator_get_current()
-        .c(d!())?
-        .body
-        .values()
-        .filter(|v| {
-            if let Some(power) = cur_entries.get(&v.td_addr) {
-                // - new power > 0: change existing entries
-                // - new power = 0: remove existing entries
-                // - the power returned by `LastCommitInfo` is impossible
-                // to be zero in the context of tendermint
-                *power as u64 != v.td_power
-            } else {
-                // add new validator
-                //
-                // try to remove non-existing entries is not allowed
-                0 < v.td_power
-            }
-        })
-        // this conversion is safe in the context of tendermint
-        .map(|v| (&v.td_pubkey, v.td_power as i64))
-        .collect::<Vec<_>>();
+    let cur_entries: BTreeMap<&Vec<u8>, i64> = last_entries;
+    let height = staking.cur_height();
+    let mut vs = if height > CFG.checkpoint.fix_staking {
+        staking
+            .validator_get_current()
+            .c(d!())?
+            .body
+            .values()
+            .map(|v| (&v.td_pubkey, v.td_power as i64))
+            .collect::<Vec<_>>()
+    } else {
+        staking
+            .validator_get_current()
+            .c(d!())?
+            .body
+            .values()
+            .filter(|v| {
+                if let Some(power) = cur_entries.get(&v.td_addr) {
+                    // - new power > 0: change existing entries
+                    // - new power = 0: remove existing entries
+                    // - the power returned by `LastCommitInfo` is impossible
+                    // to be zero in the context of tendermint
+                    *power as u64 != v.td_power
+                } else {
+                    // add new validator
+                    //
+                    // try to remove non-existing entries is not allowed
+                    0 < v.td_power
+                }
+            })
+            // this conversion is safe in the context of tendermint
+            .map(|v| (&v.td_pubkey, v.td_power as i64))
+            .collect::<Vec<_>>()
+    };
 
     if vs.is_empty() {
         return Ok(None);
@@ -130,13 +141,13 @@ pub fn get_validators(
     // reverse sort
     vs.sort_by(|a, b| b.1.cmp(&a.1));
 
-    let validator_limit =
-        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
-            VALIDATOR_LIMIT
-        } else {
-            VALIDATOR_LIMIT_V2
-        };
-
+    let validator_limit = if height < CFG.checkpoint.validators_limit_v2_height {
+        VALIDATOR_LIMIT
+    } else if height < CFG.checkpoint.fix_staking {
+        VALIDATOR_LIMIT_V2
+    } else {
+        VALIDATOR_LIMIT_V3
+    };
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
     vs.iter_mut().skip(validator_limit).for_each(|(k, power)| {
@@ -431,12 +442,14 @@ fn gen_offline_punish_list(
         .collect::<Vec<_>>();
     vs.sort_by(|a, b| b.1.cmp(&a.1));
 
-    let validator_limit =
-        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
-            VALIDATOR_LIMIT
-        } else {
-            VALIDATOR_LIMIT_V2
-        };
+    let height = staking.cur_height();
+    let validator_limit = if height < CFG.checkpoint.validators_limit_v2_height {
+        VALIDATOR_LIMIT
+    } else if height < CFG.checkpoint.fix_staking {
+        VALIDATOR_LIMIT_V2
+    } else {
+        VALIDATOR_LIMIT_V3
+    };
 
     vs.iter_mut().skip(validator_limit).for_each(|(_, power)| {
         *power = 0;
