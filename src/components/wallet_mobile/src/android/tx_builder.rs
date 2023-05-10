@@ -350,11 +350,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .into();
 
     let fra_kp = &*(keypair as *mut XfrKeyPair);
+
     let asset_str: String = env
         .get_string(asset)
         .expect("Couldn't get java string!")
         .into();
-
     let asset = if asset_str.is_empty() {
         None
     } else {
@@ -365,13 +365,13 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .get_string(lowlevel_data)
         .expect("Couldn't get java string!")
         .into();
-
     let lowlevel_data = if lowlevel_data_str.is_empty() {
         None
     } else {
         Some(hex::decode(lowlevel_data_str).unwrap())
     };
-    builder
+
+    let builder = builder
         .clone()
         .add_transfer_to_account_operation(
             parseU64(env, amount),
