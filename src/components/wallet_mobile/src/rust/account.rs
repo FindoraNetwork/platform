@@ -58,7 +58,7 @@ impl TransactionBuilder {
                 asset,
                 lowlevel_data,
             )?
-            .sign(keypair);
+            .sign_to_map(keypair);
 
         Ok(self)
     }
