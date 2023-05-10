@@ -5,7 +5,6 @@ RUN wget -nc -P /opt/ https://www.openssl.org/source/openssl-1.1.1s.tar.gz
 RUN wget -nc -P /opt/ https://dl.google.com/android/repository/android-ndk-r25c-linux.zip && unzip /opt/android-ndk-r25c-linux.zip -d /opt/
 
 ENV PATH="/opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-ENV WORK_DIR /platform
 
 ENV ANDROID_NDK_HOME /opt/android-ndk-r25c/
 RUN tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt
@@ -18,30 +17,40 @@ WORKDIR /opt/openssl-1.1.1s
 RUN ./Configure android-arm --prefix=/opt/armv7a-linux/ssl
 RUN make -j `nproc` && make install
 
-COPY . $WORK_DIR
+RUN rm -rvf /opt/openssl-1.1.1s && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt
+WORKDIR /opt/openssl-1.1.1s
+RUN ./Configure android-x86_64 --prefix=/opt/x86_64-linux/ssl
+RUN make -j `nproc` && make install
 
-WORKDIR $WORK_DIR
 ENV AR=llvm-ar
+RUN echo '[target.aarch64-linux-android]' > /usr/local/cargo/config
+RUN echo 'linker = "aarch64-linux-android33-clang"' >> /usr/local/cargo/config
+RUN echo '[target.armv7-linux-androideabi]' >> /usr/local/cargo/config
+RUN echo 'linker = "armv7a-linux-androideabi33-clang"' >> /usr/local/cargo/config
+RUN echo '[target.x86_64-linux-android]' >> /usr/local/cargo/config
+RUN echo 'linker = "x86_64-linux-android33-clang"' >> /usr/local/cargo/config
+
+ENV WORK_DIR /platform
+COPY . $WORK_DIR
+WORKDIR $WORK_DIR
 
 ENV OPENSSL_DIR=/opt/aarch64-linux/ssl
 ENV CC=aarch64-linux-android33-clang
-RUN rustup target add aarch64-linux-android
-RUN echo '[target.aarch64-linux-android]' > /usr/local/cargo/config
-RUN echo 'ar = "llvm-ar"' >> /usr/local/cargo/config
-RUN echo 'linker = "aarch64-linux-android33-clang"' >> /usr/local/cargo/config
-RUN cargo build --lib --release --target aarch64-linux-android -p wallet_mobile
+RUN rustup target add aarch64-linux-android && cargo build --lib --release --target aarch64-linux-android -p wallet_mobile
 
 ENV OPENSSL_DIR=/opt/armv7a-linux/ssl
 ENV CC=armv7a-linux-androideabi33-clang
-RUN rustup target add armv7-linux-androideabi
-RUN echo '[target.armv7-linux-androideabi]' >> /usr/local/cargo/config
-RUN echo 'ar = "llvm-ar"' >> /usr/local/cargo/config
-RUN echo 'linker = "armv7a-linux-androideabi33-clang"' >> /usr/local/cargo/config
-RUN cargo build --lib --release --target armv7-linux-androideabi -p wallet_mobile
+RUN rustup target add armv7-linux-androideabi && cargo build --lib --release --target armv7-linux-androideabi -p wallet_mobile
 
-# mkdir -p android_lib/{arm64-v8a,armeabi-v7a}
-# docker cp 037cae98f622:/platform/src/components/wallet_mobile/wallet_mobile_ffi.h ./android_lib
-# docker cp 037cae98f622:/platform/target/aarch64-linux-android/release/libwallet_mobile.a ./android_lib/arm64-v8a
-# docker cp 037cae98f622:/platform/target/aarch64-linux-android/release/libwallet_mobile.so ./android_lib/arm64-v8a
-# docker cp 037cae98f622:/platform/target/armv7-linux-androideabi/release/libwallet_mobile.a ./android_lib/armeabi-v7a
-# docker cp 037cae98f622:/platform/target/armv7-linux-androideabi/release/libwallet_mobile.so ./android_lib/armeabi-v7a
+ENV OPENSSL_DIR=/opt/x86_64-linux/ssl
+ENV CC=x86_64-linux-android33-clang
+RUN rustup target add x86_64-linux-android && cargo build --lib --release --target x86_64-linux-android -p wallet_mobile
+
+RUN mkdir -p /jniLibs/arm64-v8a && mkdir -p /jniLibs/armeabi-v7a && mkdir -p /jniLibs/x86_64
+RUN cp $WORK_DIR/src/components/wallet_mobile/wallet_mobile_ffi.h /jniLibs
+RUN cp $WORK_DIR/target/aarch64-linux-android/release/libwallet_mobile.a /jniLibs/arm64-v8a
+RUN cp $WORK_DIR/target/aarch64-linux-android/release/libwallet_mobile.so /jniLibs/arm64-v8a
+RUN cp $WORK_DIR/target/armv7-linux-androideabi/release/libwallet_mobile.a /jniLibs/armeabi-v7a
+RUN cp $WORK_DIR/target/armv7-linux-androideabi/release/libwallet_mobile.so /jniLibs/armeabi-v7a
+RUN cp $WORK_DIR/target/x86_64-linux-android/release/libwallet_mobile.a /jniLibs/x86_64
+RUN cp $WORK_DIR/target/x86_64-linux-android/release/libwallet_mobile.so /jniLibs/x86_64
