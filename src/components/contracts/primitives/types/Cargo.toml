@@ -13,7 +13,7 @@ bech32 = "0.7.2"
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 hex = "0.4.2"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", tag = "v1.0.0" }
 
 libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }

@@ -37,9 +37,9 @@ zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
 fp-utils = { path = "../contracts/primitives/utils" }
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
-cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", tag = "v1.0.0" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", tag = "v1.0.0" }
+cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", tag = "v1.0.0" }
 
 ledger = { path = "../../ledger" }
 
