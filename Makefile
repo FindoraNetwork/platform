@@ -270,7 +270,7 @@ ci_build_image:
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
 
 
 # ========================== dev ARM64/v8 ===========================
