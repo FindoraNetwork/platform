@@ -139,7 +139,7 @@ pub fn get_validators(
     }
 
     // reverse sort
-    vs.sort_by(|a, b| b.1.cmp(&a.1));
+    vs.sort_by(|a, b| b.2.cmp(&a.2));
 
     let validator_limit = if height < CFG.checkpoint.validators_limit_v2_height {
         VALIDATOR_LIMIT
