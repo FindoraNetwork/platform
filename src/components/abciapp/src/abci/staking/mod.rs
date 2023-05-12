@@ -45,8 +45,6 @@ use {
 const VALIDATOR_LIMIT: usize = 58;
 // Modify the validator's validator line to 100
 const VALIDATOR_LIMIT_V2: usize = 100;
-// Modify the validator's validator line to 95
-const VALIDATOR_LIMIT_V3: usize = 95;
 lazy_static! {
     /// Tendermint node address, sha256(pubkey)[:20]
     pub static ref TD_NODE_SELF_ADDR: Vec<u8> = pnk!(whoami::get_self_addr());
@@ -139,14 +137,12 @@ pub fn get_validators(
     }
 
     // reverse sort
-    vs.sort_by(|a, b| b.1.cmp(&a.1));
+    vs.sort_by(|a, b| b.2.cmp(&a.2));
 
     let validator_limit = if height < CFG.checkpoint.validators_limit_v2_height {
         VALIDATOR_LIMIT
-    } else if height < CFG.checkpoint.fix_staking_validator {
-        VALIDATOR_LIMIT_V2
     } else {
-        VALIDATOR_LIMIT_V3
+        VALIDATOR_LIMIT_V2
     };
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
@@ -452,14 +448,12 @@ fn gen_offline_punish_list(
         .collect::<Vec<_>>();
     vs.sort_by(|a, b| b.1.cmp(&a.1));
 
-    let height = staking.cur_height();
-    let validator_limit = if height < CFG.checkpoint.validators_limit_v2_height {
-        VALIDATOR_LIMIT
-    } else if height < CFG.checkpoint.fix_staking_validator {
-        VALIDATOR_LIMIT_V2
-    } else {
-        VALIDATOR_LIMIT_V3
-    };
+    let validator_limit =
+        if staking.cur_height() < CFG.checkpoint.validators_limit_v2_height {
+            VALIDATOR_LIMIT
+        } else {
+            VALIDATOR_LIMIT_V2
+        };
 
     vs.iter_mut().skip(validator_limit).for_each(|(_, power)| {
         *power = 0;
