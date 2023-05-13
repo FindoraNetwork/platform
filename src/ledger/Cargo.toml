@@ -33,8 +33,8 @@ ruc = "1.0"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", rev = "57633a", features = ["yoloproofs"] }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
 fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"

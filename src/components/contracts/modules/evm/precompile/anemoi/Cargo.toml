@@ -16,8 +16,8 @@ evm-precompile-utils = { path = "../utils"}
 tracing = "0.1"
 module-evm = { path = "../../../../modules/evm"}
 num_enum = { version = "0.5.4", default-features = false }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
 
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }
