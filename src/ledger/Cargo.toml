@@ -39,12 +39,12 @@ fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "main" }
-bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "main" }
-cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "main" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "main" }
-merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "main" }
-sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "main" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", tag = "v1.0.0" }
+bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", tag = "v1.0.0" }
+cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", tag = "v1.0.0" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", tag = "v1.0.0" }
+merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", tag = "v1.0.0" }
+sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", tag = "v1.0.0" }
 
 [features]
 default = []
