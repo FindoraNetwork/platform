@@ -1,8 +1,8 @@
+use super::parse_u64;
 use crate::rust::types;
 use crate::rust::*;
 use std::os::raw::c_char;
-
-use super::parse_u64;
+use zei::XfrKeyPair;
 
 #[no_mangle]
 /// Fee smaller than this value will be denied.
@@ -13,7 +13,9 @@ pub extern "C" fn findora_ffi_fra_get_minimal_fee() -> u64 {
 #[no_mangle]
 /// The destination for fee to be transfered to.
 pub extern "C" fn findora_ffi_fra_get_dest_pubkey() -> *mut types::XfrPublicKey {
-    Box::into_raw(Box::new(types::XfrPublicKey::from(fra_get_dest_pubkey())))
+    Box::into_raw(Box::new(types::XfrPublicKey::from(
+        fra_get_dest_pubkey().into_noah().unwrap(),
+    )))
 }
 
 #[no_mangle]
@@ -42,7 +44,13 @@ pub unsafe extern "C" fn findora_ffi_fee_inputs_append(
         Some((*om).clone())
     };
 
-    input.append(am, *tr, (*ar).clone(), om_op, (**kp).clone());
+    input.append(
+        am,
+        *tr,
+        (*ar).clone(),
+        om_op,
+        XfrKeyPair::from_noah(&*kp).unwrap(),
+    );
 }
 
 #[no_mangle]
