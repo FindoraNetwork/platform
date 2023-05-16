@@ -28,6 +28,7 @@ lib_dir         = lib
 subdirs = $(bin_dir) $(lib_dir)
 
 WASM_PKG = wasm.tar.gz
+ZKCARD_WASM_PKG = zkcard_wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
@@ -191,6 +192,10 @@ cleanall: clean
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
+	
+zkcard_wasm:
+	cd src/components/zkcards_wasm && wasm-pack build
+	tar -zcpf $(ZKCARD_WASM_PKG) src/components/zkcards_wasm/pkg
 
 debug_env: stop_debug_env build_release_debug
 	- rm -f checkpoint.toml

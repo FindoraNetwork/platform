@@ -1,0 +1,36 @@
+[package]
+name = "zkcard_wasm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+
+[dependencies]
+wasm-bindgen = { version = "0.2.84" }
+serde-wasm-bindgen = "0.5.0"
+js-sys =  { version = "0.3.61" }
+web-sys = { version = "0.3.61", features =  ["console"] }
+
+
+serde = { version = "1.0.162", features = ["derive"]}
+rand = "0.8"
+num = { version = "0.3", features = ["alloc"] }
+num_enum = { version = "0.5.4", default-features = false }
+slices = "0.2.0"
+
+
+barnett-smart-card-protocol = { git = "https://github.com/FindoraNetwork/findora-poker.git", branch = "add_only_function" }
+proof-essentials = { git = "https://github.com/FindoraNetwork/findora-poker.git", branch = "add_only_function" }
+
+
+ark-bn254 = "0.4.0"
+ark-std = { version = "0.4.0", features = ["std"] }
+ark-ec = "0.4.0"
+ark-serialize = "0.4.0"
+ark-ff = "0.4.0"
+
+
