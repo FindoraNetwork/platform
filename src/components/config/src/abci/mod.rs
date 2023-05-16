@@ -246,7 +246,7 @@ lazy_static! {
         fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
         lowlevel_data_min: 3971239,
         lowlevel_data_max: 4004430,
-        fix_staking_validator: 4035301
+        fix_staking_validator: 4062930
     };
 }
 
