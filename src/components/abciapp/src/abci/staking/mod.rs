@@ -99,38 +99,28 @@ pub fn get_validators(
     // - current entries == last entries
     let cur_entries: BTreeMap<&Vec<u8>, i64> = last_entries;
     let height = staking.cur_height();
-    let mut vs = if height < CFG.checkpoint.fix_staking_validator {
-        staking
-            .validator_get_current()
-            .c(d!())?
-            .body
-            .values()
-            .filter(|v| {
-                if let Some(power) = cur_entries.get(&v.td_addr) {
-                    // - new power > 0: change existing entries
-                    // - new power = 0: remove existing entries
-                    // - the power returned by `LastCommitInfo` is impossible
-                    // to be zero in the context of tendermint
-                    *power as u64 != v.td_power
-                } else {
-                    // add new validator
-                    //
-                    // try to remove non-existing entries is not allowed
-                    0 < v.td_power
-                }
-            })
-            // this conversion is safe in the context of tendermint
-            .map(|v| (&v.td_addr, &v.td_pubkey, v.td_power as i64))
-            .collect::<Vec<_>>()
-    } else {
-        staking
-            .validator_get_current()
-            .c(d!())?
-            .body
-            .values()
-            .map(|v| (&v.td_addr, &v.td_pubkey, v.td_power as i64))
-            .collect::<Vec<_>>()
-    };
+    let mut vs = staking
+        .validator_get_current()
+        .c(d!())?
+        .body
+        .values()
+        .filter(|v| {
+            if let Some(power) = cur_entries.get(&v.td_addr) {
+                // - new power > 0: change existing entries
+                // - new power = 0: remove existing entries
+                // - the power returned by `LastCommitInfo` is impossible
+                // to be zero in the context of tendermint
+                *power as u64 != v.td_power
+            } else {
+                // add new validator
+                //
+                // try to remove non-existing entries is not allowed
+                0 < v.td_power
+            }
+        })
+        // this conversion is safe in the context of tendermint
+        .map(|v| (&v.td_addr, &v.td_pubkey, v.td_power as i64))
+        .collect::<Vec<_>>();
 
     if vs.is_empty() {
         return Ok(None);
@@ -146,19 +136,12 @@ pub fn get_validators(
     };
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
-    if height < CFG.checkpoint.fix_staking_validator {
-        vs.iter_mut()
-            .skip(validator_limit)
-            .for_each(|(_, pub_key, power)| {
-                alt!(cur_entries.contains_key(pub_key), *power = 0, *power = -1);
-            });
-    } else {
-        vs.iter_mut()
-            .skip(validator_limit)
-            .for_each(|(addr, _, power)| {
-                alt!(cur_entries.contains_key(addr), *power = 0, *power = -1);
-            });
-    }
+
+    vs.iter_mut()
+        .skip(validator_limit)
+        .for_each(|(_, pub_key, power)| {
+            alt!(cur_entries.contains_key(pub_key), *power = 0, *power = -1);
+        });
 
     Ok(Some(
         vs.iter()
