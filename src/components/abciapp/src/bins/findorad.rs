@@ -117,14 +117,14 @@ fn node_command() -> Result<()> {
 
     {
         let src_cfg = [
-            "allow_duplicate_ip = false",
-            "timeout_propose(.*)\"(.*)\"",
-            "timeout_propose_delta(.*)\"(.*)\"",
-            "timeout_prevote(.*)\"(.*)\"",
-            "timeout_prevote_delta(.*)\"(.*)\"",
-            "timeout_precommit(.*)\"(.*)\"",
-            "timeout_precommit_delta(.*)\"(.*)\"",
-            "timeout_commit(.*)\"(.*)\"",
+            "allow_duplicate_ip(.*)",
+            "timeout_propose(.*)",
+            "timeout_propose_delta(.*)",
+            "timeout_prevote(.*)",
+            "timeout_prevote_delta(.*)",
+            "timeout_precommit(.*)",
+            "timeout_precommit_delta(.*)",
+            "timeout_commit(.*)",
         ];
 
         let target_cfg = [
