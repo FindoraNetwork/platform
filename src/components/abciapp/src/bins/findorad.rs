@@ -117,6 +117,7 @@ fn node_command() -> Result<()> {
 
     {
         let src_cfg = [
+            "allow_duplicate_ip = false",
             "timeout_propose(.*)\"(.*)\"",
             "timeout_propose_delta(.*)\"(.*)\"",
             "timeout_prevote(.*)\"(.*)\"",
@@ -127,6 +128,7 @@ fn node_command() -> Result<()> {
         ];
 
         let target_cfg = [
+            "allow_duplicate_ip = true",
             "timeout_propose = \"6s\"",
             "timeout_propose_delta = \"500ms\"",
             "timeout_prevote = \"1s\"",
