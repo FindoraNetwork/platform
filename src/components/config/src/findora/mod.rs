@@ -149,6 +149,7 @@ pub mod config {
 
     #[derive(Default)]
     pub struct Config {
+        pub skip_update_config: bool,
         pub enable_enterprise_web3: bool,
         pub tendermint_host: String,
         pub tendermint_port: u16,
@@ -184,6 +185,7 @@ pub mod config {
         let matches = {
             let node = SubCommand::with_name("node")
                 .about("Start findora node.")
+                .arg_from_usage("--skip-update-config 'skip update config'")
                 .arg_from_usage("--enable-enterprise-web3 'enable enterprise-web3'")
                 .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
                 .arg_from_usage("--arc-history=[EVM archive node tracing history, format \"PERIOD,INTERVAL\" in days]")
@@ -259,6 +261,7 @@ pub mod config {
 
         let enable_enterprise_web3 = m.is_present("enable-enterprise-web3");
 
+        let skip_update_config = m.is_present("skip-update-config");
         let tcfg = m
             .value_of("config")
             .map(|v| v.to_owned())
@@ -375,6 +378,7 @@ pub mod config {
         };
 
         let res = Config {
+            skip_update_config,
             enable_enterprise_web3,
             tendermint_host: th,
             tendermint_port: tp,
