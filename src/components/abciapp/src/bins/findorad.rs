@@ -115,7 +115,7 @@ fn node_command() -> Result<()> {
         return Ok(());
     }
 
-    {
+    if !CFG.skip_update_config {
         let src_cfg = [
             "timeout_propose(.*)",
             "timeout_propose_delta(.*)",
