@@ -339,6 +339,7 @@ impl EthApi for EthApiImpl {
                 value,
                 data,
                 nonce,
+                r#type: _,
             } = request;
 
             let id = native_block_id(block_number);
@@ -867,6 +868,7 @@ impl EthApi for EthApiImpl {
                     value,
                     data,
                     nonce,
+                    r#type: _,
                 } = request;
 
                 let gas_limit = core::cmp::min(
