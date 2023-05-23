@@ -124,8 +124,11 @@ pub struct CheckPointConfig {
     #[serde(default = "def_lowlevel_data_max")]
     pub lowlevel_data_max: u64,
 
-    #[serde(default = "def_fix_staking_validator")]
-    pub fix_staking_validator: u64,
+    #[serde(default = "def_validator_whitelist_v1_height")]
+    pub validator_whitelist_v1_height: u64,
+
+    #[serde(default = "def_validator_whitelist_v1")]
+    pub validator_whitelist_v1: Vec<String>,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -167,11 +170,12 @@ fn def_lowlevel_data_min() -> u64 {
 fn def_lowlevel_data_max() -> u64 {
     DEFAULT_CHECKPOINT_CONFIG.lowlevel_data_max
 }
-
-fn def_fix_staking_validator() -> u64 {
-    DEFAULT_CHECKPOINT_CONFIG.fix_staking_validator
+fn def_validator_whitelist_v1_height() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v1_height
 }
-
+fn def_validator_whitelist_v1() -> Vec<String> {
+    DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v1.clone()
+}
 #[cfg(feature = "debug_env")]
 lazy_static! {
     static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
@@ -207,7 +211,8 @@ lazy_static! {
         fns_registry: "".to_owned(),
         lowlevel_data_min: 0,
         lowlevel_data_max: 0,
-        fix_staking_validator: 0
+        validator_whitelist_v1_height: 128,
+        validator_whitelist_v1: vec![]
     };
 }
 
@@ -246,7 +251,8 @@ lazy_static! {
         fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
         lowlevel_data_min: 3971239,
         lowlevel_data_max: 4004430,
-        fix_staking_validator: 4072340
+        validator_whitelist_v1_height: 4072340,
+        validator_whitelist_v1: vec![]
     };
 }
 
