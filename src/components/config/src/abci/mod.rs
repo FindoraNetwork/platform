@@ -124,8 +124,11 @@ pub struct CheckPointConfig {
     #[serde(default = "def_lowlevel_data_max")]
     pub lowlevel_data_max: u64,
 
-    #[serde(default = "def_fix_staking_validator")]
-    pub fix_staking_validator: u64,
+    #[serde(default = "def_validator_whitelist_v1_height")]
+    pub validator_whitelist_v1_height: u64,
+
+    #[serde(default = "def_validator_whitelist_v1")]
+    pub validator_whitelist_v1: Vec<String>,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -167,11 +170,12 @@ fn def_lowlevel_data_min() -> u64 {
 fn def_lowlevel_data_max() -> u64 {
     DEFAULT_CHECKPOINT_CONFIG.lowlevel_data_max
 }
-
-fn def_fix_staking_validator() -> u64 {
-    DEFAULT_CHECKPOINT_CONFIG.fix_staking_validator
+fn def_validator_whitelist_v1_height() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v1_height
 }
-
+fn def_validator_whitelist_v1() -> Vec<String> {
+    DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v1.clone()
+}
 #[cfg(feature = "debug_env")]
 lazy_static! {
     static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
@@ -207,7 +211,8 @@ lazy_static! {
         fns_registry: "".to_owned(),
         lowlevel_data_min: 0,
         lowlevel_data_max: 0,
-        fix_staking_validator: 0
+        validator_whitelist_v1_height: 128,
+        validator_whitelist_v1: vec![]
     };
 }
 
@@ -246,7 +251,102 @@ lazy_static! {
         fns_registry: "0x57e8782c2f77B99823EeA48aCE3Eb7635F0B35F9".to_owned(),
         lowlevel_data_min: 3971239,
         lowlevel_data_max: 4004430,
-        fix_staking_validator: 4077000
+        validator_whitelist_v1_height: 4072340,
+        validator_whitelist_v1: vec![
+            "2A75D9238DBBF14891F7BFFBBA7EF86CA0E98CC9".to_string(),
+            "09EF1DB6B67D1CBF7EBA6BD9B204611848993DF7".to_string(),
+            "E012AA66C83999E3862C8AA534B9CE66FC14A37A".to_string(),
+            "544FEC0D957816C880F1AC4C4CA239FEEDE0AC70".to_string(),
+            "D7A838C7A7F2526AADCCBCB95348F8F68404693C".to_string(),
+            "61ED9D4018B10E9B007D200725CCA0087544268F".to_string(),
+            "805B1F87212164FD1DB64B8ED63A8F2C42AAC647".to_string(),
+            "5C97EE9B91D90B332813078957E3A96B304791B4".to_string(),
+            "0856654F7CD4BB0D6CC4409EF4892136C9D24692".to_string(),
+            "A8DFD116BA9664F38958C721688FA73E6320755B".to_string(),
+            "54937E208CF724F06CA723173C54FC5E8F9AD01A".to_string(),
+            "000E33AB7471186F3B1DE9FC08BB9C480F453590".to_string(),
+            "FD8C65634A9D8899FA14200177AF19D24F6E1C37".to_string(),
+            "E8F6748439DA597A43ED150F55F6B48E30494BD6".to_string(),
+            "B4989BBB38287C2AF6DF0155B55E4073DA6C4BA8".to_string(),
+            "1D8F397FA03B357DC94303086A91CE5C8C7AF1E6".to_string(),
+            "916AD122B85C16BEE71723E52F727EB5A705123F".to_string(),
+            "E5705FED0049EDA431D37B37947A136F22F8F054".to_string(),
+            "EA70EB6087E3D606730C4E9062CC24A5BD7D2B37".to_string(),
+            "236960CC4506F7A051FDF0DAC07F2AE9B9AAE63C".to_string(),
+            "1DE3EED26BB6CBAE7C6F5A8B881EF36F78F72AAF".to_string(),
+            "9AB077E00C8B731AE1F82DEC5E45CB3D1E9BBB12".to_string(),
+            "60689516C566F27E03794329C431D0084299480A".to_string(),
+            "7956EFAAFC81CF155207E33FCED084C326A5972D".to_string(),
+            "5AEBB0871B9EEAE510CB10C45E09FED03FB233D8".to_string(),
+            "69E2B6C4C1122172E69AF48E0AEC36B7F7C8005A".to_string(),
+            "8A2D072955AA021425379894377949494FACF072".to_string(),
+            "55DBB6B98E70F4A9905C880B7C66282B5D5AD000".to_string(),
+            "9ED0D8D661C99A58F78F80816968E61AAE8DC649".to_string(),
+            "26AA7581263332F47E0CE17CF4B1F34D22C7F4CB".to_string(),
+            "9F7223691393DA99A68E962A20B8578ED03A7158".to_string(),
+            "8CB713C8EA32223FCAC66B966FCFA9BAEE257946".to_string(),
+            "7C77CF71CF6CBD04885E32FC49EDA367F7BC3C65".to_string(),
+            "629F2D3DA692107BFC5DB3122C44FCFAA72DB8C7".to_string(),
+            "EAC5792572EB726AA0DBA9A7AFA9757F8063C6C9".to_string(),
+            "510082967DFA7DEBA11267B26A6318D07A457B48".to_string(),
+            "AD2C69A9432E8F6634E1ADC3D6CA69EA9E1F4114".to_string(),
+            "39F0C5E451394FAAE7213FD914EFBA8F963CCB90".to_string(),
+            "47480785029886997002807DEFD0A7E3FF37CF90".to_string(),
+            "3C59A3A7B114DD22F8DB48A5941D974C93099524".to_string(),
+            "107A17BF72756F6539A1C65A788F896665021C6A".to_string(),
+            "4CF02F4E4861D01D5DABB49661B5A874B634E16E".to_string(),
+            "F4986612979B95716AA8ABADA15E9A9DB725D691".to_string(),
+            "E6DB58F174A0B96C8D3C662B87562A1781B3C3A9".to_string(),
+            "168E7692F3D6F36E124D9883217F610DA807EAD0".to_string(),
+            "3560FD0632B4E2F4F16490BBD9CD0A763045BF35".to_string(),
+            "A50D65F2F63F65D845A7C5CBB989FF94D6688F38".to_string(),
+            "00121F5CFD8D95F8C194ED4CCFF47BBD1904B791".to_string(),
+            "A07875BBD4E062BAB2C162E180237FC3B30C4ABC".to_string(),
+            "F4E3DDE487B4AD132A802E14E8E93A4A3ABA1C42".to_string(),
+            "B54F747973A17B6D47264077090A347B65CDD472".to_string(),
+            "F6D51E19E146E8CCFCCDB65164E66E3773BA6936".to_string(),
+            "4E3DA3856567E4AB21B70C25FB7C19729FCEEBCA".to_string(),
+            "E657C713BCD25F960B676E2E824C9E05DEFDB7A2".to_string(),
+            "874D5BE395E223D136C3AB7047CB0ABA255047E4".to_string(),
+            "5C71532CEEFC43EE3857905AB94FDA505BFC06F3".to_string(),
+            "7E8CF431861A6C2C2D2DB6D05362CC01283B3883".to_string(),
+            "251E1C0B0DE110386282EE77ED09CD5920BE211F".to_string(),
+            "BD0607CB96F22781FAD19E47BE4CB12D782938DE".to_string(),
+            "CDA403F892C5597FC5DAA263900108CA802017FE".to_string(),
+            "2440346158429CEAE65C15121D0C40560820CFC2".to_string(),
+            "DDAF8255C863B296E1D8EBE20D85F66870669FF5".to_string(),
+            "B846EB4DF4B1BE5EFA824172873B62453BFF272D".to_string(),
+            "D709796D52923734403B8A5F3F02A06F7142AA26".to_string(),
+            "EE2F73BAA1605C998BB106E5A38DBD79B5209F1D".to_string(),
+            "3DEE751B9661025B602D7D0C1B95C341D5CF6233".to_string(),
+            "3E108EA444087E0D804A39A665AEB0D319E94BC0".to_string(),
+            "5517FBE15F292D4900EA9E7B9E01FF80709B6DC8".to_string(),
+            "5F14A9FAE42C014C452F2E3AE9DF005C4551459D".to_string(),
+            "C071B7470168B36F82160428F8FE715360D2E9FD".to_string(),
+            "B9ECD265A9D6116F93CD24B39282346A7BE86FD7".to_string(),
+            "F5F8E98165DC92810041D6BDC543DB71BC74FE6C".to_string(),
+            "BA6B2FC297E4B609A270FA8BBCEA9747E2DD9B98".to_string(),
+            "88152D67E67DA0E8605E61736EAC06356134E0B3".to_string(),
+            "8118E9D209F67FF4FC840FF183BED5E4CAE76E11".to_string(),
+            "7EFE6655436794BE8720D0B0EFDFFDC2A8BFF9E4".to_string(),
+            "80E064A00A421569F1222ECAB1E296D7F58D8354".to_string(),
+            "CCAC2728809428D8D2967B3D9093D6A989DF072A".to_string(),
+            "E39CC9F3F7A3551DBD63714E6CB198EC434E6609".to_string(),
+            "0DDFF0C4B29A2DE638C1C29C65817546C64883C0".to_string(),
+            "400C0F623F71C8BFEB6B4EC71B54624925C1A6C6".to_string(),
+            "B83C70895668466787EFD9351486CE18F1220CCB".to_string(),
+            "9E6717392EFDCFA101E33449A7C2A238251315B1".to_string(),
+            "47034DC213A160EA8B0B4B5605F70B08004F4F3B".to_string(),
+            "3752E29778C960E0BD18DD6EB1FCE60FF6787F1A".to_string(),
+            "5542CE9C23809CB025A3CA8428DDCB1FE2CED8D6".to_string(),
+            "CF676FC9E754D46295AF50865145A7C6E13F2B68".to_string(),
+            "9832263E4644EF7B1B58B357714B9AC7C3BBDCA5".to_string(),
+            "60E656A26F316A6687E8BB2716E43B077CAC1AEA".to_string(),
+            "0786901B984EF28A065D7345155D662E51FF42F3".to_string(),
+            "BA66D94100E1181868FA6137F7EF612F379B35F6".to_string(),
+            "497A27354A8ACF326AB8C0FF281A1B4A86FCFD6F".to_string(),
+            "D123F4524224CF32937BAB0CF8F40DD2C3C417C4".to_string(),
+        ]
     };
 }
 
