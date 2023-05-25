@@ -636,14 +636,50 @@ impl<C: Config> App<C> {
             value,
         )?;
 
+        let validator_limit = self.get_validator_limit(ctx)?.as_usize();
         utils::build_validator_updates(&self.contracts, &data).map(|mut vs| {
             vs.sort_by(|a, b| b.power.cmp(&a.power));
             let mut ret = vec![];
-            for it in vs.iter() {
-                ret.push(it.clone());
+            for (index, it) in vs.iter().enumerate() {
+                if index < validator_limit {
+                    ret.push(it.clone());
+                } else {
+                    let mut v = it.clone();
+                    v.power = 0;
+                    ret.push(v);
+                }
             }
             ret
         })
+    }
+
+    pub fn get_validator_limit(&self, ctx: &Context) -> Result<U256> {
+        let func = self
+            .contracts
+            .staking
+            .function("getValidatorsLimit")
+            .c(d!())?;
+        let input = func.encode_input(&[]).c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+
+        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+        let dp = func.decode_output(&data).c(d!())?;
+
+        if let Token::Uint(output) = dp.get(0).c(d!())? {
+            Ok(*output)
+        } else {
+            Err(eg!("Parse staking contract abi error"))
+        }
     }
 
     pub fn mint_claims(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
