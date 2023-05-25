@@ -44,7 +44,7 @@ use runtime::runner::ActionRunner;
 pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use system_contracts::{SystemContracts, SYSTEM_ADDR};
+use system_contracts::{SystemContracts, EVM_SYSTEM_ADDR, SYSTEM_ADDR};
 use utils::{parse_evm_staking_mint_claim_event, parse_evm_staking_mint_event};
 use zei::xfr::sig::XfrPublicKey;
 
@@ -300,7 +300,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 9999999;
         let value = U256::zero();
-        let from = H160::zero();
+        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
 
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -601,7 +601,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
-        let from = H160::zero();
+        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
 
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -625,7 +625,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
-        let from = H160::zero();
+        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
 
         let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -652,7 +652,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
-        let from = H160::zero();
+        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
 
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,

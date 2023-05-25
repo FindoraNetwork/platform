@@ -29,7 +29,10 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::Operation,
-        staking::{evm::EVM_STAKING, td_pubkey_to_td_addr_bytes, KEEP_HIST},
+        staking::{
+            evm::EVM_STAKING, td_pubkey_to_td_addr_bytes, KEEP_HIST,
+            VALIDATOR_UPDATE_BLOCK_ITV,
+        },
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -506,27 +509,17 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
-    if td_height <= CFG.checkpoint.evm_staking_inital_height {
-        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-            la.get_committed_state().read().get_staking().deref(),
-            begin_block_req.last_commit_info.as_ref()
-        )) {
-            resp.set_validator_updates(RepeatedField::from_vec(vs));
-        }
-
-        staking::system_ops(
-            &mut la.get_committed_state().write(),
-            &header,
-            begin_block_req.last_commit_info.as_ref(),
-            &begin_block_req.byzantine_validators.as_slice(),
-        );
-    }
-
-    if td_height <= CFG.checkpoint.disable_evm_block_height
+    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let evm_resp = s.account_base_app.write().end_block(req);
-        if td_height > CFG.checkpoint.evm_staking_inital_height {
+        s.account_base_app.write().end_block(req)
+    } else {
+        Default::default()
+    };
+    if td_height > CFG.checkpoint.evm_staking_inital_height {
+        if 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
+            % VALIDATOR_UPDATE_BLOCK_ITV
+        {
             let last_commit_info = begin_block_req
                 .last_commit_info
                 .as_ref()
@@ -548,6 +541,20 @@ pub fn end_block(
             }
             resp.validator_updates = RepeatedField::from_vec(ret);
         }
+    } else {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
+
+        staking::system_ops(
+            &mut la.get_committed_state().write(),
+            &header,
+            begin_block_req.last_commit_info.as_ref(),
+            &begin_block_req.byzantine_validators.as_slice(),
+        );
     }
 
     resp
