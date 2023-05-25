@@ -7,8 +7,9 @@
 use {
     crate::{
         data_model::{NoReplayToken, Operation, Transaction},
-        staking::{PartialUnDelegation, Staking},
+        staking::{evm::EVM_STAKING, PartialUnDelegation, Staking},
     },
+    config::abci::global_cfg::CFG,
     ruc::*,
     serde::{Deserialize, Serialize},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
@@ -35,10 +36,23 @@ impl UnDelegationOps {
 
     /// Apply new delegation to the target `Staking` instance.
     pub fn apply(&self, staking: &mut Staking, tx: &Transaction) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| Self::check_context(tx).c(d!()))
-            .and_then(|pu| staking.undelegate(&self.pubkey, pu).c(d!()))
+        let cur_height = staking.cur_height() as i64;
+        if cur_height > CFG.checkpoint.evm_staking_inital_height {
+            self.verify()?;
+            let pu =
+                Self::check_context(tx)?.c(d!(eg!("Missing partial undelegation.")))?;
+            EVM_STAKING.get().c(d!())?.write().undelegate(
+                &self.pubkey,
+                &pu.target_validator,
+                pu.am,
+            )?;
+            Ok(())
+        } else {
+            self.verify()
+                .c(d!())
+                .and_then(|_| Self::check_context(tx).c(d!()))
+                .and_then(|pu| staking.undelegate(&self.pubkey, pu).c(d!()))
+        }
     }
 
     /// Verify signature.

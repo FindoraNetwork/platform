@@ -29,7 +29,7 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::Operation,
-        staking::KEEP_HIST,
+        staking::{evm::EVM_STAKING, td_pubkey_to_td_addr_bytes, KEEP_HIST},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -243,7 +243,28 @@ pub fn begin_block(
     } else {
         pnk!(la.update_staking_simulator());
     }
+    if header.height == CFG.checkpoint.evm_staking_inital_height {
+        let validators = la
+            .get_committed_state()
+            .write()
+            .get_staking()
+            .validator_get_current()
+            .map(|v| v.get_validators().values().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
 
+        let delegations = la
+            .get_committed_state()
+            .write()
+            .get_staking()
+            .get_global_delegation_records()
+            .values()
+            .map(|v| (v.id, v.clone()))
+            .collect();
+
+        EVM_STAKING
+            .get()
+            .map(|staking| staking.write().import_validators(&validators, &delegations));
+    }
     if CFG.checkpoint.disable_evm_block_height < header.height
         && header.height < CFG.checkpoint.enable_frc20_height
     {
@@ -485,25 +506,48 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
+    if td_height <= CFG.checkpoint.evm_staking_inital_height {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
 
-    if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking().deref(),
-        begin_block_req.last_commit_info.as_ref()
-    )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+        staking::system_ops(
+            &mut la.get_committed_state().write(),
+            &header,
+            begin_block_req.last_commit_info.as_ref(),
+            &begin_block_req.byzantine_validators.as_slice(),
+        );
     }
-
-    staking::system_ops(
-        &mut la.get_committed_state().write(),
-        &header,
-        begin_block_req.last_commit_info.as_ref(),
-        &begin_block_req.byzantine_validators.as_slice(),
-    );
 
     if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let _ = s.account_base_app.write().end_block(req);
+        let evm_resp = s.account_base_app.write().end_block(req);
+        if td_height > CFG.checkpoint.evm_staking_inital_height {
+            let last_commit_info = begin_block_req
+                .last_commit_info
+                .as_ref()
+                .map(|lci| {
+                    lci.votes
+                        .as_slice()
+                        .iter()
+                        .flat_map(|v| v.validator.as_ref().map(|v| v.address.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let mut ret = vec![];
+            for it in evm_resp.validator_updates.iter() {
+                if last_commit_info
+                    .contains(&td_pubkey_to_td_addr_bytes(it.get_pub_key().get_data()))
+                {
+                    ret.push(it.clone());
+                }
+            }
+            resp.validator_updates = RepeatedField::from_vec(ret);
+        }
     }
 
     resp

@@ -11,6 +11,7 @@ pub mod system_contracts;
 pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
+use config::abci::global_cfg::CFG;
 use ethabi::Token;
 use ethereum::{
     Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
@@ -35,13 +36,16 @@ use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
 };
+use ledger::staking::evm::EVM_STAKING_MINTS;
 use precompile::PrecompileSet;
+use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
 pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
+use utils::{parse_evm_staking_mint_claim_event, parse_evm_staking_mint_event};
 use zei::xfr::sig::XfrPublicKey;
 
 pub const MODULE_NAME: &str = "evm";
@@ -77,11 +81,34 @@ pub mod storage {
     // Storage root hash related to the contract account.
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
 }
+pub struct ValidatorParam {
+    pub td_pubkey: Vec<u8>,
+    pub keytype: U256,
+    pub memo: String,
+    pub rate: U256,
+    pub staker: H160,
+    pub power: U256,
+    pub begin_block: U256,
+}
+pub struct DelegatorParam {
+    pub delegator: H160,
+    pub bound_amount: Vec<(H160, U256)>,
+    pub unbound_amount: Vec<(H160, U256)>,
+}
+
+pub struct UndelegationInfos {
+    pub validator: H160,
+    pub delegator: H160,
+    pub amount: U256,
+    pub height: U256,
+}
 
 #[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
     pub contracts: SystemContracts,
+    pub abci_begin_block: abci::RequestBeginBlock,
+    pub mint_ops: Vec<(H160, U256)>,
 }
 
 impl<C: Config> Default for App<C> {
@@ -89,6 +116,8 @@ impl<C: Config> Default for App<C> {
         App {
             phantom: Default::default(),
             contracts: pnk!(SystemContracts::new()),
+            abci_begin_block: Default::default(),
+            mint_ops: Default::default(),
         }
     }
 }
@@ -262,6 +291,392 @@ impl<C: Config> App<C> {
 
         (tx, tx_status, receipt)
     }
+    fn execute_staking_contract(
+        &self,
+        ctx: &Context,
+        req: &abci::RequestBeginBlock,
+    ) -> Result<()> {
+        let input = utils::build_evm_staking_input(&self.contracts, req)?;
+
+        let gas_limit = 9999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let mut mints = vec![];
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_event(log.data) {
+                Ok((pk, am)) => {
+                    if am != 0 {
+                        mints.push((pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse evm staking mint error: {}", e);
+                }
+            }
+        }
+
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
+
+        Ok(())
+    }
+
+    pub fn import_validators(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validators: &[ValidatorParam],
+        delegators: &[DelegatorParam],
+        undelegationinfos: &[UndelegationInfos],
+    ) -> Result<()> {
+        let function = self
+            .contracts
+            .staking
+            .function("import_validators")
+            .c(d!())?;
+
+        let vs = validators
+            .iter()
+            .map(|v| {
+                Token::Tuple(vec![
+                    Token::Bytes(v.td_pubkey.clone()),
+                    Token::Uint(v.keytype),
+                    Token::String(v.memo.clone()),
+                    Token::Uint(v.rate),
+                    Token::Address(v.staker),
+                    Token::Uint(v.power),
+                    Token::Uint(v.begin_block),
+                ])
+            })
+            .collect::<Vec<_>>();
+        let mut ds = vec![];
+        for delegator in delegators.iter() {
+            let mut bound_amounts = vec![];
+            let mut unbound_amounts = vec![];
+            for (addr, amount) in delegator.bound_amount.iter() {
+                bound_amounts.push(Token::Tuple(vec![
+                    Token::Address(*addr),
+                    Token::Uint(*amount),
+                ]));
+            }
+
+            for (addr, amount) in delegator.unbound_amount.iter() {
+                unbound_amounts.push(Token::Tuple(vec![
+                    Token::Address(*addr),
+                    Token::Uint(*amount),
+                ]));
+            }
+
+            ds.push(Token::Tuple(vec![
+                Token::Address(delegator.delegator),
+                Token::Array(bound_amounts),
+                Token::Array(unbound_amounts),
+            ]));
+        }
+        let undelegation_infos = undelegationinfos
+            .iter()
+            .map(|v| {
+                Token::Tuple(vec![
+                    Token::Address(v.validator),
+                    Token::Address(v.delegator),
+                    Token::Uint(v.amount),
+                    Token::Uint(v.height),
+                ])
+            })
+            .collect::<Vec<_>>();
+
+        let input = function
+            .encode_input(&[
+                Token::Array(vs),
+                Token::Array(ds),
+                Token::Array(undelegation_infos),
+            ])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn stake(
+        &self,
+        ctx: &Context,
+        from: H160,
+        value: U256,
+        validator: H160,
+        td_pubkey: Vec<u8>,
+        staker: H160,
+        staker_pk: Vec<u8>,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        println!(
+            "Stake: from {:x} to {:x}, amount: {}",
+            &staker, &validator, &value
+        );
+
+        let function = self.contracts.staking.function("stake").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let td_pubkey = Token::Bytes(td_pubkey);
+        let staker = Token::Address(staker);
+        let staker_pk = Token::Bytes(staker_pk);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = function
+            .encode_input(&[validator, td_pubkey, staker, staker_pk, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn delegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        delegator_pk: Vec<u8>,
+        amount: U256,
+    ) -> Result<()> {
+        println!(
+            "Delegate from {:X} to {:X}, amount:{}",
+            &delegator, &validator, &amount
+        );
+
+        let function = self.contracts.staking.function("delegate").c(d!())?;
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let delegator_pk = Token::Bytes(delegator_pk);
+        let input = function
+            .encode_input(&[validator, delegator, delegator_pk])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            amount,
+        )?;
+        Ok(())
+    }
+
+    pub fn undelegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("undelegate").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let input = function
+            .encode_input(&[validator, delegator, amount])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn claim(
+        &self,
+        ctx: &Context,
+        from: H160,
+        delegator: H160,
+        delegator_pk: &XfrPublicKey,
+        amount: U256,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("claim").c(d!())?;
+        let delegator_address = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let input = function
+            .encode_input(&[delegator_address, amount])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((_delegator, am)) => {
+                    if delegator != _delegator {
+                        return Err(eg!("Invalid delegator."));
+                    }
+                    if am != 0 {
+                        mints.push((*delegator_pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
+            }
+        }
+
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
+
+        Ok(())
+    }
+
+    pub fn update_validator(
+        &self,
+        ctx: &Context,
+        staker: H160,
+        validator: H160,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        let func = self.contracts.staking.function("updateValidator").c(d!())?;
+
+        let staker = Token::Address(staker);
+        let validator = Token::Address(validator);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = func
+            .encode_input(&[staker, validator, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    fn get_validator_list(&self, ctx: &Context) -> Result<Vec<abci::ValidatorUpdate>> {
+        let func = self
+            .contracts
+            .staking
+            .function("getValidatorsList")
+            .c(d!())?;
+        let input = func.encode_input(&[]).c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        utils::build_validator_updates(&self.contracts, &data).map(|mut vs| {
+            vs.sort_by(|a, b| b.power.cmp(&a.power));
+            let mut ret = vec![];
+            for it in vs.iter() {
+                ret.push(it.clone());
+            }
+            ret
+        })
+    }
+
+    pub fn mint_claims(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
+        let func = self.contracts.staking.function("mintClaims").c(d!())?;
+        let input = func.encode_input(&[]).c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((delegator, amount)) => {
+                    mints.push((delegator, U256::from(amount)));
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
+            }
+        }
+
+        Ok(mints)
+    }
 }
 
 impl<C: Config> AppModule for App<C> {
@@ -286,6 +701,37 @@ impl<C: Config> AppModule for App<C> {
             }
             _ => resp,
         }
+    }
+    fn begin_block(&mut self, ctx: &mut Context, req: &abci::RequestBeginBlock) {
+        if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
+            self.abci_begin_block = req.clone();
+        }
+    }
+
+    fn end_block(
+        &mut self,
+        ctx: &mut Context,
+        _req: &abci::RequestEndBlock,
+    ) -> abci::ResponseEndBlock {
+        let mut resp = abci::ResponseEndBlock::default();
+
+        if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
+            if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
+                println!("Error on evm staking trigger: {}", &e);
+                tracing::error!("Error on evm staking trigger: {}", e);
+            }
+
+            match self.get_validator_list(ctx) {
+                Ok(r) => {
+                    if !r.is_empty() {
+                        resp.set_validator_updates(RepeatedField::from_vec(r));
+                    }
+                }
+                Err(e) => tracing::error!("Error on get validator list: {}", e),
+            }
+        }
+
+        resp
     }
 }
 

@@ -5,7 +5,11 @@
 //!
 
 use {
-    crate::{data_model::NoReplayToken, staking::Staking},
+    crate::{
+        data_model::NoReplayToken,
+        staking::{evm::EVM_STAKING, Staking},
+    },
+    config::abci::global_cfg::CFG,
     ruc::*,
     serde::{Deserialize, Serialize},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
@@ -28,9 +32,17 @@ impl ClaimOps {
 
     /// Apply new claim to the target `Staking` instance.
     pub fn apply(&self, staking: &mut Staking) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        let cur_height = staking.cur_height() as i64;
+        if cur_height > CFG.checkpoint.evm_staking_inital_height {
+            self.verify()?;
+            let am = self.body.amount.c(d!(eg!("Missing amount.")))?;
+            EVM_STAKING.get().c(d!())?.write().claim(&self.pubkey, am)?;
+            Ok(())
+        } else {
+            self.verify()
+                .c(d!())
+                .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        }
     }
 
     /// Verify signature.

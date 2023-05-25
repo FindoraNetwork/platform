@@ -9,6 +9,7 @@ mod app;
 pub mod extensions;
 mod modules;
 mod notify;
+mod staking;
 
 use crate::modules::ModuleManager;
 use abci::Header;

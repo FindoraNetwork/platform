@@ -141,6 +141,12 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_validator_whitelist_v3")]
     pub validator_whitelist_v3: Vec<String>,
+
+    #[serde(default = "def_evm_staking_inital_height")]
+    pub evm_staking_inital_height: i64,
+
+    #[serde(default = "def_evm_staking_address")]
+    pub evm_staking_address: String,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -205,6 +211,14 @@ fn def_validator_whitelist_v3_height() -> u64 {
 fn def_validator_whitelist_v3() -> Vec<String> {
     DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v3.clone()
 }
+fn def_evm_staking_inital_height() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.evm_staking_inital_height
+}
+
+fn def_evm_staking_address() -> String {
+    DEFAULT_CHECKPOINT_CONFIG.evm_staking_address.clone()
+}
+
 #[cfg(feature = "debug_env")]
 lazy_static! {
     static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
@@ -246,6 +260,8 @@ lazy_static! {
         validator_whitelist_v2: vec![],
         validator_whitelist_v3_height: 0,
         validator_whitelist_v3: vec![],
+        evm_staking_inital_height: 128,
+        evm_staking_address: "0x34d4F6946Ceb1014BF13603fA7e7fC943952e8a4".to_owned(),
     };
 }
 
@@ -576,7 +592,9 @@ lazy_static! {
             "D518C4F95A3F39ED853A2614566897C4AD5A008F".to_string(),
             "37D3228A650F591522698BECDF42DCE5D1113D88".to_string(),
             "577F8548D8F834D39D26350D2A3A928F478AF5FD".to_string(),
-        ],
+        ],,
+        evm_staking_inital_height: 5000000,
+        evm_staking_address: "".to_owned(),
     };
 }
 
