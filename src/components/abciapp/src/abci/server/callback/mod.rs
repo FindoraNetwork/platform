@@ -535,6 +535,7 @@ pub fn end_block(
             for it in evm_resp.validator_updates.iter() {
                 if last_commit_info
                     .contains(&td_pubkey_to_td_addr_bytes(it.get_pub_key().get_data()))
+                    || it.power > 0
                 {
                     ret.push(it.clone());
                 }

@@ -82,16 +82,19 @@ pub mod storage {
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
 }
 pub struct ValidatorParam {
+    pub td_addr: H160,
     pub td_pubkey: Vec<u8>,
     pub keytype: U256,
     pub memo: String,
     pub rate: U256,
     pub staker: H160,
+    pub staker_pk: Vec<u8>,
     pub power: U256,
     pub begin_block: U256,
 }
 pub struct DelegatorParam {
     pub delegator: H160,
+    pub delegator_pk: Vec<u8>,
     pub bound_amount: Vec<(H160, U256)>,
     pub unbound_amount: Vec<(H160, U256)>,
 }
@@ -350,11 +353,13 @@ impl<C: Config> App<C> {
             .iter()
             .map(|v| {
                 Token::Tuple(vec![
+                    Token::Address(v.td_addr),
                     Token::Bytes(v.td_pubkey.clone()),
                     Token::Uint(v.keytype),
                     Token::String(v.memo.clone()),
                     Token::Uint(v.rate),
                     Token::Address(v.staker),
+                    Token::Bytes(v.staker_pk.clone()),
                     Token::Uint(v.power),
                     Token::Uint(v.begin_block),
                 ])
@@ -380,6 +385,7 @@ impl<C: Config> App<C> {
 
             ds.push(Token::Tuple(vec![
                 Token::Address(delegator.delegator),
+                Token::Bytes(delegator.delegator_pk.clone()),
                 Token::Array(bound_amounts),
                 Token::Array(unbound_amounts),
             ]));
@@ -753,7 +759,6 @@ impl<C: Config> AppModule for App<C> {
 
         if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
             if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
-                println!("Error on evm staking trigger: {}", &e);
                 tracing::error!("Error on evm staking trigger: {}", e);
             }
 

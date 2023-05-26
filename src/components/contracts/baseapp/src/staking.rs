@@ -31,17 +31,20 @@ impl EVMStaking for BaseApp {
                     .unwrap_or(self.deliver_state.header.height as u64);
 
                 vs.push(ValidatorParam {
+                    td_addr: H160::from_slice(&v.td_addr),
                     td_pubkey: v.td_pubkey.clone(),
                     keytype: U256::from(2),
                     memo: serde_json::to_string(&v.memo).c(d!())?,
                     rate: mapping_rate(v.commission_rate),
                     staker: mapping_address(&v.id),
+                    staker_pk: v.id.as_bytes().to_vec(),
                     power: U256::from(v.td_power),
                     begin_block: U256::from(begin_block),
                 });
             }
         }
-        let mut ds: BTreeMap<H160, BTreeMap<u64, Vec<(H160, U256)>>> = BTreeMap::new();
+        let mut ds: BTreeMap<XfrPublicKey, BTreeMap<u64, Vec<(H160, U256)>>> =
+            BTreeMap::new();
         {
             for delegation in delegations.values() {
                 let d = delegation
@@ -54,8 +57,8 @@ impl EVMStaking for BaseApp {
                 let mut v = BTreeMap::new();
                 v.insert(delegation.end_height, d.clone());
 
-                let address = delegation.receiver_pk.unwrap_or(delegation.id);
-                ds.entry(mapping_address(&address))
+                let public_key = delegation.receiver_pk.unwrap_or(delegation.id);
+                ds.entry(public_key)
                     .and_modify(|rem| {
                         rem.entry(delegation.end_height)
                             .and_modify(|rem1| rem1.extend(d.clone().into_iter()))
@@ -67,9 +70,10 @@ impl EVMStaking for BaseApp {
         let mut delegators = vec![];
         let mut undelegation_infos = vec![];
         {
-            for (address, delegations) in ds.iter() {
+            for (public_key, delegations) in ds.iter() {
                 let mut bound_amount = vec![];
                 let mut unbound_amount = vec![];
+                let address = mapping_address(public_key);
                 for (end_height, values) in delegations.iter() {
                     let v = values.to_vec();
                     if BLOCK_HEIGHT_MAX == *end_height {
@@ -80,7 +84,7 @@ impl EVMStaking for BaseApp {
                             .iter()
                             .map(|(validator_addr, amount)| UndelegationInfos {
                                 validator: *validator_addr,
-                                delegator: *address,
+                                delegator: address,
                                 amount: *amount,
                                 height: U256::from(*end_height),
                             })
@@ -90,7 +94,8 @@ impl EVMStaking for BaseApp {
                 }
 
                 delegators.push(DelegatorParam {
-                    delegator: *address,
+                    delegator: address,
+                    delegator_pk: public_key.as_bytes().to_vec(),
                     bound_amount,
                     unbound_amount,
                 });
