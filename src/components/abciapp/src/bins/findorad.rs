@@ -127,7 +127,7 @@ fn node_command() -> Result<()> {
         ];
 
         let target_cfg = [
-            "timeout_propose = \"8s\"",
+            "timeout_propose = \"3s\"",
             "timeout_propose_delta = \"500ms\"",
             "timeout_prevote = \"1s\"",
             "timeout_prevote_delta = \"500ms\"",
