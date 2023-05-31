@@ -51,12 +51,16 @@ impl DecimalsMapping for EthereumDecimalsMapping {
 pub trait FeeCalculator {
     /// Return the minimal required gas price.
     fn min_gas_price() -> U256;
+    fn max_gas_price() -> U256;
 }
 
 impl FeeCalculator for () {
     fn min_gas_price() -> U256 {
         // 10 GWEI, min gas limit: 21000, min gas price must > 50_0000_0000
         U256::from(100_0000_0000_u64)
+    }
+    fn max_gas_price() -> U256 {
+        U256::from(50000_0000_0000_u64)
     }
 }
 

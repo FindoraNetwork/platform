@@ -142,6 +142,9 @@ pub struct CheckPointConfig {
     #[serde(default = "def_validator_whitelist_v3")]
     pub validator_whitelist_v3: Vec<String>,
 
+    #[serde(default = "def_max_gas_price_limit")]
+    pub max_gas_price_limit: i64,
+
     #[serde(default = "def_evm_staking_inital_height")]
     pub evm_staking_inital_height: i64,
 
@@ -211,6 +214,11 @@ fn def_validator_whitelist_v3_height() -> u64 {
 fn def_validator_whitelist_v3() -> Vec<String> {
     DEFAULT_CHECKPOINT_CONFIG.validator_whitelist_v3.clone()
 }
+
+fn def_max_gas_price_limit() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.max_gas_price_limit
+}
+
 fn def_evm_staking_inital_height() -> i64 {
     DEFAULT_CHECKPOINT_CONFIG.evm_staking_inital_height
 }
@@ -260,6 +268,7 @@ lazy_static! {
         validator_whitelist_v2: vec![],
         validator_whitelist_v3_height: 0,
         validator_whitelist_v3: vec![],
+        max_gas_price_limit: 0,
         evm_staking_inital_height: 128,
         evm_staking_address: "0x34d4F6946Ceb1014BF13603fA7e7fC943952e8a4".to_owned(),
     };
@@ -593,6 +602,7 @@ lazy_static! {
             "37D3228A650F591522698BECDF42DCE5D1113D88".to_string(),
             "577F8548D8F834D39D26350D2A3A928F478AF5FD".to_string(),
         ],,
+        max_gas_price_limit: 5000000,
         evm_staking_inital_height: 5000000,
         evm_staking_address: "".to_owned(),
     };

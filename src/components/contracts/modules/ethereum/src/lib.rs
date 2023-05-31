@@ -201,12 +201,22 @@ impl<C: Config> ValidateUnsigned for App<C> {
                 C::BlockGasLimit::get()
             )));
         }
+        let mut flag = false;
+        if ctx.header.height < CFG.checkpoint.max_gas_price_limit {
+            if transaction.gas_price < C::FeeCalculator::min_gas_price() {
+                flag = true;
+            }
+        } else if transaction.gas_price < C::FeeCalculator::min_gas_price()
+            || transaction.gas_price > C::FeeCalculator::max_gas_price()
+        {
+            flag = true;
+        }
 
-        if transaction.gas_price < C::FeeCalculator::min_gas_price() {
+        if flag {
             return Err(eg!(format!(
-                "InvalidGasPrice: got {}, but the minimum gas price is {}",
+                "InvalidGasPrice: got {}, but the minimum gas price is {}, max gas price is {}",
                 transaction.gas_price,
-                C::FeeCalculator::min_gas_price()
+                C::FeeCalculator::min_gas_price(), C::FeeCalculator::max_gas_price()
             )));
         }
 
