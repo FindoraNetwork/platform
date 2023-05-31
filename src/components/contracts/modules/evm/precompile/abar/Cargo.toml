@@ -1,21 +1,17 @@
 [package]
-name = "evm-precompile-anemoi"
+name = "evm-precompile-abar"
 version = "0.1.0"
 edition = "2021"
-
-[[bench]]
-name = 'anemoi'
-path = 'benches/anemoi.rs'
-harness = false
 
 [dependencies]
 ethereum-types = { version = "0.14", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm-abar = { path = "../../../../primitives/abar" }
 evm-precompile-utils = { path = "../utils"}
 tracing = "0.1"
-module-evm = { path = "../../../../modules/evm"}
+module-evm = { path = "../../../../modules/evm" }
 num_enum = { version = "0.5.4", default-features = false }
-platform-lib-noah = { git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+platform-lib-noah = { git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "evm-abar" }
 
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }
