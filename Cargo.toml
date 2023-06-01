@@ -15,6 +15,7 @@ members = [
     "src/components/contracts/modules/evm/precompile/modexp",
     "src/components/contracts/modules/evm/precompile/sha3fips",
     "src/components/contracts/modules/evm/precompile/anemoi",
+    "src/components/contracts/modules/evm/precompile/abar",
     "src/components/contracts/modules/evm/precompile/utils",
     "src/components/contracts/modules/evm/precompile/utils/macro",
     "src/components/contracts/modules/xhub",
@@ -31,6 +32,7 @@ members = [
     "src/components/contracts/primitives/utils",
     "src/components/contracts/primitives/wasm",
     "src/components/contracts/primitives/enterprise-web3",
+    "src/components/contracts/primitives/abar",
     "src/components/contracts/rpc",
 ]
 
