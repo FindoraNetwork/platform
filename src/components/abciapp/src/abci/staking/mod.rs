@@ -147,9 +147,17 @@ pub fn get_validators(
     let validator_whitelist: Vec<Vec<u8>> =
         if height < CFG.checkpoint.validator_whitelist_v1_height {
             vec![]
-        } else {
+        } else if height < CFG.checkpoint.validator_whitelist_v2_height {
             CFG.checkpoint
                 .validator_whitelist_v1
+                .iter()
+                .map(|v| hex::decode(v).c(d!()))
+                .collect::<Result<Vec<_>>>()
+                .c(d!("invalid file"))
+                .unwrap()
+        } else {
+            CFG.checkpoint
+                .validator_whitelist_v2
                 .iter()
                 .map(|v| hex::decode(v).c(d!()))
                 .collect::<Result<Vec<_>>>()
@@ -165,6 +173,20 @@ pub fn get_validators(
             .for_each(|(_, _, power)| {
                 *power = -1;
             });
+    } else if height < CFG.checkpoint.validator_whitelist_v2_height {
+        for (index, (addr, _, power)) in vs.iter_mut().enumerate() {
+            if index < validator_limit {
+                if !cur_entries.contains_key(addr) {
+                    *power = -1;
+                } else if !validator_whitelist.is_empty()
+                    && !validator_whitelist.contains(addr)
+                {
+                    *power = 1;
+                }
+            } else {
+                alt!(cur_entries.contains_key(addr), *power = 0, *power = -1);
+            }
+        }
     } else {
         for (index, (addr, _, power)) in vs.iter_mut().enumerate() {
             if index < validator_limit {
