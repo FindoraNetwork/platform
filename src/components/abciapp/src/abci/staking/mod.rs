@@ -190,7 +190,7 @@ pub fn get_validators(
     } else {
         for (index, (addr, _, power)) in vs.iter_mut().enumerate() {
             if index < validator_limit {
-                if !cur_entries.contains_key(addr) {
+                if !cur_entries.contains_key(addr) && 0 == (*power) {
                     *power = -1;
                 } else if !validator_whitelist.is_empty()
                     && !validator_whitelist.contains(addr)
