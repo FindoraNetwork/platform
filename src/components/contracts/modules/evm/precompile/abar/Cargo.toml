@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ethereum-types = { version = "0.14", default-features = false }
+ethabi = { version = "18.0", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 evm-abar = { path = "../../../../primitives/abar" }
 evm-precompile-utils = { path = "../utils"}

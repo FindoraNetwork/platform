@@ -9,7 +9,7 @@ path = 'benches/anemoi.rs'
 harness = false
 
 [dependencies]
-ethereum-types = { version = "0.14", default-features = false }
+ethabi = { version = "18.0", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 evm-precompile-utils = { path = "../utils"}
 tracing = "0.1"

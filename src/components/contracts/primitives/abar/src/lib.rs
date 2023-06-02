@@ -1,18 +1,15 @@
 use ethereum_types::{Address, U256};
-use platform_lib_noah::{
-    noah_algebra::serialization::NoahFromToBytes,
-    noah_api::{
-        anon_xfr::{
-            ar_to_abar::{gen_ar_to_abar_body, verify_ar_to_abar_body, ArToAbarBody},
-            structs::{AnonAssetRecord, AxfrOwnerMemo},
-            AXfrPlonkPf,
-        },
-        keys::PublicKey,
-        parameters::{AddressFormat, ProverParams, VerifierParams},
-        xfr::structs::{
-            AssetType, BlindAssetRecord, OpenAssetRecord, XfrAmount, XfrAssetType,
-            ASSET_TYPE_LENGTH,
-        },
+use platform_lib_noah::noah_api::{
+    anon_xfr::{
+        ar_to_abar::{gen_ar_to_abar_body, verify_ar_to_abar_body, ArToAbarBody},
+        structs::{AnonAssetRecord, AxfrOwnerMemo},
+        AXfrPlonkPf,
+    },
+    keys::PublicKey,
+    parameters::{AddressFormat, ProverParams, VerifierParams},
+    xfr::structs::{
+        AssetType, BlindAssetRecord, OpenAssetRecord, XfrAmount, XfrAssetType,
+        ASSET_TYPE_LENGTH,
     },
 };
 use rand_core::{CryptoRng, RngCore};
@@ -90,13 +87,6 @@ impl EvmToAbarNote {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<EvmToAbarNote> {
         bincode::deserialize(bytes).c(d!())
-    }
-
-    pub fn returns(&self) -> Vec<u8> {
-        let mut bytes = vec![];
-        bytes.extend(self.output.commitment.noah_to_bytes());
-        bytes.extend(self.memo.0.clone());
-        bytes
     }
 }
 

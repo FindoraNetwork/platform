@@ -1,10 +1,12 @@
-use ethereum_types::{Address, U256};
+use ethabi::{decode, encode, ParamType, Token};
 use evm::executor::stack::{PrecompileFailure, PrecompileOutput};
 use evm::{Context, ExitError, ExitSucceed};
 use evm_abar::EvmToAbarNote;
 use evm_precompile_utils::EvmDataReader;
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
-use platform_lib_noah::noah_api::parameters::VerifierParams;
+use platform_lib_noah::{
+    noah_algebra::serialization::NoahFromToBytes, noah_api::parameters::VerifierParams,
+};
 
 /// The Abar precompile
 pub struct Abar;
@@ -22,15 +24,20 @@ impl Abar {
             }
         };
 
-        // 20 + 32 = 52
-        if input.len() < 52 {
-            return Err(PrecompileFailure::Error {
-                exit_status: ExitError::Other("input must more than 52 bytes".into()),
-            });
-        }
-        let asset = Address::from_slice(&input[0..20]);
-        let amount = U256::from_big_endian(&input[20..52]);
-        let note = EvmToAbarNote::from_bytes(&input[52..]).map_err(|_| {
+        // params: decode(address,uint256,bytes);
+        let mut tokens = decode(
+            &[ParamType::Address, ParamType::Uint(256), ParamType::Bytes],
+            input,
+        )
+        .map_err(|_| PrecompileFailure::Error {
+            exit_status: ExitError::Other("input invalid bytes".into()),
+        })?;
+
+        let proof_bytes = tokens.pop().unwrap().into_bytes().unwrap(); // safe
+        let amount = tokens.pop().unwrap().into_uint().unwrap(); // safe
+        let asset = tokens.pop().unwrap().into_address().unwrap(); // safe
+
+        let note = EvmToAbarNote::from_bytes(&proof_bytes).map_err(|_| {
             PrecompileFailure::Error {
                 exit_status: ExitError::Other("deserialize failure".into()),
             }
@@ -47,10 +54,15 @@ impl Abar {
             }
         })?;
 
+        // return: encode(bytes32, bytes);
+        let comm = Token::FixedBytes(note.output.commitment.noah_to_bytes());
+        let memo = Token::Bytes(note.memo.0);
+        let bytes = encode(&[comm, memo]);
+
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: gas_cost,
-            output: note.returns(),
+            output: bytes,
             logs: Default::default(),
         })
     }
