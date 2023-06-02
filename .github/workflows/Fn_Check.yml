@@ -36,6 +36,7 @@ jobs:
       shell: bash
       run: |
         docker build -t findorad:debug_env -f container/Dockerfile-debug-env .
+        docker rm -f findorad-debug-env || true
         docker run -d --rm --network host --name findorad-debug-env findorad:debug_env
         sleep 120
 
