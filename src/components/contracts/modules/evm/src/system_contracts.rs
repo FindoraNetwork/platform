@@ -7,7 +7,6 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 
 pub static SYSTEM_ADDR: &str = "0x0000000000000000000000000000000000002000";
-pub static EVM_SYSTEM_ADDR: &str = "0x0000000000000000000000000000000000003000";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SystemContracts {

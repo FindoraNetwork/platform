@@ -1,4 +1,5 @@
-use ethabi::{Event, EventParam, ParamType, RawLog, Token};
+use ethabi::{Contract, Event, EventParam, ParamType, RawLog, Token};
+use ethereum::Log;
 use ethereum_types::{H160, H256, U256};
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
@@ -230,90 +231,32 @@ pub fn build_validator_updates(
     }
 }
 
-pub fn evm_staking_min_event() -> Event {
-    Event {
-        name: "MintOps".to_owned(),
-        inputs: vec![
-            EventParam {
-                name: "public_key".to_owned(),
-                kind: ParamType::Bytes,
-                indexed: false,
-            },
-            EventParam {
-                name: "amount".to_owned(),
-                kind: ParamType::Uint(256),
-                indexed: false,
-            },
-        ],
-        anonymous: false,
-    }
-}
-
-pub fn evm_staking_mint_claim_event() -> Event {
-    Event {
-        name: "MintClaim".to_owned(),
-        inputs: vec![
-            EventParam {
-                name: "delegator".to_owned(),
-                kind: ParamType::Address,
-                indexed: false,
-            },
-            EventParam {
-                name: "amount".to_owned(),
-                kind: ParamType::Uint(256),
-                indexed: false,
-            },
-        ],
-        anonymous: false,
-    }
-}
-
-pub fn parse_evm_staking_mint_event(data: Vec<u8>) -> Result<(XfrPublicKey, u64)> {
-    let event = evm_staking_min_event();
+pub fn parse_evm_staking_coinbase_mint_event(
+    staking_contracts: &Contract,
+    log: Log,
+) -> Result<(H160, XfrPublicKey, u64)> {
+    let event = staking_contracts
+        .event("CoinbaseMint")
+        .map_err(|e| eg!(e))?;
     let log = RawLog {
-        topics: vec![event.signature()],
-        data,
+        topics: log.topics,
+        data: log.data,
     };
+    let result = event.parse_log(log).map_err(|e| eg!(e))?;
+    let addr = result.params[0].value.clone().into_address().c(d!())?;
 
-    let result = event.parse_log(log).c(d!())?;
+    //let pubkey_type = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
 
-    let public_key_bytes = result.params[0]
-        .value
-        .clone()
-        .into_bytes()
-        .unwrap_or_default();
+    let public_key_bytes = result.params[2].value.clone().into_bytes().c(d!())?;
 
+    if public_key_bytes.is_empty() {
+        return Err(eg!("pubkey is empty"));
+    }
     let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
 
-    let amount = result.params[1]
-        .value
-        .clone()
-        .into_uint()
-        .unwrap_or_default()
-        .as_u64();
+    let amount = result.params[3].value.clone().into_uint().c(d!())?.as_u64();
 
-    Ok((public_key, amount))
-}
-
-pub fn parse_evm_staking_mint_claim_event(data: Vec<u8>) -> Result<(H160, u64)> {
-    let event = evm_staking_mint_claim_event();
-    let log = RawLog {
-        topics: vec![event.signature()],
-        data,
-    };
-
-    let result = event.parse_log(log).c(d!())?;
-
-    let address = result.params[0].value.clone().into_address().c(d!())?;
-
-    let amount = result.params[1]
-        .value
-        .clone()
-        .into_uint()
-        .unwrap_or_default()
-        .as_u64();
-
-    Ok((address, amount))
+    Ok((addr, public_key, amount))
 }
 
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {

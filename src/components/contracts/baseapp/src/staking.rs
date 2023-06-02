@@ -7,7 +7,7 @@ use fp_traits::{
 use fp_types::crypto::Address;
 use ledger::staking::{evm::EVMStaking, Delegation, Validator, BLOCK_HEIGHT_MAX};
 use module_evm::{
-    system_contracts::EVM_SYSTEM_ADDR, DelegatorParam, UndelegationInfos, ValidatorParam,
+    system_contracts::SYSTEM_ADDR, DelegatorParam, UndelegationInfos, ValidatorParam,
 };
 use ruc::{d, Result, RucResult};
 use sha3::{Digest, Keccak256};
@@ -20,7 +20,7 @@ impl EVMStaking for BaseApp {
         validators: &[Validator],
         delegations: &BTreeMap<XfrPublicKey, Delegation>,
     ) -> Result<()> {
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         let mut vs = vec![];
         {
@@ -129,10 +129,9 @@ impl EVMStaking for BaseApp {
         let staker_pk = staker.as_bytes().to_vec();
         let staker_address = mapping_address(staker);
 
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
+        let amount = U256::from(amount);
 
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         module_account::App::<BaseApp>::mint(
             &self.deliver_state,
@@ -170,10 +169,9 @@ impl EVMStaking for BaseApp {
         let delegator_pk = delegator.as_bytes().to_vec();
         let delegator_address = mapping_address(delegator);
 
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
+        let amount = U256::from(amount);
 
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         module_account::App::<BaseApp>::mint(
             &self.deliver_state,
@@ -208,7 +206,7 @@ impl EVMStaking for BaseApp {
     ) -> Result<()> {
         let delegator_address = mapping_address(delegator);
 
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         let amount =
             EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
@@ -262,10 +260,10 @@ impl EVMStaking for BaseApp {
     fn claim(&self, delegator_pk: &XfrPublicKey, amount: u64) -> Result<()> {
         let delegator = mapping_address(delegator_pk);
         let amount = U256::from(amount);
-
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
         if let Err(e) = self.modules.evm_module.claim(
             &self.deliver_state,
-            H160::zero(),
+            from,
             delegator,
             delegator_pk,
             amount,

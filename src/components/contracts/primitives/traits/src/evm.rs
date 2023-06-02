@@ -60,7 +60,7 @@ impl FeeCalculator for () {
         U256::from(100_0000_0000_u64)
     }
     fn max_gas_price() -> U256 {
-        U256::from(50000_0000_0000_u64)
+        U256::from(5_000_000_000_000_u64)
     }
 }
 

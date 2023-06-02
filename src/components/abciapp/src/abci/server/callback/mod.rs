@@ -29,10 +29,7 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::Operation,
-        staking::{
-            evm::EVM_STAKING, td_pubkey_to_td_addr_bytes, KEEP_HIST,
-            VALIDATOR_UPDATE_BLOCK_ITV,
-        },
+        staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -494,6 +491,14 @@ pub fn end_block(
 
     let mut la = s.la.write();
 
+    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        s.account_base_app.write().end_block(req)
+    } else {
+        Default::default()
+    };
+
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -509,38 +514,11 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
-    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
-        || td_height >= CFG.checkpoint.enable_frc20_height
-    {
-        s.account_base_app.write().end_block(req)
-    } else {
-        Default::default()
-    };
     if td_height > CFG.checkpoint.evm_staking_inital_height {
         if 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
             % VALIDATOR_UPDATE_BLOCK_ITV
         {
-            let last_commit_info = begin_block_req
-                .last_commit_info
-                .as_ref()
-                .map(|lci| {
-                    lci.votes
-                        .as_slice()
-                        .iter()
-                        .flat_map(|v| v.validator.as_ref().map(|v| v.address.clone()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let mut ret = vec![];
-            for it in evm_resp.validator_updates.iter() {
-                if last_commit_info
-                    .contains(&td_pubkey_to_td_addr_bytes(it.get_pub_key().get_data()))
-                    || it.power > 0
-                {
-                    ret.push(it.clone());
-                }
-            }
-            resp.validator_updates = RepeatedField::from_vec(ret);
+            resp.validator_updates = evm_resp.validator_updates;
         }
     } else {
         if let Ok(Some(vs)) = ruc::info!(staking::get_validators(

@@ -44,8 +44,8 @@ use runtime::runner::ActionRunner;
 pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use system_contracts::{SystemContracts, EVM_SYSTEM_ADDR, SYSTEM_ADDR};
-use utils::{parse_evm_staking_mint_claim_event, parse_evm_staking_mint_event};
+use system_contracts::{SystemContracts, SYSTEM_ADDR};
+use utils::parse_evm_staking_coinbase_mint_event;
 use zei::xfr::sig::XfrPublicKey;
 
 pub const MODULE_NAME: &str = "evm";
@@ -303,7 +303,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 9999999;
         let value = U256::zero();
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -316,8 +316,8 @@ impl<C: Config> App<C> {
 
         let mut mints = vec![];
         for log in logs.into_iter() {
-            match parse_evm_staking_mint_event(log.data) {
-                Ok((pk, am)) => {
+            match parse_evm_staking_coinbase_mint_event(&self.contracts.staking, log) {
+                Ok((_, pk, am)) => {
                     if am != 0 {
                         mints.push((pk, am));
                     }
@@ -346,7 +346,7 @@ impl<C: Config> App<C> {
         let function = self
             .contracts
             .staking
-            .function("import_validators")
+            .function("importValidators")
             .c(d!())?;
 
         let vs = validators
@@ -441,7 +441,7 @@ impl<C: Config> App<C> {
             &staker, &validator, &value
         );
 
-        let function = self.contracts.staking.function("stake").c(d!())?;
+        let function = self.contracts.staking.function("systemStake").c(d!())?;
 
         let validator = Token::Address(validator);
         let td_pubkey = Token::Bytes(td_pubkey);
@@ -482,7 +482,7 @@ impl<C: Config> App<C> {
             &delegator, &validator, &amount
         );
 
-        let function = self.contracts.staking.function("delegate").c(d!())?;
+        let function = self.contracts.staking.function("systemDelegate").c(d!())?;
         let validator = Token::Address(validator);
         let delegator = Token::Address(delegator);
         let delegator_pk = Token::Bytes(delegator_pk);
@@ -511,7 +511,11 @@ impl<C: Config> App<C> {
         delegator: H160,
         amount: U256,
     ) -> Result<()> {
-        let function = self.contracts.staking.function("undelegate").c(d!())?;
+        let function = self
+            .contracts
+            .staking
+            .function("systemUndelegate")
+            .c(d!())?;
 
         let validator = Token::Address(validator);
         let delegator = Token::Address(delegator);
@@ -543,7 +547,7 @@ impl<C: Config> App<C> {
         delegator_pk: &XfrPublicKey,
         amount: U256,
     ) -> Result<()> {
-        let function = self.contracts.staking.function("claim").c(d!())?;
+        let function = self.contracts.staking.function("systemClaim").c(d!())?;
         let delegator_address = Token::Address(delegator);
         let amount = Token::Uint(amount);
         let input = function
@@ -564,8 +568,8 @@ impl<C: Config> App<C> {
 
         let mut mints = Vec::new();
         for log in logs.into_iter() {
-            match parse_evm_staking_mint_claim_event(log.data) {
-                Ok((_delegator, am)) => {
+            match parse_evm_staking_coinbase_mint_event(&self.contracts.staking, log) {
+                Ok((_delegator, _, am)) => {
                     if delegator != _delegator {
                         return Err(eg!("Invalid delegator."));
                     }
@@ -594,20 +598,24 @@ impl<C: Config> App<C> {
         memo: String,
         rate: U256,
     ) -> Result<()> {
-        let func = self.contracts.staking.function("updateValidator").c(d!())?;
+        let func = self
+            .contracts
+            .staking
+            .function("systemUpdateValidator")
+            .c(d!())?;
 
-        let staker = Token::Address(staker);
         let validator = Token::Address(validator);
+        let staker = Token::Address(staker);
         let memo = Token::String(memo);
         let rate = Token::Uint(rate);
 
         let input = func
-            .encode_input(&[staker, validator, memo, rate])
+            .encode_input(&[validator, staker, memo, rate])
             .c(d!())?;
 
         let gas_limit = 99999999999;
         let value = U256::zero();
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -631,7 +639,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
         let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -642,82 +650,7 @@ impl<C: Config> App<C> {
             value,
         )?;
 
-        let validator_limit = self.get_validator_limit(ctx)?.as_usize();
-        utils::build_validator_updates(&self.contracts, &data).map(|mut vs| {
-            vs.sort_by(|a, b| b.power.cmp(&a.power));
-            let mut ret = vec![];
-            for (index, it) in vs.iter().enumerate() {
-                if index < validator_limit {
-                    ret.push(it.clone());
-                } else {
-                    let mut v = it.clone();
-                    v.power = 0;
-                    ret.push(v);
-                }
-            }
-            ret
-        })
-    }
-
-    pub fn get_validator_limit(&self, ctx: &Context) -> Result<U256> {
-        let func = self
-            .contracts
-            .staking
-            .function("getValidatorsLimit")
-            .c(d!())?;
-        let input = func.encode_input(&[]).c(d!())?;
-
-        let gas_limit = 99999999999;
-        let value = U256::zero();
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
-
-        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
-            ctx,
-            input,
-            from,
-            gas_limit,
-            self.contracts.staking_address,
-            value,
-        )?;
-        let dp = func.decode_output(&data).c(d!())?;
-
-        if let Token::Uint(output) = dp.get(0).c(d!())? {
-            Ok(*output)
-        } else {
-            Err(eg!("Parse staking contract abi error"))
-        }
-    }
-
-    pub fn mint_claims(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
-        let func = self.contracts.staking.function("mintClaims").c(d!())?;
-        let input = func.encode_input(&[]).c(d!())?;
-
-        let gas_limit = 99999999999;
-        let value = U256::zero();
-        let from = H160::from_str(EVM_SYSTEM_ADDR).c(d!())?;
-
-        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
-            ctx,
-            input,
-            from,
-            gas_limit,
-            self.contracts.staking_address,
-            value,
-        )?;
-
-        let mut mints = Vec::new();
-        for log in logs.into_iter() {
-            match parse_evm_staking_mint_claim_event(log.data) {
-                Ok((delegator, amount)) => {
-                    mints.push((delegator, U256::from(amount)));
-                }
-                Err(e) => {
-                    tracing::warn!("Parse claim mint error: {}", e);
-                }
-            }
-        }
-
-        Ok(mints)
+        utils::build_validator_updates(&self.contracts, &data)
     }
 }
 

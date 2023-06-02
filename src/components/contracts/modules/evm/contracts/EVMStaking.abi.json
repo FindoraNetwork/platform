@@ -1,74 +1,76 @@
 [
   {
-    "inputs": [],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
     "anonymous": false,
     "inputs": [
       {
         "indexed": true,
         "internalType": "address",
-        "name": "previousOwner",
+        "name": "addr",
         "type": "address"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
+        "indexed": false,
+        "internalType": "enum PublicKeyType.Type",
+        "name": "ty",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "public_key",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
       }
     ],
-    "name": "OwnershipTransferred",
+    "name": "CoinbaseMint",
     "type": "event"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "POWER_DECIMAL",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "POWER_DECIMAL_DIFF",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SYSTEM_ADDR",
+    "outputs": [
       {
         "internalType": "address",
-        "name": "addr",
+        "name": "",
         "type": "address"
       }
     ],
-    "name": "adminSetPowerAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "addr",
-        "type": "address"
-      }
-    ],
-    "name": "adminSetRewardAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "addr",
-        "type": "address"
-      }
-    ],
-    "name": "adminSetStakingAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
-      },
       {
         "internalType": "uint256",
         "name": "amount",
@@ -86,16 +88,6 @@
         "internalType": "address",
         "name": "validator",
         "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes",
-        "name": "delegator_pk",
-        "type": "bytes"
       }
     ],
     "name": "delegate",
@@ -104,13 +96,19 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getValidatorsLimit",
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "ed25519PublicKey",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "bytes",
         "name": "",
-        "type": "uint256"
+        "type": "bytes"
       }
     ],
     "stateMutability": "view",
@@ -128,7 +126,7 @@
             "type": "bytes"
           },
           {
-            "internalType": "enum IBase.PublicKeyType",
+            "internalType": "enum PublicKeyType.Type",
             "name": "ty",
             "type": "uint8"
           },
@@ -143,8 +141,8 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct IBase.ValidatorInfo[]",
-        "name": "",
+        "internalType": "struct IValidators.ValidatorInfo[]",
+        "name": "res",
         "type": "tuple[]"
       }
     ],
@@ -166,7 +164,7 @@
             "type": "bytes"
           },
           {
-            "internalType": "enum IBase.PublicKeyType",
+            "internalType": "enum PublicKeyType.Type",
             "name": "ty",
             "type": "uint8"
           },
@@ -201,8 +199,8 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct IStaking.ValidatorParam[]",
-        "name": "validators",
+        "internalType": "struct ISystemImporter.ValidatorParam[]",
+        "name": "vs",
         "type": "tuple[]"
       },
       {
@@ -230,7 +228,7 @@
                 "type": "uint256"
               }
             ],
-            "internalType": "struct IStaking.DelegatorAmount[]",
+            "internalType": "struct ISystemImporter.DelegatorAmount[]",
             "name": "boundAmount",
             "type": "tuple[]"
           },
@@ -247,13 +245,13 @@
                 "type": "uint256"
               }
             ],
-            "internalType": "struct IStaking.DelegatorAmount[]",
+            "internalType": "struct ISystemImporter.DelegatorAmount[]",
             "name": "unboundAmount",
             "type": "tuple[]"
           }
         ],
-        "internalType": "struct IStaking.DelegatorParam[]",
-        "name": "delegators",
+        "internalType": "struct ISystemImporter.DelegatorParam[]",
+        "name": "ds",
         "type": "tuple[]"
       },
       {
@@ -279,67 +277,126 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct IStaking.UndelegationInfo[]",
-        "name": "undelegationInfos",
+        "internalType": "struct ISystemImporter.UndelegationInfo[]",
+        "name": "uis",
         "type": "tuple[]"
       }
     ],
-    "name": "import_validators",
+    "name": "importValidators",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "rewards",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "public_key",
+        "type": "bytes"
+      },
+      {
+        "internalType": "string",
+        "name": "memo",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "rate",
+        "type": "uint256"
+      }
+    ],
+    "name": "stake",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "mintClaims",
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "staking",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "systemClaim",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [
+    "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "validator",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "powerAddress",
-    "outputs": [
+      },
       {
         "internalType": "address",
-        "name": "",
+        "name": "delegator",
         "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "delegator_pk",
+        "type": "bytes"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "renounceOwnership",
+    "name": "systemDelegate",
     "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rewardAddress",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -375,68 +432,9 @@
         "type": "uint256"
       }
     ],
-    "name": "stake",
+    "name": "systemStake",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "stakingAddress",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
-    ],
-    "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "proposer",
-        "type": "address"
-      },
-      {
-        "internalType": "address[]",
-        "name": "signed",
-        "type": "address[]"
-      },
-      {
-        "internalType": "address[]",
-        "name": "unsigned",
-        "type": "address[]"
-      },
-      {
-        "internalType": "address[]",
-        "name": "byztine",
-        "type": "address[]"
-      },
-      {
-        "internalType": "enum IBase.ByztineBehavior[]",
-        "name": "behavior",
-        "type": "uint8[]"
-      }
-    ],
-    "name": "trigger",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -457,7 +455,7 @@
         "type": "uint256"
       }
     ],
-    "name": "undelegate",
+    "name": "systemUndelegate",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -466,9 +464,65 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "staker",
         "type": "address"
       },
+      {
+        "internalType": "string",
+        "name": "memo",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "rate",
+        "type": "uint256"
+      }
+    ],
+    "name": "systemUpdateValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "proposer",
+        "type": "address"
+      },
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      },
+      {
+        "internalType": "enum IConsensusTransaction.ByztineBehavior[]",
+        "name": "",
+        "type": "uint8[]"
+      }
+    ],
+    "name": "trigger",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "address",
         "name": "validator",
