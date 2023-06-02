@@ -133,7 +133,7 @@ fn node_command() -> Result<()> {
             "timeout_prevote_delta = \"500ms\"",
             "timeout_precommit = \"1s\"",
             "timeout_precommit_delta = \"500ms\"",
-            "timeout_commit = \"15s\"",
+            "timeout_commit = \"10s\"",
         ];
         let path = format!("{}/config/config.toml", CFG.tendermint_home);
         fs::read_to_string(&path)
