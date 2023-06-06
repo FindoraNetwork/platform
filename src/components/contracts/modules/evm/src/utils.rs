@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ethabi::{Contract, Event, EventParam, ParamType, RawLog, Token};
 use ethereum::Log;
 use ethereum_types::{H160, H256, U256};
@@ -14,7 +16,7 @@ use zei::{
     },
 };
 
-use crate::system_contracts::SystemContracts;
+use crate::system_contracts::{SystemContracts, SYSTEM_ADDR};
 
 pub fn deposit_asset_event() -> Event {
     Event {
@@ -235,6 +237,10 @@ pub fn parse_evm_staking_coinbase_mint_event(
     staking_contracts: &Contract,
     log: Log,
 ) -> Result<(H160, XfrPublicKey, u64)> {
+    if log.address != H160::from_str(SYSTEM_ADDR).map_err(|e| eg!(e))? {
+        return Err(eg!("caller error"));
+    }
+
     let event = staking_contracts
         .event("CoinbaseMint")
         .map_err(|e| eg!(e))?;
