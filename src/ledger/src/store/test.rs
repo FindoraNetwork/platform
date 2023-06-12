@@ -185,7 +185,6 @@ fn test_asset_transfer() {
     let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &template, vec![]);
-    let second_ba = ba.clone();
 
     let asset_issuance_body = IssueAssetBody::new(
         &new_code,
@@ -202,7 +201,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&second_ba).unwrap(),
+                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
                     lien: None,
                 },
                 None,
