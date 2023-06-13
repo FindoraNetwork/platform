@@ -46,5 +46,10 @@ pub trait EVMStaking: Sync + Send + 'static {
         rate: [u64; 2],
     ) -> Result<()>;
     /// claim call
-    fn claim(&self, from: &XfrPublicKey, amount: u64) -> Result<()>;
+    fn claim(
+        &self,
+        td_addr: &[u8],
+        delegator_pk: &XfrPublicKey,
+        amount: u64,
+    ) -> Result<()>;
 }

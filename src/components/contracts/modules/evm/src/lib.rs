@@ -543,15 +543,18 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         from: H160,
+        validator: H160,
         delegator: H160,
         delegator_pk: &XfrPublicKey,
         amount: U256,
     ) -> Result<()> {
         let function = self.contracts.staking.function("systemClaim").c(d!())?;
-        let delegator_address = Token::Address(delegator);
-        let amount = Token::Uint(amount);
         let input = function
-            .encode_input(&[delegator_address, amount])
+            .encode_input(&[
+                Token::Address(validator),
+                Token::Address(delegator),
+                Token::Uint(amount),
+            ])
             .c(d!())?;
 
         let gas_limit = 99999999999;

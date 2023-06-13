@@ -249,7 +249,18 @@ pub fn unstake(
 }
 
 /// Claim rewards from findora network
-pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
+pub fn claim(
+    td_addr: Option<&str>,
+    am: Option<&str>,
+    sk_str: Option<&str>,
+) -> Result<()> {
+    let td_addr = td_addr.map(|ta| ta.to_owned()).c(d!()).or_else(|_| {
+        get_td_pubkey()
+            .c(d!())
+            .map(|td_pk| td_pubkey_to_td_addr(&td_pk))
+    })?;
+    let td_addr = hex::decode(td_addr).c(d!())?;
+
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
     } else {
@@ -262,7 +273,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
 
     utils::gen_fee_op(&kp).c(d!()).map(|op| {
         builder.add_operation(op);
-        builder.add_operation_claim(&kp, am);
+        builder.add_operation_claim(Some(td_addr), &kp, am);
     })?;
 
     let mut tx = builder.take_transaction();

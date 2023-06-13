@@ -21,6 +21,9 @@ pub struct ClaimOps {
     pub(crate) body: Data,
     pub(crate) pubkey: XfrPublicKey,
     signature: XfrSignature,
+    ///
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub td_addr: Option<Vec<u8>>,
 }
 
 impl ClaimOps {
@@ -36,7 +39,12 @@ impl ClaimOps {
         if cur_height > CFG.checkpoint.evm_staking_inital_height {
             self.verify()?;
             let am = self.body.amount.c(d!(eg!("Missing amount.")))?;
-            EVM_STAKING.get().c(d!())?.write().claim(&self.pubkey, am)?;
+            let td_addr = self.td_addr.clone().c(d!(eg!("Missing validator addr.")))?;
+            EVM_STAKING
+                .get()
+                .c(d!())?
+                .write()
+                .claim(&td_addr, &self.pubkey, am)?;
             Ok(())
         } else {
             self.verify()
@@ -67,13 +75,19 @@ impl ClaimOps {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn new(keypair: &XfrKeyPair, amount: Option<u64>, nonce: NoReplayToken) -> Self {
+    pub fn new(
+        td_addr: Option<Vec<u8>>,
+        keypair: &XfrKeyPair,
+        amount: Option<u64>,
+        nonce: NoReplayToken,
+    ) -> Self {
         let body = Data::new(amount, nonce);
         let signature = keypair.sign(&body.to_bytes());
         ClaimOps {
             body,
             pubkey: keypair.get_pk(),
             signature,
+            td_addr,
         }
     }
 

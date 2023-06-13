@@ -143,6 +143,12 @@ subcommands:
   - claim:
       about: Claim accumulated FRA rewards
       args:
+        - validator-td-addr:
+            help: stake FRAs to a custom validator
+            short: A
+            long: validator-td-addr
+            takes_value: true
+            value_name: TendermintAddr
         - amount:
             help: how much `FRA unit`s to claim
             short: n

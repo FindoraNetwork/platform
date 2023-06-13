@@ -355,7 +355,7 @@ mod claim {
 
         common::utils::gen_fee_op(owner_kp).c(d!()).map(|op| {
             builder.add_operation(op);
-            builder.add_operation_claim(owner_kp, amount);
+            builder.add_operation_claim(None, owner_kp, amount);
         })?;
 
         Ok(builder.take_transaction())

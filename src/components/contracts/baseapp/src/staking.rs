@@ -257,13 +257,20 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
 
-    fn claim(&self, delegator_pk: &XfrPublicKey, amount: u64) -> Result<()> {
+    fn claim(
+        &self,
+        td_addr: &[u8],
+        delegator_pk: &XfrPublicKey,
+        amount: u64,
+    ) -> Result<()> {
+        let validator = H160::from_slice(td_addr);
         let delegator = mapping_address(delegator_pk);
         let amount = U256::from(amount);
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
         if let Err(e) = self.modules.evm_module.claim(
             &self.deliver_state,
             from,
+            validator,
             delegator,
             delegator_pk,
             amount,

@@ -10,7 +10,7 @@
       },
       {
         "indexed": false,
-        "internalType": "enum PublicKeyType.Type",
+        "internalType": "enum IBaseEnum.PublicKeyType",
         "name": "ty",
         "type": "uint8"
       },
@@ -31,30 +31,36 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "POWER_DECIMAL",
-    "outputs": [
+    "anonymous": false,
+    "inputs": [
       {
+        "indexed": false,
         "internalType": "uint8",
-        "name": "",
+        "name": "version",
         "type": "uint8"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "name": "Initialized",
+    "type": "event"
   },
   {
-    "inputs": [],
-    "name": "POWER_DECIMAL_DIFF",
-    "outputs": [
+    "anonymous": false,
+    "inputs": [
       {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "name": "OwnershipTransferred",
+    "type": "event"
   },
   {
     "inputs": [],
@@ -72,6 +78,16 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
@@ -88,30 +104,21 @@
         "internalType": "address",
         "name": "validator",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "delegator_pk",
+        "type": "bytes"
       }
     ],
     "name": "delegate",
     "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "ed25519PublicKey",
-    "outputs": [
-      {
-        "internalType": "bytes",
-        "name": "",
-        "type": "bytes"
-      }
-    ],
-    "stateMutability": "view",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -126,7 +133,7 @@
             "type": "bytes"
           },
           {
-            "internalType": "enum PublicKeyType.Type",
+            "internalType": "enum IBaseEnum.PublicKeyType",
             "name": "ty",
             "type": "uint8"
           },
@@ -164,7 +171,7 @@
             "type": "bytes"
           },
           {
-            "internalType": "enum PublicKeyType.Type",
+            "internalType": "enum IBaseEnum.PublicKeyType",
             "name": "ty",
             "type": "uint8"
           },
@@ -291,19 +298,72 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "systemAddr_",
+        "type": "address"
+      }
+    ],
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
         "name": "",
         "type": "address"
       }
     ],
-    "name": "rewards",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rewardAddr",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "address",
         "name": "",
-        "type": "uint256"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "setRewardAddr",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "setStakingAddr",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -319,6 +379,16 @@
         "type": "bytes"
       },
       {
+        "internalType": "address",
+        "name": "staker",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "staker_pk",
+        "type": "bytes"
+      },
+      {
         "internalType": "string",
         "name": "memo",
         "type": "string"
@@ -331,28 +401,17 @@
     ],
     "name": "stake",
     "outputs": [],
-    "stateMutability": "payable",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "staking",
+    "inputs": [],
+    "name": "stakingAddr",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "address",
         "name": "",
-        "type": "uint256"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -360,6 +419,11 @@
   },
   {
     "inputs": [
+      {
+        "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      },
       {
         "internalType": "address",
         "name": "delegator",
@@ -492,27 +556,40 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "proposer",
         "type": "address"
       },
       {
         "internalType": "address[]",
-        "name": "",
+        "name": "voted",
         "type": "address[]"
       },
       {
         "internalType": "address[]",
-        "name": "",
+        "name": "unvoted",
         "type": "address[]"
       },
       {
         "internalType": "address[]",
-        "name": "",
+        "name": "byztine",
         "type": "address[]"
       },
       {
-        "internalType": "enum IConsensusTransaction.ByztineBehavior[]",
-        "name": "",
+        "internalType": "enum IBaseEnum.ByztineBehavior[]",
+        "name": "behavior",
         "type": "uint8[]"
       }
     ],
@@ -523,6 +600,34 @@
   },
   {
     "inputs": [
+      {
+        "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "undelegate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "staker",
+        "type": "address"
+      },
       {
         "internalType": "address",
         "name": "validator",

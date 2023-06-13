@@ -569,10 +569,11 @@ impl TransactionBuilder {
     /// Add a operation to claim all the rewards
     pub fn add_operation_claim(
         &mut self,
+        td_addr: Option<Vec<u8>>,
         keypair: &XfrKeyPair,
         am: Option<u64>,
     ) -> &mut Self {
-        let op = ClaimOps::new(keypair, am, self.txn.body.no_replay_token);
+        let op = ClaimOps::new(td_addr, keypair, am, self.txn.body.no_replay_token);
         self.add_operation(Operation::Claim(op))
     }
 
