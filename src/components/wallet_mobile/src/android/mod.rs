@@ -1,3 +1,6 @@
+#[macro_use]
+mod exception;
+
 mod constructor;
 mod evm;
 mod transfer;
@@ -5,12 +8,12 @@ mod tx_builder;
 
 use crate::rust::types;
 use crate::rust::*;
+use exception::ThrowExceptionImpl;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
 use zei::xfr::structs::ASSET_TYPE_LENGTH;
-
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.
 pub extern "system" fn Java_com_findora_JniApi_buildId(
@@ -288,7 +291,7 @@ pub extern "system" fn Java_com_findora_JniApi_bech32ToBase64(
         .expect("Couldn't get java string!")
         .into();
 
-    let bs = rs_bech32_to_base64(pk.as_str()).unwrap();
+    let bs = throw_exception!(env, rs_bech32_to_base64(pk.as_str()));
     let output = env.new_string(bs).expect("Couldn't create java string!");
     **output
 }
@@ -304,7 +307,7 @@ pub extern "system" fn Java_com_findora_JniApi_base64ToBech32(
         .expect("Couldn't get java string!")
         .into();
 
-    let bs = rs_base64_to_bech32(pk.as_str()).unwrap();
+    let bs = throw_exception!(env, rs_base64_to_bech32(pk.as_str()));
     let output = env.new_string(bs).expect("Couldn't create java string!");
     **output
 }
@@ -321,7 +324,7 @@ pub extern "system" fn Java_com_findora_JniApi_base64ToBech32(
 /// @see {@link module:Findora-Wasm~ClientAssetRecord#from_json_record|ClientAssetRecord.from_json_record} for information about how to construct an asset record object
 /// from a JSON result returned from the ledger server.
 pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
-    _env: JNIEnv,
+    env: JNIEnv,
     _: JClass,
     record_ptr: jlong,
     owner_memo_ptr: jlong,
@@ -335,7 +338,10 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
         Some(memo.clone())
     };
     let keypair = &*(keypair_ptr as *mut types::XfrKeyPair);
-    let oar = rs_open_client_asset_record(record, owner_memo, keypair).unwrap();
+    let oar = throw_exception!(
+        env,
+        rs_open_client_asset_record(record, owner_memo, keypair)
+    );
     Box::into_raw(Box::new(types::OpenAssetRecord::from(oar))) as jlong
 }
 
