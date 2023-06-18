@@ -155,9 +155,17 @@ pub fn get_validators(
                 .collect::<Result<Vec<_>>>()
                 .c(d!("invalid file"))
                 .unwrap()
-        } else {
+        } else if height < CFG.checkpoint.validator_whitelist_v3_height {
             CFG.checkpoint
                 .validator_whitelist_v2
+                .iter()
+                .map(|v| hex::decode(v).c(d!()))
+                .collect::<Result<Vec<_>>>()
+                .c(d!("invalid file"))
+                .unwrap()
+        } else {
+            CFG.checkpoint
+                .validator_whitelist_v3
                 .iter()
                 .map(|v| hex::decode(v).c(d!()))
                 .collect::<Result<Vec<_>>>()
