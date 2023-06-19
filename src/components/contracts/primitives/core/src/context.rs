@@ -38,6 +38,12 @@ pub struct Context {
     pub eth_cache: EthereumCache,
 }
 
+impl Drop for Context {
+    fn drop(&mut self) {
+        self.state.write().clear_query_cache();
+    }
+}
+
 impl Context {
     pub fn new(
         state_merkle: Arc<RwLock<ChainState<FinDB>>>,
