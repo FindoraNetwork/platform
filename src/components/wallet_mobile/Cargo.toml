@@ -32,7 +32,7 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
 
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
