@@ -601,7 +601,7 @@ lazy_static! {
             "D518C4F95A3F39ED853A2614566897C4AD5A008F".to_string(),
             "37D3228A650F591522698BECDF42DCE5D1113D88".to_string(),
             "577F8548D8F834D39D26350D2A3A928F478AF5FD".to_string(),
-        ],,
+        ],
         max_gas_price_limit: 5000000,
         evm_staking_inital_height: 5000000,
         evm_staking_address: "".to_owned(),
