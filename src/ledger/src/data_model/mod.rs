@@ -532,7 +532,8 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.noah_to_bytes().as_slice(), *weight);
+            let b = key.noah_to_bytes();
+            weight_map.insert(b.as_slice(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
