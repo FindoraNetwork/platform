@@ -432,7 +432,7 @@ pub struct XfrAddress {
 impl XfrAddress {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.noah_to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -443,7 +443,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
+        self.key.noah_to_bytes().as_slice().hash(state);
     }
 }
 
@@ -458,7 +458,7 @@ pub struct IssuerPublicKey {
 impl IssuerPublicKey {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.noah_to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -469,7 +469,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
+        self.key.noah_to_bytes().as_slice().hash(state);
     }
 }
 
@@ -532,7 +532,7 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.to_bytes(), *weight);
+            weight_map.insert(key.noah_to_bytes().as_slice(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
