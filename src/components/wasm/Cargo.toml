@@ -36,7 +36,7 @@ bs58 = "0.4"
 getrandom = { version = "0.2", features = ["js"] }
 
 finutils = { path = "../finutils", default-features = false }
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "feat-secp-support" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
 ledger = { path = "../../ledger" }

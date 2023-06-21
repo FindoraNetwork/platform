@@ -85,9 +85,7 @@ impl<'a> TryFrom<&'a [u8]> for Address32 {
 
 impl From<XfrPublicKey> for Address32 {
     fn from(k: XfrPublicKey) -> Self {
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&k.to_bytes());
-        Address32(bytes)
+        Address32::try_from(k.noah_to_bytes().as_slice()).unwrap()
     }
 }
 

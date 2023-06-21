@@ -33,7 +33,7 @@ rucv4 = { package = "ruc", version = "4.0" }
 nix = "0.25"
 
 ledger = { path = "../../ledger", default-features = false }
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "feat-secp-support" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
 
 eth_checksum = { version = "0.1.2", optional = true }
