@@ -12,7 +12,7 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 use noah_algebra::bls12_381::BLSScalar;
 use noah_algebra::prelude::Scalar;
-use noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
+use noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive381};
 
 use {
     crate::converter::ConvertAccount,
