@@ -253,7 +253,7 @@ impl Verify for MultiSignature {
     fn verify(&self, msg: &[u8], signer: &Address32) -> bool {
         match self {
             Self::Xfr(ref sig) => {
-                let mut bytes = [0u8; 33];
+                let mut bytes = [0u8; 32];
                 bytes[0..32].copy_from_slice(signer.as_ref());
                 match XfrPublicKey::noah_from_bytes(&bytes) {
                     Ok(who) => sig.verify(msg, &who),
