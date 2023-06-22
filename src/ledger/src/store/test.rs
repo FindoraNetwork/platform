@@ -148,6 +148,7 @@ fn test_asset_creation_invalid_public_key() {
 }
 
 #[test]
+#[allow(clippy::redundant_clone)]
 fn test_asset_transfer() {
     let mut ledger = LedgerState::tmp_ledger();
 
