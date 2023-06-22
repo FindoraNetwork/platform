@@ -432,7 +432,7 @@ pub struct XfrAddress {
 impl XfrAddress {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.noah_to_bytes().as_slice())
+        b64enc(&self.key.to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -443,7 +443,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.noah_to_bytes().as_slice().hash(state);
+        self.key.to_bytes().as_slice().hash(state);
     }
 }
 
@@ -529,16 +529,16 @@ impl SignatureRules {
     /// Keyset must store XfrPublicKeys in byte form.
     pub fn check_signature_set(&self, keyset: &HashSet<Vec<u8>>) -> Result<()> {
         let mut sum: u64 = 0;
-        let mut weight_map = HashMap::new();
+        let mut weight_map: HashMap<Vec<u8>, u64> = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            let b = key.noah_to_bytes();
-            weight_map.insert(b.as_slice(), *weight);
+            let b = key.to_bytes();
+            weight_map.insert(b, *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
             sum = sum
-                .checked_add(*weight_map.get(&key[..]).unwrap_or(&0))
+                .checked_add(*weight_map.get::<[u8]>(&key.as_slice()).unwrap_or(&0))
                 .c(d!())?;
         }
 
