@@ -5,13 +5,25 @@ use {
     curve25519_dalek::ristretto::CompressedRistretto,
     rand_core::SeedableRng,
     std::cmp::min,
-    zei::noah_algebra::prelude::msg_eq,
     zei::noah_api::{
         ristretto,
         xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
     },
     zei::XfrBody,
 };
+
+#[macro_export]
+macro_rules! msg_eq {
+    ($noah_err: expr, $ruc_err: expr $(,)?) => {
+        assert!($ruc_err.msg_has_overloop(ruc::eg!($noah_err).as_ref()));
+    };
+    ($noah_err: expr, $ruc_err: expr, $msg: expr $(,)?) => {
+        assert!(
+            $ruc_err.msg_has_overloop(ruc::eg!($noah_err).as_ref()),
+            $msg
+        );
+    };
+}
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 

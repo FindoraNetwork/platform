@@ -35,6 +35,7 @@ use {
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
+    ruc::*,
     serde::{Deserialize, Serialize},
     sha2::Sha512,
     sliding_set::SlidingSet,
@@ -71,7 +72,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive254},
+    zei::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
     zei::{OwnerMemo, XfrPublicKey},
 };
 
@@ -491,10 +492,10 @@ impl LedgerState {
     pub fn add_abar(&mut self, abar: &AnonAssetRecord) -> Result<ATxoSID> {
         let mut abar_state_val = self.abar_state.write();
         let store = PrefixedStore::new("abar_store", &mut abar_state_val);
-        let mut mt = PersistentMerkleTree::new(store)?;
+        let mut mt = PersistentMerkleTree::new(store).c(d!())?;
 
         let leaf = hash_abar(mt.entry_count(), abar);
-        mt.add_commitment_hash(leaf).map(ATxoSID)
+        mt.add_commitment_hash(leaf).map(ATxoSID).c(d!())
     }
 
     #[inline(always)]
@@ -502,9 +503,9 @@ impl LedgerState {
     pub fn commit_anon_changes(&mut self) -> Result<u64> {
         let mut abar_state_val = self.abar_state.write();
         let store = PrefixedStore::new("abar_store", &mut abar_state_val);
-        let mut mt = PersistentMerkleTree::new(store)?;
+        let mut mt = PersistentMerkleTree::new(store).c(d!())?;
 
-        mt.commit()
+        mt.commit().c(d!())
     }
 
     #[inline(always)]
@@ -519,7 +520,7 @@ impl LedgerState {
     pub fn get_abar_root_hash(&self) -> Result<BN254Scalar> {
         let abar_query_state = State::new(self.abar_state.read().chain_state(), false);
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
-        let mt = ImmutablePersistentMerkleTree::new(store)?;
+        let mt = ImmutablePersistentMerkleTree::new(store).c(d!())?;
 
         mt.get_root_with_depth(MERKLE_TREE_DEPTH).c(d!(
             "probably due to badly constructed tree or data corruption"
@@ -532,9 +533,11 @@ impl LedgerState {
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
         let abar_query_state = State::new(self.abar_state.read().chain_state(), false);
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
-        let mt = ImmutablePersistentMerkleTree::new(store)?;
+        let mt = ImmutablePersistentMerkleTree::new(store).c(d!())?;
 
-        let t = mt.generate_proof_with_depth(id.0, MERKLE_TREE_DEPTH)?;
+        let t = mt
+            .generate_proof_with_depth(id.0, MERKLE_TREE_DEPTH)
+            .c(d!())?;
         Ok(build_mt_leaf_info_from_proof(t, id.0))
     }
 
@@ -615,7 +618,7 @@ impl LedgerState {
 
         // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
         let store = PrefixedStore::new("abar_store", &mut abar_state);
-        let _ = PersistentMerkleTree::new(store)?;
+        let _ = PersistentMerkleTree::new(store).c(d!())?;
 
         let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
@@ -831,6 +834,7 @@ impl LedgerState {
                 .chain(extras.iter())
                 .map(|pk| {
                     XfrPublicKey::from_noah(&pk)
+                        .c(d!())
                         .and_then(|pk| self.staking_get_nonconfidential_balance(&pk))
                         .unwrap_or(0)
                 })
@@ -1633,7 +1637,7 @@ impl LedgerStatus {
         // current merkle tree version.
         let abar_query_state = State::new(abar_state.read().chain_state(), false);
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
-        let abar_mt = ImmutablePersistentMerkleTree::new(store)?;
+        let abar_mt = ImmutablePersistentMerkleTree::new(store).c(d!())?;
 
         let mut hasher = Sha512::new();
         hasher.update(txn_effect.txn.body.digest());
@@ -1655,13 +1659,15 @@ impl LedgerStatus {
                 axfr_note.body.inputs.len(),
                 axfr_note.body.outputs.len(),
                 af,
-            )?;
+            )
+            .c(d!())?;
             let abar_version = axfr_note.body.merkle_root_version;
             if abar_mt.version() - abar_version > VERSION_WINDOW {
                 return Err(eg!("Proof is old, need rebuild!"));
             }
             let version_root = abar_mt
-                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
+                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)
+                .c(d!())?;
 
             verify_anon_xfr_note(
                 &verifier_params,
@@ -1684,7 +1690,8 @@ impl LedgerStatus {
                 return Err(eg!("Proof is old, need rebuild!"));
             }
             let version_root = abar_mt
-                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
+                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)
+                .c(d!())?;
 
             // verify zk proof with merkle root
             abar_conv.verify(version_root, hasher.clone())?;

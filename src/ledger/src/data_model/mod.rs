@@ -73,7 +73,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
+    zei::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
     zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
@@ -1357,14 +1357,14 @@ impl BarToAbarOps {
         match &self.note {
             BarAnonConvNote::BarNote(note) => {
                 // fetch the verifier Node Params for PlonkProof
-                let node_params = VerifierParams::get_bar_to_abar()?;
+                let node_params = VerifierParams::get_bar_to_abar().c(d!())?;
                 // verify the Plonk proof and signature
                 verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key)
                     .c(d!())
             }
             BarAnonConvNote::ArNote(note) => {
                 // fetch the verifier Node Params for PlonkProof
-                let node_params = VerifierParams::get_ar_to_abar()?;
+                let node_params = VerifierParams::get_ar_to_abar().c(d!())?;
                 // verify the Plonk proof and signature
                 verify_ar_to_abar_note(&node_params, note).c(d!())
             }
@@ -1427,14 +1427,15 @@ impl AbarConvNote {
         &self,
         merkle_root: BN254Scalar,
         hasher: D,
-    ) -> Result<()> {
+    ) -> ruc::Result<()> {
         match self {
             AbarConvNote::AbarToBar(note) => {
                 let af = match note.folding_instance {
                     AXfrAddressFoldingInstance::Secp256k1(_) => AddressFormat::SECP256K1,
                     AXfrAddressFoldingInstance::Ed25519(_) => AddressFormat::ED25519,
                 };
-                let abar_to_bar_verifier_params = VerifierParams::get_abar_to_bar(af)?;
+                let abar_to_bar_verifier_params =
+                    VerifierParams::get_abar_to_bar(af).c(d!())?;
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
                 // verify zk proof with merkle root
                 verify_abar_to_bar_note(
@@ -1450,7 +1451,8 @@ impl AbarConvNote {
                     AXfrAddressFoldingInstance::Secp256k1(_) => AddressFormat::SECP256K1,
                     AXfrAddressFoldingInstance::Ed25519(_) => AddressFormat::ED25519,
                 };
-                let abar_to_ar_verifier_params = VerifierParams::get_abar_to_ar(af)?;
+                let abar_to_ar_verifier_params =
+                    VerifierParams::get_abar_to_ar(af).c(d!())?;
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
                 // verify zk proof with merkle root
                 verify_abar_to_ar_note(

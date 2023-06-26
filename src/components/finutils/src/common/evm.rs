@@ -61,7 +61,10 @@ pub fn transfer_to_account(
 
     let transfer_op = utils::gen_transfer_op(
         &kp,
-        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
+        vec![(
+            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?,
+            amount,
+        )],
         asset,
         false,
         false,

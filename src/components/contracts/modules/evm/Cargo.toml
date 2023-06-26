@@ -33,8 +33,8 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }

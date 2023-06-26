@@ -39,6 +39,7 @@ use {
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
+    ruc::*,
     serde::{Deserialize, Serialize},
     sha2::Sha512,
     std::{
@@ -197,9 +198,9 @@ impl TransactionBuilder {
         for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
                 if let Ok(oar) = open_blind_asset_record(
-                    &o.into_noah()?,
+                    &o.into_noah().c(d!())?,
                     &om.map(|o| o.into_noah()),
-                    &kp.into_noah()?,
+                    &kp.into_noah().c(d!())?,
                 ) {
                     if ASSET_TYPE_FRA == oar.asset_type
                         && kp.get_pk_ref().to_bytes() == o.public_key.to_bytes()
@@ -259,7 +260,7 @@ impl TransactionBuilder {
 
         let mut am = fee;
         for i in inputs.inner.into_iter() {
-            open_blind_asset_record(&i.ar.record.into_noah()?, &i.om.map(|o| o.into_noah()), &i.kp.into_noah()?)
+            open_blind_asset_record(&i.ar.record.into_noah().c(d!())?, &i.om.map(|o| o.into_noah()), &i.kp.into_noah().c(d!())?)
                 .c(d!())
                 .and_then(|oar| {
                     if oar.asset_type != ASSET_TYPE_FRA {
@@ -355,7 +356,7 @@ impl TransactionBuilder {
             amount,
             token_code.val,
             confidentiality_flags,
-            key_pair.get_pk().into_noah()?,
+            key_pair.get_pk().into_noah().c(d!())?,
         );
 
         let pc_gens = PedersenCommitmentRistretto::default();
@@ -368,7 +369,7 @@ impl TransactionBuilder {
             &[(
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&ba)?,
+                    record: BlindAssetRecord::from_noah(&ba).c(d!())?,
                     lien: None,
                 },
                 owner_memo.map(|om| OwnerMemo::from_noah(&om).unwrap()),
@@ -423,7 +424,8 @@ impl TransactionBuilder {
                 let param = if let Some(key) = params.get(&key) {
                     key
                 } else {
-                    let param = ProverParams::gen_abar_to_abar(key.0, key.1, af)?;
+                    let param =
+                        ProverParams::gen_abar_to_abar(key.0, key.1, af).c(d!())?;
                     params.insert(key, param);
                     params.get(&key).unwrap() // safe, checked.
                 };
@@ -433,7 +435,8 @@ impl TransactionBuilder {
                     param,
                     pre_note.clone(),
                     hasher.clone(),
-                )?;
+                )
+                .c(d!())?;
 
                 // Add operation
                 let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
@@ -449,17 +452,19 @@ impl TransactionBuilder {
                 let params = match pre_note.input_keypair.get_sk_ref() {
                     SecretKey::Secp256k1(_) => {
                         if abar_bar_params[0].is_none() {
-                            abar_bar_params[0] = Some(ProverParams::gen_abar_to_bar(
-                                AddressFormat::SECP256K1,
-                            )?);
+                            abar_bar_params[0] = Some(
+                                ProverParams::gen_abar_to_bar(AddressFormat::SECP256K1)
+                                    .c(d!())?,
+                            );
                         }
                         abar_bar_params[0].as_ref()
                     }
                     SecretKey::Ed25519(_) => {
                         if abar_bar_params[1].is_none() {
-                            abar_bar_params[1] = Some(ProverParams::gen_abar_to_bar(
-                                AddressFormat::ED25519,
-                            )?);
+                            abar_bar_params[1] = Some(
+                                ProverParams::gen_abar_to_bar(AddressFormat::ED25519)
+                                    .c(d!())?,
+                            );
                         }
                         abar_bar_params[1].as_ref()
                     }
@@ -470,7 +475,8 @@ impl TransactionBuilder {
                     params.unwrap(),
                     pre_note.clone(),
                     hasher.clone(),
-                )?;
+                )
+                .c(d!())?;
 
                 // Create operation
                 let conv = AbarToBarOps::new(
@@ -492,17 +498,19 @@ impl TransactionBuilder {
                 let params = match pre_note.input_keypair.get_sk_ref() {
                     SecretKey::Secp256k1(_) => {
                         if abar_ar_params[0].is_none() {
-                            abar_ar_params[0] = Some(ProverParams::gen_abar_to_ar(
-                                AddressFormat::SECP256K1,
-                            )?);
+                            abar_ar_params[0] = Some(
+                                ProverParams::gen_abar_to_ar(AddressFormat::SECP256K1)
+                                    .c(d!())?,
+                            );
                         }
                         abar_ar_params[0].as_ref()
                     }
                     SecretKey::Ed25519(_) => {
                         if abar_ar_params[1].is_none() {
-                            abar_ar_params[1] = Some(ProverParams::gen_abar_to_ar(
-                                AddressFormat::ED25519,
-                            )?);
+                            abar_ar_params[1] = Some(
+                                ProverParams::gen_abar_to_ar(AddressFormat::ED25519)
+                                    .c(d!())?,
+                            );
                         }
                         abar_ar_params[1].as_ref()
                     }
@@ -512,7 +520,8 @@ impl TransactionBuilder {
                     params.unwrap(),
                     pre_note.clone(),
                     hasher.clone(),
-                )?;
+                )
+                .c(d!())?;
 
                 // Create operation
                 let conv = AbarToBarOps::new(
@@ -717,19 +726,21 @@ impl TransactionBuilder {
                 let note = init_abar_to_ar_note(
                     &mut prng,
                     input,
-                    &input_keypair.into_noah()?,
-                    &bar_pub_key.into_noah()?,
-                )?;
+                    &input_keypair.into_noah().c(d!())?,
+                    &bar_pub_key.into_noah().c(d!())?,
+                )
+                .c(d!())?;
                 self.abar_ar_cache.push(note);
             }
             _ => {
                 let note = init_abar_to_bar_note(
                     &mut prng,
                     input,
-                    &input_keypair.into_noah()?,
-                    &bar_pub_key.into_noah()?,
+                    &input_keypair.into_noah().c(d!())?,
+                    &bar_pub_key.into_noah().c(d!())?,
                     asset_record_type,
-                )?;
+                )
+                .c(d!())?;
                 self.abar_bar_cache.push(note);
             }
         }
@@ -754,8 +765,13 @@ impl TransactionBuilder {
         let fee = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32);
 
         // generate anon transfer note
-        let note = init_anon_xfr_note(inputs, outputs, fee, &input_keypair.into_noah()?)
-            .c(d!())?;
+        let note = init_anon_xfr_note(
+            inputs,
+            outputs,
+            fee,
+            &input_keypair.into_noah().c(d!())?,
+        )
+        .c(d!())?;
         self.abar_abar_cache.push(note.clone());
 
         Ok((self, note))
@@ -818,7 +834,7 @@ impl TransactionBuilder {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder as u64)
                     .asset_type(asset_type)
-                    .pub_key(&remainder_pk.into_noah()?)
+                    .pub_key(&remainder_pk.into_noah().c(d!())?)
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -842,7 +858,7 @@ impl TransactionBuilder {
             let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
-                .pub_key(&remainder_pk.into_noah()?)
+                .pub_key(&remainder_pk.into_noah().c(d!())?)
                 .finalize(&mut prng)
                 .unwrap()
                 .build()
@@ -859,9 +875,13 @@ impl TransactionBuilder {
             ));
         }
 
-        let note =
-            init_anon_xfr_note(inputs, &vec_outputs, fees, &input_keypair.into_noah()?)
-                .c(d!())?;
+        let note = init_anon_xfr_note(
+            inputs,
+            &vec_outputs,
+            fees,
+            &input_keypair.into_noah().c(d!())?,
+        )
+        .c(d!())?;
         self.abar_abar_cache.push(note.clone());
 
         // return a list of all new remainder abars generated
@@ -1108,15 +1128,15 @@ fn gen_bar_conv_note(
     let mut prng = ChaChaRng::from_seed(seed);
 
     if is_bar_transparent {
-        let prover_params = ProverParams::gen_ar_to_abar()?;
+        let prover_params = ProverParams::gen_ar_to_abar().c(d!())?;
 
         // generate the BarToAbarNote with the ZKP
         let note = gen_ar_to_abar_note(
             &mut prng,
             &prover_params,
             input_record,
-            &auth_key_pair.into_noah()?,
-            &abar_pub_key.into_noah()?,
+            &auth_key_pair.into_noah().c(d!())?,
+            &abar_pub_key.into_noah().c(d!())?,
         )
         .c(d!())?;
 
@@ -1124,15 +1144,15 @@ fn gen_bar_conv_note(
         Ok((BarAnonConvNote::ArNote(Box::new(note)), c))
     } else {
         // generate params for Bar to Abar conversion
-        let prover_params = ProverParams::gen_bar_to_abar()?;
+        let prover_params = ProverParams::gen_bar_to_abar().c(d!())?;
 
         // generate the BarToAbarNote with the ZKP
         let note = gen_bar_to_abar_note(
             &mut prng,
             &prover_params,
             input_record,
-            &auth_key_pair.into_noah()?,
-            &abar_pub_key.into_noah()?,
+            &auth_key_pair.into_noah().c(d!())?,
+            &abar_pub_key.into_noah().c(d!())?,
         )
         .c(d!())?;
         let c = note.body.output.commitment;
@@ -1779,7 +1799,7 @@ impl AnonTransferOperationBuilder {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder)
                     .asset_type(asset)
-                    .pub_key(&keypair.get_pk().into_noah()?)
+                    .pub_key(&keypair.get_pk().into_noah().c(d!())?)
                     .finalize(&mut prng)
                     .unwrap()
                     .build()
@@ -1800,7 +1820,7 @@ impl AnonTransferOperationBuilder {
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             fees_in_fra,
-            &keypair.into_noah()?,
+            &keypair.into_noah().c(d!())?,
         )
         .c(d!("error from init_anon_xfr_note"))?;
 
@@ -1818,7 +1838,8 @@ impl AnonTransferOperationBuilder {
             SecretKey::Ed25519(_) => AddressFormat::ED25519,
         };
         let param =
-            ProverParams::gen_abar_to_abar(self.inputs.len(), self.outputs.len(), af)?;
+            ProverParams::gen_abar_to_abar(self.inputs.len(), self.outputs.len(), af)
+                .c(d!())?;
 
         let mut hasher = Sha512::new();
 
@@ -1826,7 +1847,7 @@ impl AnonTransferOperationBuilder {
         bytes.extend_from_slice(Serialized::new(&pre_note.body).as_ref());
         hasher.update(bytes);
 
-        let note = finish_anon_xfr_note(&mut prng, &param, pre_note, hasher)?;
+        let note = finish_anon_xfr_note(&mut prng, &param, pre_note, hasher).c(d!())?;
 
         // Add operation
         let inp = AnonTransferOps::new(note, self.nonce).c(d!())?;
@@ -1915,13 +1936,13 @@ mod tests {
             1000,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            alice.get_pk().into_noah()?,
+            alice.get_pk().into_noah().c(d!())?,
         );
         let ar_2 = AssetRecordTemplate::with_no_asset_tracing(
             1000,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let (ba_1, _, memo1) =
             build_blind_asset_record(&mut prng, &pc_gens, &ar_1, vec![]);
@@ -1934,12 +1955,13 @@ mod tests {
             25,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let res = invalid_outputs_transfer_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()?).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah().c(d!())?)
+                    .c(d!())?,
                 None,
                 None,
                 20,
@@ -1957,12 +1979,13 @@ mod tests {
             20,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let res = invalid_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()?).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah().c(d!())?)
+                    .c(d!())?,
                 None,
                 None,
                 20,
@@ -1985,12 +2008,13 @@ mod tests {
             20,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let res = missing_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()?).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah().c(d!())?)
+                    .c(d!())?,
                 None,
                 None,
                 20,
@@ -2011,42 +2035,43 @@ mod tests {
             5,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let output_charlie13_code1_template = AssetRecordTemplate::with_no_asset_tracing(
             13,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            charlie.get_pk().into_noah()?,
+            charlie.get_pk().into_noah().c(d!())?,
         );
         let output_ben2_code1_template = AssetRecordTemplate::with_no_asset_tracing(
             2,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            ben.get_pk().into_noah()?,
+            ben.get_pk().into_noah().c(d!())?,
         );
         let output_bob5_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             5,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk().into_noah()?,
+            bob.get_pk().into_noah().c(d!())?,
         );
         let output_charlie13_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             13,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            charlie.get_pk().into_noah()?,
+            charlie.get_pk().into_noah().c(d!())?,
         );
         let output_ben2_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             2,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            ben.get_pk().into_noah()?,
+            ben.get_pk().into_noah().c(d!())?,
         );
         let _valid_transfer_op = TransferOperationBuilder::new()
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()?).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah().c(d!())?)
+                    .c(d!())?,
                 None,
                 None,
                 20,
@@ -2054,7 +2079,8 @@ mod tests {
             .c(d!())?
             .add_input(
                 TxoRef::Relative(2),
-                open_blind_asset_record(&ba_2, &memo2, &bob.into_noah()?).c(d!())?,
+                open_blind_asset_record(&ba_2, &memo2, &bob.into_noah().c(d!())?)
+                    .c(d!())?,
                 None,
                 None,
                 20,

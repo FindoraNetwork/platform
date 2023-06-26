@@ -63,9 +63,9 @@ features = ["f16", "serde"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.12"
 fs2 = "0.4"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
-sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "develop" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6", optional = true }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6", optional = true }
+sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "feat-secp-support" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

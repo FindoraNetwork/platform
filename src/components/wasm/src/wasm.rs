@@ -89,7 +89,7 @@ use {
             trace_assets as noah_trace_assets,
         },
     },
-    zei::noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    zei::noah_crypto::hybrid_encryption::{XPublicKey, XSecretKey},
     zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
