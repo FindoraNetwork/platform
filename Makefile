@@ -256,6 +256,8 @@ start_localnode: stop_debug_env
 # endif
 
 
+
+
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
