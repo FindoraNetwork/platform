@@ -17,7 +17,7 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::noah_algebra::bls12_381::BLSScalar,
+    zei::noah_algebra::bn254::BN254Scalar,
     zei::noah_api::anon_xfr::structs::{
         AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
         MTLeafInfo as NoahMTLeafInfo,
@@ -305,7 +305,7 @@ impl AxfrOwnerMemo {
 pub struct AxfrOwnerMemoInfo {
     pub(crate) amount: u64,
     pub(crate) asset_type: String,
-    pub(crate) blind: BLSScalar,
+    pub(crate) blind: BN254Scalar,
 }
 
 #[wasm_bindgen]
@@ -322,7 +322,7 @@ impl AxfrOwnerMemoInfo {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn blind(&self) -> BLSScalar {
+    pub fn blind(&self) -> BN254Scalar {
         self.blind
     }
 }

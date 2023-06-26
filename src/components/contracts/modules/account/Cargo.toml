@@ -15,7 +15,7 @@ primitive-types = { version = "0.11.1", default-features = false, features = ["r
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -24,11 +24,10 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
 config = { path = "../../../config"}
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }
 
 [dev-dependencies]
 rand_chacha = "0.3"
 parking_lot = "0.12"
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }

@@ -20,7 +20,7 @@ use ledger::{
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ring::pbkdf2;
-use ruc::Result;
+use ruc::*;
 use std::num::NonZeroU32;
 use std::str;
 use zei::{
@@ -58,7 +58,8 @@ pub fn rs_trace_assets(
     xfr_body: XfrBody,
     tracer_keypair: &AssetTracerKeyPair,
 ) -> Result<Vec<(u64, String)>> {
-    Ok(noah_trace_assets(&xfr_body, tracer_keypair.get_keys())?
+    Ok(noah_trace_assets(&xfr_body, tracer_keypair.get_keys())
+        .c(d!())?
         .iter()
         .map(|(amt, asset_type, _, _)| {
             let asset_type_code = AssetTypeCode { val: *asset_type };
@@ -83,10 +84,11 @@ pub fn rs_open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<OpenAssetRecord> {
     open_bar(
-        &record.get_bar_ref().into_noah()?,
+        &record.get_bar_ref().into_noah().c(d!())?,
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        &keypair.into_noah()?,
+        &keypair.into_noah().c(d!())?,
     )
+    .c(d!())
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

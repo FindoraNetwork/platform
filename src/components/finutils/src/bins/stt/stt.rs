@@ -233,7 +233,7 @@ mod issue {
             FRA_PRE_ISSUE_AMOUNT / 2,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            root_kp.get_pk().into_noah()?,
+            root_kp.get_pk().into_noah().c(d!())?,
         );
         let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
@@ -291,7 +291,10 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
+            vec![(
+                XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?,
+                amount,
+            )],
             None,
             false,
             false,

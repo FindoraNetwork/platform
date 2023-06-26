@@ -52,7 +52,8 @@ fn check_block_rewards_rate() -> Result<()> {
         let tx = gen_transfer_tx(
             &ledger,
             &root_kp,
-            &XfrPublicKey::from_noah(&FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()])?,
+            &XfrPublicKey::from_noah(&FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()])
+                .c(d!())?,
             FRA_PRE_ISSUE_AMOUNT / 200,
             seq_id,
         )
@@ -100,7 +101,7 @@ fn gen_transfer_tx(
 ) -> Result<Transaction> {
     let mut tx_builder = TransactionBuilder::from_seq_id(seq_id);
 
-    let binding = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)?;
+    let binding = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).c(d!())?;
     let target_list = vec![(target_pk, am), (&binding, TX_FEE_MIN)];
 
     let mut trans_builder = TransferOperationBuilder::new();
@@ -121,9 +122,9 @@ fn gen_transfer_tx(
         }
 
         open_blind_asset_record(
-            &utxo.0.record.into_noah()?,
+            &utxo.0.record.into_noah().c(d!())?,
             &owner_memo.map(|o| o.into_noah()),
-            &owner_kp.into_noah()?,
+            &owner_kp.into_noah().c(d!())?,
         )
         .c(d!())
         .and_then(|ob| {

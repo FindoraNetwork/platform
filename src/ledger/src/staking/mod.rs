@@ -82,12 +82,12 @@ lazy_static! {
     /// Reserved accounts of EcoSystem.
     pub static ref FF_PK_LIST: Vec<NoahXfrPublicKey> = FF_ADDR_LIST
         .iter()
-        .map(|addr| pnk!(wallet::public_key_from_bech32(addr).and_then(|pk|pk.into_noah())))
+        .map(|addr| pnk!(wallet::public_key_from_bech32(addr).and_then(|pk|pk.into_noah().c(d!()))))
         .collect();
 
     /// Reserved accounts of Findora Foundation.
     pub static ref FF_PK_EXTRA_120_0000: NoahXfrPublicKey =
-        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000).and_then(|pk|pk.into_noah()));
+        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000).and_then(|pk|pk.into_noah().c(d!())));
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();

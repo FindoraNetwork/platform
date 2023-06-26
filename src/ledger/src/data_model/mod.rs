@@ -49,7 +49,7 @@ use {
     },
     unicode_normalization::UnicodeNormalization,
     zei::noah_algebra::{
-        bls12_381::BLSScalar, serialization::NoahFromToBytes, traits::Scalar,
+        bn254::BN254Scalar, serialization::NoahFromToBytes, traits::Scalar,
     },
     zei::noah_api::{
         anon_xfr::{
@@ -73,7 +73,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
+    zei::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
     zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
@@ -285,13 +285,13 @@ impl AssetTypeCode {
 
         let mut bytes = vec![0u8; 32];
         bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
-        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
 
         let mut bytes = vec![0u8; 32];
         bytes[0] = raw_asset_type_code.val.0[31];
-        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
 
-        let res = AnemoiJive381::eval_variable_length_hash(&f);
+        let res = AnemoiJive254::eval_variable_length_hash(&f);
         Self::new_from_vec(res.to_bytes())
     }
 }
@@ -432,7 +432,7 @@ pub struct XfrAddress {
 impl XfrAddress {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -443,7 +443,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
+        self.key.to_bytes().as_slice().hash(state);
     }
 }
 
@@ -458,7 +458,7 @@ pub struct IssuerPublicKey {
 impl IssuerPublicKey {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.noah_to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -469,7 +469,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
+        self.key.noah_to_bytes().as_slice().hash(state);
     }
 }
 
@@ -529,15 +529,16 @@ impl SignatureRules {
     /// Keyset must store XfrPublicKeys in byte form.
     pub fn check_signature_set(&self, keyset: &HashSet<Vec<u8>>) -> Result<()> {
         let mut sum: u64 = 0;
-        let mut weight_map = HashMap::new();
+        let mut weight_map: HashMap<Vec<u8>, u64> = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.to_bytes(), *weight);
+            let b = key.to_bytes();
+            weight_map.insert(b, *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
             sum = sum
-                .checked_add(*weight_map.get(&key[..]).unwrap_or(&0))
+                .checked_add(*weight_map.get::<[u8]>(&key.as_slice()).unwrap_or(&0))
                 .c(d!())?;
         }
 
@@ -1117,8 +1118,8 @@ impl AssetTypePrefix {
     }
 
     #[allow(missing_docs)]
-    pub fn to_field_element(&self) -> BLSScalar {
-        BLSScalar::from_bytes(&self.bytes()).unwrap()
+    pub fn to_field_element(&self) -> BN254Scalar {
+        BN254Scalar::from_bytes(&self.bytes()).unwrap()
     }
 }
 
@@ -1356,14 +1357,14 @@ impl BarToAbarOps {
         match &self.note {
             BarAnonConvNote::BarNote(note) => {
                 // fetch the verifier Node Params for PlonkProof
-                let node_params = VerifierParams::get_bar_to_abar()?;
+                let node_params = VerifierParams::get_bar_to_abar().c(d!())?;
                 // verify the Plonk proof and signature
                 verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key)
                     .c(d!())
             }
             BarAnonConvNote::ArNote(note) => {
                 // fetch the verifier Node Params for PlonkProof
-                let node_params = VerifierParams::get_ar_to_abar()?;
+                let node_params = VerifierParams::get_ar_to_abar().c(d!())?;
                 // verify the Plonk proof and signature
                 verify_ar_to_abar_note(&node_params, note).c(d!())
             }
@@ -1424,16 +1425,17 @@ impl AbarConvNote {
     /// Verifies the ZKP based on the type of conversion
     pub fn verify<D: Digest<OutputSize = U64> + Default>(
         &self,
-        merkle_root: BLSScalar,
+        merkle_root: BN254Scalar,
         hasher: D,
-    ) -> Result<()> {
+    ) -> ruc::Result<()> {
         match self {
             AbarConvNote::AbarToBar(note) => {
                 let af = match note.folding_instance {
                     AXfrAddressFoldingInstance::Secp256k1(_) => AddressFormat::SECP256K1,
                     AXfrAddressFoldingInstance::Ed25519(_) => AddressFormat::ED25519,
                 };
-                let abar_to_bar_verifier_params = VerifierParams::get_abar_to_bar(af)?;
+                let abar_to_bar_verifier_params =
+                    VerifierParams::get_abar_to_bar(af).c(d!())?;
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
                 // verify zk proof with merkle root
                 verify_abar_to_bar_note(
@@ -1449,7 +1451,8 @@ impl AbarConvNote {
                     AXfrAddressFoldingInstance::Secp256k1(_) => AddressFormat::SECP256K1,
                     AXfrAddressFoldingInstance::Ed25519(_) => AddressFormat::ED25519,
                 };
-                let abar_to_ar_verifier_params = VerifierParams::get_abar_to_ar(af)?;
+                let abar_to_ar_verifier_params =
+                    VerifierParams::get_abar_to_ar(af).c(d!())?;
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
                 // verify zk proof with merkle root
                 verify_abar_to_ar_note(
@@ -2378,7 +2381,7 @@ impl StateCommitmentData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AnonStateCommitmentData {
     /// Root hash of the latest committed version of abar merkle tree
-    pub abar_root_hash: BLSScalar,
+    pub abar_root_hash: BN254Scalar,
     /// Root hash of the nullifier set merkle tree
     pub nullifier_root_hash: BitDigest,
 }
@@ -2419,7 +2422,7 @@ pub fn gen_random_keypair() -> XfrKeyPair {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
+pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BN254Scalar {
     let c = commit(
         oabar.pub_key_ref(),
         oabar.get_blind(),

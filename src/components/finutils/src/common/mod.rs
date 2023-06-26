@@ -167,7 +167,10 @@ pub fn stake(
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
-        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, am)],
+        vec![(
+            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?,
+            am,
+        )],
         None,
         false,
         false,
@@ -208,7 +211,10 @@ pub fn stake_append(
     builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
-        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, am)],
+        vec![(
+            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?,
+            am,
+        )],
         None,
         false,
         false,
@@ -750,7 +756,10 @@ fn gen_delegate_tx(
 
     utils::gen_transfer_op(
         owner_kp,
-        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)?, amount)],
+        vec![(
+            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?,
+            amount,
+        )],
         None,
         false,
         false,
@@ -965,7 +974,7 @@ pub fn convert_abar2bar(
     let oabar_in = OpenAnonAssetRecordBuilder::from_abar(
         &axtxo_abar.1,
         owner_memo,
-        &from.into_noah()?,
+        &from.into_noah().c(d!())?,
     )
     .unwrap()
     .mt_leaf_info(mt_leaf_info)
@@ -975,7 +984,7 @@ pub fn convert_abar2bar(
     // check oabar is unspent. If already spent return error
     // create nullifier
     let n = nullify(
-        &from.into_noah()?,
+        &from.into_noah().c(d!())?,
         oabar_in.get_amount(),
         oabar_in.get_asset_type().as_scalar(),
         mt_leaf_uid,
@@ -1056,7 +1065,7 @@ pub fn gen_anon_transfer_op(
         let oabar_in = OpenAnonAssetRecordBuilder::from_abar(
             &axtxo_abar.1,
             owner_memo,
-            &from.into_noah()?,
+            &from.into_noah().c(d!())?,
         )
         .unwrap()
         .mt_leaf_info(mt_leaf_info)
@@ -1065,7 +1074,7 @@ pub fn gen_anon_transfer_op(
 
         // check oabar is unspent.
         let n = nullify(
-            &from.into_noah()?,
+            &from.into_noah().c(d!())?,
             oabar_in.get_amount(),
             oabar_in.get_asset_type().as_scalar(),
             mt_leaf_uid,
@@ -1092,7 +1101,7 @@ pub fn gen_anon_transfer_op(
     let oabar_out = OpenAnonAssetRecordBuilder::new()
         .amount(axfr_amount)
         .asset_type(inputs[0].get_asset_type())
-        .pub_key(&to.into_noah()?)
+        .pub_key(&to.into_noah().c(d!())?)
         .finalize(&mut prng)
         .unwrap()
         .build()
@@ -1205,7 +1214,7 @@ pub fn gen_oabar_add_op_x(
         let oabar_in = OpenAnonAssetRecordBuilder::from_abar(
             &axtxo_abar.1,
             owner_memo,
-            &from.into_noah()?,
+            &from.into_noah().c(d!())?,
         )
         .unwrap()
         .mt_leaf_info(mt_leaf_info)
@@ -1214,7 +1223,7 @@ pub fn gen_oabar_add_op_x(
 
         // check oabar is unspent.
         let n = nullify(
-            &from.into_noah()?,
+            &from.into_noah().c(d!())?,
             oabar_in.get_amount(),
             oabar_in.get_asset_type().as_scalar(),
             mt_leaf_uid,
@@ -1245,7 +1254,7 @@ pub fn gen_oabar_add_op_x(
         let oabar_out = OpenAnonAssetRecordBuilder::new()
             .amount(axfr_amount)
             .asset_type(asset_type.val)
-            .pub_key(&to.into_noah()?)
+            .pub_key(&to.into_noah().c(d!())?)
             .finalize(&mut prng)
             .unwrap()
             .build()
@@ -1372,7 +1381,7 @@ pub fn check_abar_status(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(
         &axtxo_abar.1,
         owner_memo,
-        &from.into_noah()?,
+        &from.into_noah().c(d!())?,
     )
     .unwrap()
     .mt_leaf_info(mt_leaf_info)
@@ -1380,7 +1389,7 @@ pub fn check_abar_status(
     .unwrap();
 
     let n = nullify(
-        &from.into_noah()?,
+        &from.into_noah().c(d!())?,
         oabar.get_amount(),
         oabar.get_asset_type().as_scalar(),
         mt_leaf_uid,
@@ -1418,14 +1427,14 @@ pub fn get_owned_abars(
             let oabar = OpenAnonAssetRecordBuilder::from_abar(
                 &abar,
                 memo,
-                &axfr_secret_key.into_noah()?,
+                &axfr_secret_key.into_noah().c(d!())?,
             )
             .unwrap()
             .build()
             .unwrap();
 
             let n = nullify(
-                &axfr_secret_key.into_noah()?,
+                &axfr_secret_key.into_noah().c(d!())?,
                 oabar.get_amount(),
                 oabar.get_asset_type().as_scalar(),
                 sid.0,
@@ -1488,14 +1497,14 @@ pub fn anon_balance(
                     let oabar = OpenAnonAssetRecordBuilder::from_abar(
                         &abar,
                         memo,
-                        &axfr_secret_key.into_noah()?,
+                        &axfr_secret_key.into_noah().c(d!())?,
                     )
                     .unwrap()
                     .build()
                     .unwrap();
 
                     let n = nullify(
-                        &axfr_secret_key.into_noah()?,
+                        &axfr_secret_key.into_noah().c(d!())?,
                         oabar.get_amount(),
                         oabar.get_asset_type().as_scalar(),
                         sid.0,

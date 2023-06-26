@@ -3,7 +3,7 @@ use evm::{Context, ExitError, ExitSucceed};
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 use platform_lib_noah::noah_algebra::bls12_381::BLSScalar;
 use platform_lib_noah::noah_algebra::prelude::Scalar;
-use platform_lib_noah::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
+use platform_lib_noah::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive381};
 
 /// The Anemoi precompile
 pub struct Anemoi;

@@ -67,7 +67,7 @@ use {
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::noah_algebra::{
-        bls12_381::BLSScalar,
+        bn254::BN254Scalar,
         prelude::{NoahFromToBytes, Scalar},
     },
     zei::noah_api::{
@@ -89,7 +89,7 @@ use {
             trace_assets as noah_trace_assets,
         },
     },
-    zei::noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    zei::noah_crypto::hybrid_encryption::{XPublicKey, XSecretKey},
     zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 

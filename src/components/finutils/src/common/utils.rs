@@ -199,7 +199,10 @@ pub fn gen_transfer_op_xx(
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)?, TX_FEE_MIN));
+        target_list.push((
+            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).c(d!())?,
+            TX_FEE_MIN,
+        ));
         op_fee += TX_FEE_MIN;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
@@ -220,9 +223,9 @@ pub fn gen_transfer_op_xx(
 
     for (sid, (utxo, owner_memo)) in utxos {
         let oar = open_blind_asset_record(
-            &utxo.0.record.into_noah()?,
+            &utxo.0.record.into_noah().c(d!())?,
             &owner_memo,
-            &owner_kp.into_noah()?,
+            &owner_kp.into_noah().c(d!())?,
         )
         .c(d!())?;
 
@@ -337,9 +340,9 @@ pub fn gen_fee_bar_to_abar(
     let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
     for (sid, (utxo, owner_memo)) in utxos {
         let oar = open_blind_asset_record(
-            &utxo.0.record.into_noah()?,
+            &utxo.0.record.into_noah().c(d!())?,
             &owner_memo,
-            &owner_kp.into_noah()?,
+            &owner_kp.into_noah().c(d!())?,
         )
         .c(d!())?;
 
@@ -370,7 +373,7 @@ pub fn gen_fee_bar_to_abar(
                             i_am - op_fee,
                             ASSET_TYPE_FRA,
                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                            owner_kp.pub_key.into_noah()?,
+                            owner_kp.pub_key.into_noah().c(d!())?,
                         ),
                         None,
                         None,
@@ -561,9 +564,9 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
         .values()
         .map(|(utxo, owner_memo)| {
             open_blind_asset_record(
-                &utxo.0.record.into_noah()?,
+                &utxo.0.record.into_noah().c(d!())?,
                 owner_memo,
-                &kp.into_noah()?,
+                &kp.into_noah().c(d!())?,
             )
             .c(d!())
             .map(|obr| alt!(obr.asset_type == asset_type, obr.amount, 0))
@@ -585,10 +588,11 @@ pub fn get_asset_all(kp: &XfrKeyPair) -> Result<BTreeMap<AssetTypeCode, u64>> {
 
     for (_k, v) in info {
         let res = open_blind_asset_record(
-            &v.0 .0.record.into_noah()?,
+            &v.0 .0.record.into_noah().c(d!())?,
             &v.1,
-            &kp.into_noah()?,
-        )?;
+            &kp.into_noah().c(d!())?,
+        )
+        .c(d!())?;
 
         let code = AssetTypeCode {
             val: res.asset_type,
@@ -901,9 +905,9 @@ pub fn get_oar(
         }
 
         let oar = open_blind_asset_record(
-            &utxo.0.record.into_noah()?,
+            &utxo.0.record.into_noah().c(d!())?,
             &owner_memo,
-            &owner_kp.into_noah()?,
+            &owner_kp.into_noah().c(d!())?,
         )
         .c(d!())?;
 
