@@ -270,7 +270,7 @@ lazy_static! {
         validator_whitelist_v3: vec![],
         max_gas_price_limit: 0,
         evm_staking_inital_height: 128,
-        evm_staking_address: "0x34d4F6946Ceb1014BF13603fA7e7fC943952e8a4".to_owned(),
+        evm_staking_address: "0x84db796A3F8F02396f82219e3197933d15960771".to_owned(),
     };
 }
 

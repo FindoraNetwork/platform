@@ -261,9 +261,12 @@ pub fn begin_block(
             .map(|v| (v.id, v.clone()))
             .collect();
 
-        EVM_STAKING
-            .get()
-            .map(|staking| staking.write().import_validators(&validators, &delegations));
+        if let Err(e) = EVM_STAKING.get().c(d!()).and_then(|staking| {
+            staking.write().import_validators(&validators, &delegations)
+        }) {
+            println!("import_validators error {:?}", e);
+            panic!()
+        };
     }
     if CFG.checkpoint.disable_evm_block_height < header.height
         && header.height < CFG.checkpoint.enable_frc20_height

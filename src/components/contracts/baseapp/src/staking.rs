@@ -1,4 +1,5 @@
 use crate::BaseApp;
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, U256};
 use fp_traits::{
     account::AccountAsset,
@@ -43,76 +44,92 @@ impl EVMStaking for BaseApp {
                 });
             }
         }
-        let mut ds: BTreeMap<XfrPublicKey, BTreeMap<u64, Vec<(H160, U256)>>> =
-            BTreeMap::new();
+        let power = vs.iter().map(|v| v.power.as_u128()).sum::<u128>();
+
+        let evm_staking_address =
+            H160::from_str(CFG.checkpoint.evm_staking_address.as_str()).c(d!())?;
+
+        module_account::App::<BaseApp>::mint(
+            &self.deliver_state,
+            &Address::from(evm_staking_address),
+            U256::from(power),
+        )?;
+
+        if let Err(e) =
+            self.modules
+                .evm_module
+                .import_validators(&self.deliver_state, from, &vs)
+        {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            return Err(e);
+        }
+
+        let mut ds: BTreeMap<(XfrPublicKey, H160), Vec<(u64, U256)>> = BTreeMap::new();
         {
             for delegation in delegations.values() {
-                let d = delegation
-                    .delegations
-                    .iter()
-                    .map(|(validator_addr, amount)| {
-                        (mapping_address(validator_addr), U256::from(*amount))
-                    })
-                    .collect::<Vec<_>>();
-                let mut v = BTreeMap::new();
-                v.insert(delegation.end_height, d.clone());
-
                 let public_key = delegation.receiver_pk.unwrap_or(delegation.id);
-                ds.entry(public_key)
-                    .and_modify(|rem| {
-                        rem.entry(delegation.end_height)
-                            .and_modify(|rem1| rem1.extend(d.clone().into_iter()))
-                            .or_insert(d);
-                    })
-                    .or_insert(v);
+
+                for (validator, amount) in delegation.delegations.iter() {
+                    let amount = U256::from(*amount);
+                    ds.entry((public_key, mapping_address(validator)))
+                        .and_modify(|am| {
+                            am.push((delegation.end_height, amount));
+                        })
+                        .or_insert(vec![(delegation.end_height, amount)]);
+                }
             }
         }
         let mut delegators = vec![];
         let mut undelegation_infos = vec![];
         {
-            for (public_key, delegations) in ds.iter() {
-                let mut bound_amount = vec![];
-                let mut unbound_amount = vec![];
-                let address = mapping_address(public_key);
-                for (end_height, values) in delegations.iter() {
-                    let v = values.to_vec();
+            for ((public_key, validator_address), value) in ds.iter() {
+                let mut bound_amount = U256::zero();
+                let mut unbound_amount = U256::zero();
+
+                let delegator_address = mapping_address(public_key);
+
+                for (end_height, amount) in value.iter() {
                     if BLOCK_HEIGHT_MAX == *end_height {
-                        bound_amount.extend(v);
+                        bound_amount = bound_amount.checked_add(*amount).c(d!())?;
                     } else {
-                        unbound_amount.extend(v);
-                        let v = values
-                            .iter()
-                            .map(|(validator_addr, amount)| UndelegationInfos {
-                                validator: *validator_addr,
-                                delegator: address,
-                                amount: *amount,
-                                height: U256::from(*end_height),
-                            })
-                            .collect::<Vec<_>>();
-                        undelegation_infos.extend(v);
+                        unbound_amount = unbound_amount.checked_add(*amount).c(d!())?;
+                        undelegation_infos.push(UndelegationInfos {
+                            validator: *validator_address,
+                            delegator: delegator_address,
+                            amount: *amount,
+                            height: U256::from(*end_height),
+                        });
                     }
                 }
-
                 delegators.push(DelegatorParam {
-                    delegator: address,
+                    validator: *validator_address,
+                    delegator: delegator_address,
                     delegator_pk: public_key.as_bytes().to_vec(),
                     bound_amount,
                     unbound_amount,
                 });
             }
         }
-        if let Err(e) = self.modules.evm_module.import_validators(
+
+        if let Err(e) = self.modules.evm_module.import_delegators(
             &self.deliver_state,
             from,
-            &vs,
             &delegators,
+        ) {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            return Err(e);
+        }
+        if let Err(e) = self.modules.evm_module.import_undelegations(
+            &self.deliver_state,
+            from,
             &undelegation_infos,
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
             return Err(e);
         }
-
         self.deliver_state.state.write().commit_session();
         self.deliver_state.db.write().commit_session();
         Ok(())

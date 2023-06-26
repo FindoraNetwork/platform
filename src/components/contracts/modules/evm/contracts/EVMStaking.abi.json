@@ -104,16 +104,6 @@
         "internalType": "address",
         "name": "validator",
         "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes",
-        "name": "delegator_pk",
-        "type": "bytes"
       }
     ],
     "name": "delegate",
@@ -154,6 +144,81 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "validator",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "delegator",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes",
+            "name": "delegator_pk",
+            "type": "bytes"
+          },
+          {
+            "internalType": "uint256",
+            "name": "boundAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unboundAmount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ISystemImporter.DelegatorParam[]",
+        "name": "dp",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "importDelegators",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "validator",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "delegator",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "height",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ISystemImporter.UndelegationParam[]",
+        "name": "udp",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "importUndelegations",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -207,85 +272,7 @@
           }
         ],
         "internalType": "struct ISystemImporter.ValidatorParam[]",
-        "name": "vs",
-        "type": "tuple[]"
-      },
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "delegator",
-            "type": "address"
-          },
-          {
-            "internalType": "bytes",
-            "name": "delegator_pk",
-            "type": "bytes"
-          },
-          {
-            "components": [
-              {
-                "internalType": "address",
-                "name": "validator",
-                "type": "address"
-              },
-              {
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-              }
-            ],
-            "internalType": "struct ISystemImporter.DelegatorAmount[]",
-            "name": "boundAmount",
-            "type": "tuple[]"
-          },
-          {
-            "components": [
-              {
-                "internalType": "address",
-                "name": "validator",
-                "type": "address"
-              },
-              {
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-              }
-            ],
-            "internalType": "struct ISystemImporter.DelegatorAmount[]",
-            "name": "unboundAmount",
-            "type": "tuple[]"
-          }
-        ],
-        "internalType": "struct ISystemImporter.DelegatorParam[]",
-        "name": "ds",
-        "type": "tuple[]"
-      },
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "validator",
-            "type": "address"
-          },
-          {
-            "internalType": "address payable",
-            "name": "delegator",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "height",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct ISystemImporter.UndelegationInfo[]",
-        "name": "uis",
+        "name": "vp",
         "type": "tuple[]"
       }
     ],
@@ -295,13 +282,7 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "systemAddr_",
-        "type": "address"
-      }
-    ],
+    "inputs": [],
     "name": "initialize",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -376,16 +357,6 @@
       {
         "internalType": "bytes",
         "name": "public_key",
-        "type": "bytes"
-      },
-      {
-        "internalType": "address",
-        "name": "staker",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes",
-        "name": "staker_pk",
         "type": "bytes"
       },
       {
@@ -603,11 +574,6 @@
       {
         "internalType": "address",
         "name": "validator",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
         "type": "address"
       },
       {

@@ -93,10 +93,11 @@ pub struct ValidatorParam {
     pub begin_block: U256,
 }
 pub struct DelegatorParam {
+    pub validator: H160,
     pub delegator: H160,
     pub delegator_pk: Vec<u8>,
-    pub bound_amount: Vec<(H160, U256)>,
-    pub unbound_amount: Vec<(H160, U256)>,
+    pub bound_amount: U256,
+    pub unbound_amount: U256,
 }
 
 pub struct UndelegationInfos {
@@ -305,6 +306,15 @@ impl<C: Config> App<C> {
         let value = U256::zero();
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
+        tracing::info!(
+            target: "evm staking",
+            "trigger from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
@@ -340,86 +350,194 @@ impl<C: Config> App<C> {
         ctx: &Context,
         from: H160,
         validators: &[ValidatorParam],
-        delegators: &[DelegatorParam],
-        undelegationinfos: &[UndelegationInfos],
     ) -> Result<()> {
         let function = self
             .contracts
             .staking
             .function("importValidators")
             .c(d!())?;
-
-        let vs = validators
-            .iter()
-            .map(|v| {
-                Token::Tuple(vec![
-                    Token::Address(v.td_addr),
-                    Token::Bytes(v.td_pubkey.clone()),
-                    Token::Uint(v.keytype),
-                    Token::String(v.memo.clone()),
-                    Token::Uint(v.rate),
-                    Token::Address(v.staker),
-                    Token::Bytes(v.staker_pk.clone()),
-                    Token::Uint(v.power),
-                    Token::Uint(v.begin_block),
-                ])
-            })
-            .collect::<Vec<_>>();
-        let mut ds = vec![];
-        for delegator in delegators.iter() {
-            let mut bound_amounts = vec![];
-            let mut unbound_amounts = vec![];
-            for (addr, amount) in delegator.bound_amount.iter() {
-                bound_amounts.push(Token::Tuple(vec![
-                    Token::Address(*addr),
-                    Token::Uint(*amount),
-                ]));
+        let mut vss = vec![];
+        {
+            let vs = validators
+                .iter()
+                .map(|v| {
+                    Token::Tuple(vec![
+                        Token::Address(v.td_addr),
+                        Token::Bytes(v.td_pubkey.clone()),
+                        Token::Uint(v.keytype),
+                        Token::String(v.memo.clone()),
+                        Token::Uint(v.rate),
+                        Token::Address(v.staker),
+                        Token::Bytes(v.staker_pk.clone()),
+                        Token::Uint(v.power),
+                        Token::Uint(v.begin_block),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            let mut tmp = vec![];
+            for (index, v) in vs.iter().enumerate() {
+                tmp.push(v.clone());
+                if index > 0 && 0 == index % 60 {
+                    vss.push(tmp.clone());
+                    tmp.clear();
+                }
             }
-
-            for (addr, amount) in delegator.unbound_amount.iter() {
-                unbound_amounts.push(Token::Tuple(vec![
-                    Token::Address(*addr),
-                    Token::Uint(*amount),
-                ]));
+            if !tmp.is_empty() {
+                vss.push(tmp);
             }
-
-            ds.push(Token::Tuple(vec![
-                Token::Address(delegator.delegator),
-                Token::Bytes(delegator.delegator_pk.clone()),
-                Token::Array(bound_amounts),
-                Token::Array(unbound_amounts),
-            ]));
         }
-        let undelegation_infos = undelegationinfos
-            .iter()
-            .map(|v| {
-                Token::Tuple(vec![
-                    Token::Address(v.validator),
-                    Token::Address(v.delegator),
-                    Token::Uint(v.amount),
-                    Token::Uint(v.height),
-                ])
-            })
-            .collect::<Vec<_>>();
+        for vs in vss.iter() {
+            let input = function
+                .encode_input(&[Token::Array(vs.to_vec())])
+                .c(d!())?;
+            let gas_limit = 99999999999;
+            let value = U256::zero();
+            tracing::info!(
+                target: "evm staking",
+                "importValidators from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+                from,
+                gas_limit,
+                value,
+                self.contracts.staking_address,
+                hex::encode(&input)
+            );
+            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+                ctx,
+                input,
+                from,
+                gas_limit,
+                self.contracts.staking_address,
+                value,
+            )?;
+        }
 
-        let input = function
-            .encode_input(&[
-                Token::Array(vs),
-                Token::Array(ds),
-                Token::Array(undelegation_infos),
-            ])
+        Ok(())
+    }
+
+    pub fn import_delegators(
+        &self,
+        ctx: &Context,
+        from: H160,
+        delegators: &[DelegatorParam],
+    ) -> Result<()> {
+        let function = self
+            .contracts
+            .staking
+            .function("importDelegators")
             .c(d!())?;
 
-        let gas_limit = 99999999999;
-        let value = U256::zero();
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
-            ctx,
-            input,
-            from,
-            gas_limit,
-            self.contracts.staking_address,
-            value,
-        )?;
+        let mut dss = vec![];
+        {
+            let mut ds = vec![];
+            for delegator in delegators.iter() {
+                ds.push(Token::Tuple(vec![
+                    Token::Address(delegator.validator),
+                    Token::Address(delegator.delegator),
+                    Token::Bytes(delegator.delegator_pk.clone()),
+                    Token::Uint(delegator.bound_amount),
+                    Token::Uint(delegator.unbound_amount),
+                ]));
+            }
+            let mut tmp = vec![];
+            for (index, v) in ds.iter().enumerate() {
+                tmp.push(v.clone());
+                if index > 0 && 0 == index % 60 {
+                    dss.push(tmp.clone());
+                    tmp.clear();
+                }
+            }
+            if !tmp.is_empty() {
+                dss.push(tmp);
+            }
+        }
+        for ds in dss.iter() {
+            let input = function
+                .encode_input(&[Token::Array(ds.to_vec())])
+                .c(d!())?;
+            let gas_limit = 99999999999;
+            let value = U256::zero();
+            tracing::info!(
+                target: "evm staking",
+                "importDelegators from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+                from,
+                gas_limit,
+                value,
+                self.contracts.staking_address,
+                hex::encode(&input)
+            );
+            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+                ctx,
+                input,
+                from,
+                gas_limit,
+                self.contracts.staking_address,
+                value,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn import_undelegations(
+        &self,
+        ctx: &Context,
+        from: H160,
+        undelegationinfos: &[UndelegationInfos],
+    ) -> Result<()> {
+        let function = self
+            .contracts
+            .staking
+            .function("importUndelegations")
+            .c(d!())?;
+        let mut infos = vec![];
+        {
+            let undelegation_infos = undelegationinfos
+                .iter()
+                .map(|v| {
+                    Token::Tuple(vec![
+                        Token::Address(v.validator),
+                        Token::Address(v.delegator),
+                        Token::Uint(v.amount),
+                        Token::Uint(v.height),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            let mut tmp = vec![];
+            for (index, v) in undelegation_infos.iter().enumerate() {
+                tmp.push(v.clone());
+                if index > 0 && 0 == index % 60 {
+                    infos.push(tmp.clone());
+                    tmp.clear();
+                }
+            }
+            if !tmp.is_empty() {
+                infos.push(tmp);
+            }
+        }
+        for info in infos.iter() {
+            let input = function
+                .encode_input(&[Token::Array(info.to_vec())])
+                .c(d!())?;
+            let gas_limit = 99999999999;
+            let value = U256::zero();
+            tracing::info!(
+                target: "evm staking",
+                "importUndelegations from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+                from,
+                gas_limit,
+                value,
+                self.contracts.staking_address,
+                hex::encode(&input)
+            );
+            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+                ctx,
+                input,
+                from,
+                gas_limit,
+                self.contracts.staking_address,
+                value,
+            )?;
+        }
 
         Ok(())
     }
@@ -436,11 +554,6 @@ impl<C: Config> App<C> {
         memo: String,
         rate: U256,
     ) -> Result<()> {
-        println!(
-            "Stake: from {:x} to {:x}, amount: {}",
-            &staker, &validator, &value
-        );
-
         let function = self.contracts.staking.function("systemStake").c(d!())?;
 
         let validator = Token::Address(validator);
@@ -456,6 +569,15 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
 
+        tracing::info!(
+            target: "evm staking",
+            "systemStake from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
@@ -491,7 +613,15 @@ impl<C: Config> App<C> {
             .c(d!())?;
 
         let gas_limit = 99999999999;
-
+        tracing::info!(
+            target: "evm staking",
+            "systemDelegate from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            amount,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
@@ -527,6 +657,16 @@ impl<C: Config> App<C> {
         let gas_limit = 99999999999;
         let value = U256::zero();
 
+        tracing::info!(
+            target: "evm staking",
+            "systemUndelegate from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
+
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
@@ -559,6 +699,16 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
+
+        tracing::info!(
+            target: "evm staking",
+            "systemClaim from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
 
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -619,6 +769,16 @@ impl<C: Config> App<C> {
         let gas_limit = 99999999999;
         let value = U256::zero();
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
+
+        tracing::info!(
+            target: "evm staking",
+            "systemUpdateValidator from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
 
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
