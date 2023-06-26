@@ -49,7 +49,7 @@ use {
     },
     unicode_normalization::UnicodeNormalization,
     zei::noah_algebra::{
-        bls12_381::BLSScalar, serialization::NoahFromToBytes, traits::Scalar,
+        bn254::BN254Scalar, serialization::NoahFromToBytes, traits::Scalar,
     },
     zei::noah_api::{
         anon_xfr::{
@@ -285,13 +285,13 @@ impl AssetTypeCode {
 
         let mut bytes = vec![0u8; 32];
         bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
-        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
 
         let mut bytes = vec![0u8; 32];
         bytes[0] = raw_asset_type_code.val.0[31];
-        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
 
-        let res = AnemoiJive381::eval_variable_length_hash(&f);
+        let res = AnemoiJive254::eval_variable_length_hash(&f);
         Self::new_from_vec(res.to_bytes())
     }
 }
@@ -1118,8 +1118,8 @@ impl AssetTypePrefix {
     }
 
     #[allow(missing_docs)]
-    pub fn to_field_element(&self) -> BLSScalar {
-        BLSScalar::from_bytes(&self.bytes()).unwrap()
+    pub fn to_field_element(&self) -> BN254Scalar {
+        BN254Scalar::from_bytes(&self.bytes()).unwrap()
     }
 }
 
@@ -1425,7 +1425,7 @@ impl AbarConvNote {
     /// Verifies the ZKP based on the type of conversion
     pub fn verify<D: Digest<OutputSize = U64> + Default>(
         &self,
-        merkle_root: BLSScalar,
+        merkle_root: BN254Scalar,
         hasher: D,
     ) -> Result<()> {
         match self {
@@ -2379,7 +2379,7 @@ impl StateCommitmentData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AnonStateCommitmentData {
     /// Root hash of the latest committed version of abar merkle tree
-    pub abar_root_hash: BLSScalar,
+    pub abar_root_hash: BN254Scalar,
     /// Root hash of the nullifier set merkle tree
     pub nullifier_root_hash: BitDigest,
 }
@@ -2420,7 +2420,7 @@ pub fn gen_random_keypair() -> XfrKeyPair {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
+pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BN254Scalar {
     let c = commit(
         oabar.pub_key_ref(),
         oabar.get_blind(),

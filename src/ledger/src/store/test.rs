@@ -875,11 +875,11 @@ fn test_update_anon_stores() {
         },
     ];
 
-    let str0 = bs58::encode(&BLSScalar::zero().noah_to_bytes()).into_string();
+    let str0 = bs58::encode(&BN254Scalar::zero().noah_to_bytes()).into_string();
     let d0: Key = Key::from_base58(&str0).unwrap();
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
 
-    let str1 = bs58::encode(&BLSScalar::one().noah_to_bytes()).into_string();
+    let str1 = bs58::encode(&BN254Scalar::one().noah_to_bytes()).into_string();
     let d1: Key = Key::from_base58(&str1).unwrap();
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
 

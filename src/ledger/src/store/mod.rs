@@ -55,7 +55,7 @@ use {
     zei::noah_accumulators::merkle_tree::{
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
-    zei::noah_algebra::{bls12_381::BLSScalar, prelude::*},
+    zei::noah_algebra::{bn254::BN254Scalar, prelude::*},
     zei::noah_api::{
         anon_xfr::{
             abar_to_abar::verify_anon_xfr_note,
@@ -71,7 +71,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
+    zei::noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive254},
     zei::{OwnerMemo, XfrPublicKey},
 };
 
@@ -516,7 +516,7 @@ impl LedgerState {
     #[inline(always)]
     /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
     /// state and ignore session cache
-    pub fn get_abar_root_hash(&self) -> Result<BLSScalar> {
+    pub fn get_abar_root_hash(&self) -> Result<BN254Scalar> {
         let abar_query_state = State::new(self.abar_state.read().chain_state(), false);
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
@@ -1872,8 +1872,8 @@ fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
     };
 }
 
-fn hash_abar(uid: u64, abar: &AnonAssetRecord) -> BLSScalar {
-    AnemoiJive381::eval_variable_length_hash(&[BLSScalar::from(uid), abar.commitment])
+fn hash_abar(uid: u64, abar: &AnonAssetRecord) -> BN254Scalar {
+    AnemoiJive254::eval_variable_length_hash(&[BN254Scalar::from(uid), abar.commitment])
 }
 
 fn default_status_utxos() -> Mapxnk<TxoSID, Utxo> {

@@ -39,10 +39,10 @@ fbnc = { version = "0.2.9", default-features = false}
 num-bigint = "0.4.3"
 
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "feat-secp-support" }
-bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "develop" }
+bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "feat-secp-support" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
-merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "develop" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "feat-secp-support" }
+merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "feat-secp-support" }
 sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "develop" }
 
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }

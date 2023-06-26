@@ -67,7 +67,7 @@ use {
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::noah_algebra::{
-        bls12_381::BLSScalar,
+        bn254::BN254Scalar,
         prelude::{NoahFromToBytes, Scalar},
     },
     zei::noah_api::{

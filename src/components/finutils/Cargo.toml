@@ -34,7 +34,7 @@ nix = "0.25"
 
 ledger = { path = "../../ledger", default-features = false }
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "feat-secp-support" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "feat-secp-support" }
 
 eth_checksum = { version = "0.1.2", optional = true }
 fp-core = { path = "../contracts/primitives/core", default-features = false }
