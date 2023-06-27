@@ -45,6 +45,8 @@ impl EVMStaking for BaseApp {
             }
         }
         let power = vs.iter().map(|v| v.power.as_u128()).sum::<u128>();
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(power)).c(d!())?;
 
         let evm_staking_address =
             H160::from_str(CFG.checkpoint.evm_staking_address.as_str()).c(d!())?;
@@ -52,7 +54,7 @@ impl EVMStaking for BaseApp {
         module_account::App::<BaseApp>::mint(
             &self.deliver_state,
             &Address::from(evm_staking_address),
-            U256::from(power),
+            amount,
         )?;
 
         if let Err(e) =
@@ -62,6 +64,7 @@ impl EVMStaking for BaseApp {
         {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "import_validators error:{:?}", e);
             return Err(e);
         }
 
@@ -119,6 +122,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "import_delegators error:{:?}", e);
             return Err(e);
         }
         if let Err(e) = self.modules.evm_module.import_undelegations(
@@ -128,6 +132,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "import_undelegations error:{:?}", e);
             return Err(e);
         }
         self.deliver_state.state.write().commit_session();
@@ -146,7 +151,8 @@ impl EVMStaking for BaseApp {
         let staker_pk = staker.as_bytes().to_vec();
         let staker_address = mapping_address(staker);
 
-        let amount = U256::from(amount);
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
 
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -169,6 +175,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "stake error:{:?}", e);
             return Err(e);
         }
 
@@ -186,7 +193,8 @@ impl EVMStaking for BaseApp {
         let delegator_pk = delegator.as_bytes().to_vec();
         let delegator_address = mapping_address(delegator);
 
-        let amount = U256::from(amount);
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
 
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -206,6 +214,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "delegate error:{:?}", e);
             return Err(e);
         }
 
@@ -237,6 +246,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "undelegate error:{:?}", e);
             return Err(e);
         };
 
@@ -266,6 +276,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "update_validator error:{:?}", e);
             return Err(e);
         }
 
@@ -294,6 +305,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "claim error:{:?}", e);
             return Err(e);
         }
 
