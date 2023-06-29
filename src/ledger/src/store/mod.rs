@@ -14,7 +14,7 @@ use {
             AuthenticatedUtxoStatus, BlockEffect, BlockSID, FinalizedBlock,
             FinalizedTransaction, IssuerPublicKey, Operation, OutputPosition,
             StateCommitmentData, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,
-            UnAuthenticatedUtxo, Utxo, UtxoStatus, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            UnAuthenticatedUtxo, Utxo, UtxoStatus, BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
@@ -1709,17 +1709,13 @@ impl LedgerStatus {
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
 
-        let handle_asset_type_code = |code: AssetTypeCode| -> AssetTypeCode {
-            if CFG.checkpoint.utxo_asset_prefix_height > self.td_commit_height
-                || code.val == ASSET_TYPE_FRA
-            {
-                code
-            } else {
-                AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                    AssetTypePrefix::UserDefined,
-                    &code,
-                )
-            }
+        let handle_asset_type_code = |code: AssetTypeCode| {
+            AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                AssetTypePrefix::UserDefined,
+                &code,
+                &CFG.checkpoint,
+                self.td_commit_height,
+            )
         };
         for no_replay_token in block.no_replay_tokens.iter() {
             let (rand, seq_id) = (

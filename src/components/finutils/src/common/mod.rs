@@ -813,7 +813,7 @@ pub fn create_asset_x(
     code: Option<AssetTypeCode>,
 ) -> Result<AssetTypeCode> {
     let code = code.unwrap_or_else(AssetTypeCode::gen_random);
-    let asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+    let asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
         AssetTypePrefix::UserDefined,
         &code,
     );

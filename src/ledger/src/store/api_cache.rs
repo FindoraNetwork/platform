@@ -6,7 +6,7 @@ use {
         data_model::{
             ATxoSID, AssetTypeCode, AssetTypePrefix, DefineAsset, IssueAsset,
             IssuerPublicKey, Operation, StateCommitmentData, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress, ASSET_TYPE_FRA,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -131,16 +131,14 @@ impl ApiCache {
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
         let asset_code = creation.body.asset.code;
-        let code = if asset_code.val == ASSET_TYPE_FRA
-            || CFG.checkpoint.utxo_asset_prefix_height > cur_height
-        {
-            creation.body.asset.code
-        } else {
-            AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                AssetTypePrefix::UserDefined,
-                &creation.body.asset.code,
-            )
-        };
+
+        let code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+            AssetTypePrefix::UserDefined,
+            &asset_code,
+            &CFG.checkpoint,
+            cur_height,
+        );
+
         let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
         let mut tmp = creation.clone();

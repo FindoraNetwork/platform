@@ -105,6 +105,9 @@ pub struct CheckPointConfig {
     #[serde(default = "def_utxo_asset_prefix_height")]
     pub utxo_asset_prefix_height: u64,
 
+    #[serde(default = "def_utxo_asset_prefix_height_2nd_update")]
+    pub utxo_asset_prefix_height_2nd_update: u64,
+
     #[serde(default = "def_prismxx_inital_height")]
     pub prismxx_inital_height: i64,
 
@@ -144,6 +147,10 @@ fn def_fix_deliver_tx_revert_nonce_height() -> i64 {
 
 fn def_utxo_asset_prefix_height() -> u64 {
     DEFAULT_CHECKPOINT_CONFIG.utxo_asset_prefix_height
+}
+
+fn def_utxo_asset_prefix_height_2nd_update() -> u64 {
+    DEFAULT_CHECKPOINT_CONFIG.utxo_asset_prefix_height_2nd_update
 }
 
 fn def_prismxx_inital_height() -> i64 {
@@ -203,6 +210,7 @@ lazy_static! {
         check_signatures_num: 0,
         fix_deliver_tx_revert_nonce_height: 0,
         utxo_asset_prefix_height: 0,
+        utxo_asset_prefix_height_2nd_update: 0,
         prismxx_inital_height: 128,
         prism_bridge_address: "0x5f9552fEd754F20B636C996DaDB32806554Bb995".to_owned(),
         remove_fake_staking_hash: 0,
@@ -243,6 +251,7 @@ lazy_static! {
         check_signatures_num: 4004430,
         fix_deliver_tx_revert_nonce_height: 4004430,
         utxo_asset_prefix_height: 4004430,
+        utxo_asset_prefix_height_2nd_update: 5000_0000,
         prismxx_inital_height: 4004430,
         prism_bridge_address: "0x4672372fDB139B7295Fc59b55b43EC5fF2761A0b".to_owned(),
         remove_fake_staking_hash: 4004430,

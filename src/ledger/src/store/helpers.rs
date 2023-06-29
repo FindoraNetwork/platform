@@ -7,10 +7,10 @@ use {
         IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy, XfrNotePolicies,
     },
     crate::data_model::{
-        Asset, AssetRules, AssetTypeCode, AssetTypePrefix, ConfidentialMemo,
-        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
-        Operation, Transaction, TransferAsset, TransferAssetBody, TransferType,
-        TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
+        Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
+        DefineAssetBody, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+        TxnEffect, TxnSID, TxoRef, TxoSID,
     },
     globutils::SignatureOf,
     rand_core::{CryptoRng, RngCore},
@@ -38,12 +38,7 @@ pub fn asset_creation_body(
     asset_rules: AssetRules,
     memo: Option<Memo>,
     confidential_memo: Option<ConfidentialMemo>,
-) -> (DefineAssetBody, AssetTypeCode) {
-    let new_token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
-        AssetTypePrefix::UserDefined,
-        token_code,
-    );
-
+) -> DefineAssetBody {
     let mut token = Asset {
         code: *token_code,
         issuer: IssuerPublicKey { key: *issuer_key },
@@ -63,12 +58,9 @@ pub fn asset_creation_body(
         token.confidential_memo = ConfidentialMemo {};
     }
 
-    (
-        DefineAssetBody {
-            asset: Box::new(token),
-        },
-        new_token_code,
-    )
+    DefineAssetBody {
+        asset: Box::new(token),
+    }
 }
 
 #[allow(missing_docs)]

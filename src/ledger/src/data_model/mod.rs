@@ -10,7 +10,9 @@ mod effects;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
+use zei::noah_algebra::bls12_381::BLSScalar;
 
+use config::abci::CheckPointConfig;
 use {
     crate::{
         converter::ConvertAccount,
@@ -276,7 +278,7 @@ impl AssetTypeCode {
 
     /// Generates the asset type code from the prefix and the Anemoi hash function
     #[inline(always)]
-    pub fn from_prefix_and_raw_asset_type_code(
+    pub fn from_prefix_and_raw_asset_type_code_2nd_update(
         prefix: AssetTypePrefix,
         raw_asset_type_code: &AssetTypeCode,
     ) -> Self {
@@ -293,6 +295,65 @@ impl AssetTypeCode {
 
         let res = AnemoiJive254::eval_variable_length_hash(&f);
         Self::new_from_vec(res.to_bytes())
+    }
+
+    /// Former version, now deprecated way to derive the asset code.
+    /// This version uses BLS12-381.
+    #[inline(always)]
+    #[deprecated]
+    pub fn from_prefix_and_raw_asset_type_code_1st_update(
+        prefix: AssetTypePrefix,
+        raw_asset_type_code: &AssetTypeCode,
+    ) -> Self {
+        let mut f = Vec::with_capacity(3);
+
+        #[allow(deprecated)]
+        f.push(prefix.to_field_element_old());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
+        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[0] = raw_asset_type_code.val.0[31];
+        f.push(BLSScalar::from_bytes(&bytes).unwrap());
+
+        #[allow(deprecated)]
+        {
+            use zei::noah_crypto::anemoi_jive::bls12_381_deprecated::AnemoiJive381Deprecated;
+            let res = AnemoiJive381Deprecated::eval_variable_length_hash(&f);
+            Self::new_from_vec(res.to_bytes())
+        }
+    }
+
+    /// Select the right asset code based on the global setting.
+    pub fn from_prefix_and_raw_asset_type_code(
+        prefix: AssetTypePrefix,
+        raw_asset_type_code: &AssetTypeCode,
+        checkpoint: &CheckPointConfig,
+        cur_height: u64,
+    ) -> Self {
+        if raw_asset_type_code.val == ASSET_TYPE_FRA
+            || core::cmp::min(
+                checkpoint.utxo_asset_prefix_height,
+                checkpoint.utxo_asset_prefix_height_2nd_update,
+            ) > cur_height
+        {
+            *raw_asset_type_code
+        } else if checkpoint.utxo_asset_prefix_height_2nd_update > cur_height
+            && checkpoint.utxo_asset_prefix_height <= cur_height
+        {
+            #[allow(deprecated)]
+            AssetTypeCode::from_prefix_and_raw_asset_type_code_1st_update(
+                prefix,
+                &raw_asset_type_code,
+            )
+        } else {
+            AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
+                prefix,
+                &raw_asset_type_code,
+            )
+        }
     }
 }
 
@@ -1120,6 +1181,12 @@ impl AssetTypePrefix {
     #[allow(missing_docs)]
     pub fn to_field_element(&self) -> BN254Scalar {
         BN254Scalar::from_bytes(&self.bytes()).unwrap()
+    }
+
+    #[allow(missing_docs)]
+    #[deprecated]
+    pub fn to_field_element_old(&self) -> BLSScalar {
+        BLSScalar::from_bytes(&self.bytes()).unwrap()
     }
 }
 

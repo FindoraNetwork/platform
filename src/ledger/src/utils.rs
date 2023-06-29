@@ -2,19 +2,15 @@
 //! # Test only
 //!
 
-use zei::noah_api::xfr::structs::AssetType;
-
 use {
     crate::{
         data_model::{
-            AssetRules, AssetTypeCode, AssetTypePrefix, DefineAsset, DefineAssetBody,
-            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
+            AssetRules, AssetTypeCode, DefineAsset, DefineAssetBody, IssueAsset,
+            IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
             Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
         },
         staking::FRA_PRE_ISSUE_AMOUNT,
     },
-    fbnc::NumKey,
-    fp_utils::hashing::keccak_256,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
@@ -33,7 +29,7 @@ pub fn create_definition_transaction(
     asset_rules: AssetRules,
     memo: Option<Memo>,
     seq_id: u64,
-) -> Result<(Transaction, AssetTypeCode)> {
+) -> Result<Transaction> {
     let issuer_key = IssuerPublicKey {
         key: *keypair.get_pk_ref(),
     };
@@ -42,19 +38,9 @@ pub fn create_definition_transaction(
     let asset_create =
         DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
 
-    let code = if code.val == ASSET_TYPE_FRA {
-        *code
-    } else {
-        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-        asset_code.append(&mut code.to_bytes());
-        AssetTypeCode {
-            val: AssetType(keccak_256(&asset_code)),
-        }
-    };
-
-    Ok((
-        Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id),
-        code,
+    Ok(Transaction::from_operation(
+        Operation::DefineAsset(asset_create),
+        seq_id,
     ))
 }
 
@@ -70,7 +56,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let (mut tx, _) = pnk!(create_definition_transaction(
+    let mut tx = pnk!(create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {

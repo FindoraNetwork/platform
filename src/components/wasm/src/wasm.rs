@@ -130,10 +130,11 @@ pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
-        AssetTypePrefix::UserDefined,
-        &original_asset_code,
-    );
+    let derived_asset_code =
+        AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
+            AssetTypePrefix::UserDefined,
+            &original_asset_code,
+        );
 
     Ok(derived_asset_code.to_base64())
 }
