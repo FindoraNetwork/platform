@@ -2,8 +2,6 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use std::collections::BTreeMap;
-
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -17,13 +15,26 @@ use {
             Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
+        staking::{
+            init::get_inital_validators, StakerMemo, TendermintAddrRef, FRA_TOTAL_AMOUNT,
+        },
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
+    serde_json::Value,
     sha2::{Digest, Sha256},
-    std::collections::HashMap,
+    std::{
+        collections::{BTreeMap, HashMap},
+        str::FromStr,
+    },
     tendermint::{PrivateKey, PublicKey},
+    tokio::runtime::Runtime,
+    web3::{
+        ethabi::{Function, Param, ParamType, StateMutability, Token},
+        transports::Http,
+        types::{BlockId, BlockNumber, Bytes, CallRequest, H160},
+        Web3,
+    },
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
@@ -615,4 +626,161 @@ pub struct ValidatorKey {
 /// Restore validator key from a string
 pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
     serde_json::from_str(key_data).c(d!())
+}
+
+#[allow(missing_docs)]
+pub fn get_evm_staking_address() -> Result<H160> {
+    let url = format!("{}:8668/display_checkpoint", get_serv_addr()?);
+    let val = attohttpc::get(url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .json::<Value>()
+        .c(d!())?;
+    let address = match val["evm_staking_address"].as_str() {
+        Some(val) => val,
+        None => {
+            return Err(eg!("evm_staking_address json value not found"));
+        }
+    };
+    H160::from_str(address).c(d!())
+}
+#[allow(missing_docs)]
+pub fn get_staking_address(url: &str, evm_staking_address: H160) -> Result<H160> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "stakingAddr".to_owned(),
+        inputs: vec![],
+        outputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Address,
+            internal_type: Some(String::from("address")),
+        }],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+
+    let data = function.encode_input(&[]).map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(evm_staking_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+
+    if let Some(Token::Address(addr)) = ret.get(0) {
+        Ok(*addr)
+    } else {
+        Err(eg!(" address not found"))
+    }
+}
+#[allow(missing_docs)]
+pub fn get_validator_memo_and_rate(
+    url: &str,
+    staking_address: H160,
+    validator_address: H160,
+) -> Result<(StakerMemo, [u64; 2])> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "validators".to_owned(),
+        inputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Address,
+            internal_type: Some(String::from("address")),
+        }],
+        outputs: vec![
+            Param {
+                name: String::from("public_key"),
+                kind: ParamType::Bytes,
+                internal_type: Some(String::from("bytes")),
+            },
+            Param {
+                name: String::from("ty"),
+                kind: ParamType::Uint(8),
+                internal_type: Some(String::from("enum IBaseEnum.PublicKeyType")),
+            },
+            Param {
+                name: String::from("memo"),
+                kind: ParamType::String,
+                internal_type: Some(String::from("string")),
+            },
+            Param {
+                name: String::from("rate"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+            Param {
+                name: String::from("staker"),
+                kind: ParamType::Address,
+                internal_type: Some(String::from("address")),
+            },
+            Param {
+                name: String::from("power"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+            Param {
+                name: String::from("totalUnboundAmount"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+            Param {
+                name: String::from("punishRate"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+            Param {
+                name: String::from("beginBlock"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+        ],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+    let data = function
+        .encode_input(&[Token::Address(validator_address)])
+        .map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(staking_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+    let memo = if let Some(Token::String(memo)) = ret.get(2) {
+        serde_json::from_str::<StakerMemo>(memo.as_str()).unwrap_or_default()
+    } else {
+        return Err(eg!("memo not found"));
+    };
+    let rate = if let Some(Token::Uint(rate)) = ret.get(3) {
+        let deciamls = 1_000_000_u64;
+        let tmp = 10_000_u64;
+        [rate.as_u64() * tmp / deciamls, tmp]
+    } else {
+        return Err(eg!("rate not found"));
+    };
+    Ok((memo, rate))
 }

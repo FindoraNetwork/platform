@@ -16,6 +16,9 @@ pub mod evm;
 pub mod utils;
 
 use {
+    self::utils::{
+        get_evm_staking_address, get_staking_address, get_validator_memo_and_rate,
+    },
     crate::api::DelegationInfo,
     globutils::wallet,
     lazy_static::lazy_static,
@@ -33,10 +36,8 @@ use {
     ruc::*,
     std::{env, fs},
     tendermint::PrivateKey,
-    utils::{
-        get_block_height, get_local_block_height, get_validator_detail,
-        parse_td_validator_keys,
-    },
+    utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
+    web3::types::H160,
     zei::{
         setup::PublicParams,
         xfr::{
@@ -63,17 +64,25 @@ lazy_static! {
 
 /// Updating the information of a staker includes commission_rate and staker_memo
 pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
-    let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
-    let vd = get_validator_detail(&addr).c(d!())?;
+    let pub_key = get_td_pubkey()
+        .map(|i| td_pubkey_to_td_addr_bytes(&i))
+        .c(d!())?;
+    let validator_address = H160::from_slice(&pub_key);
+
+    let evm_staking_address = get_evm_staking_address()?;
+    let url = format!("{}:8545", get_serv_addr()?);
+    let staking_address = get_staking_address(&url, evm_staking_address)?;
+    let (validator_memo, rate) =
+        get_validator_memo_and_rate(&url, staking_address, validator_address)?;
 
     let cr = cr
-        .map_or(Ok(vd.commission_rate), |s| {
+        .map_or(Ok(rate), |s| {
             s.parse::<f64>()
                 .c(d!("commission rate must be a float number"))
                 .and_then(convert_commission_rate)
         })
         .c(d!())?;
-    let memo = memo.unwrap_or(vd.memo);
+    let memo = memo.unwrap_or(validator_memo);
 
     let td_pubkey = get_td_pubkey().c(d!())?;
 

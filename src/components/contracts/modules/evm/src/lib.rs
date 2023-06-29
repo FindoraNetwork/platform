@@ -315,7 +315,7 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -323,24 +323,6 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             value,
         )?;
-
-        let mut mints = vec![];
-        for log in logs.into_iter() {
-            match parse_evm_staking_coinbase_mint_event(&self.contracts.staking, log) {
-                Ok((_, pk, am)) => {
-                    if am != 0 {
-                        mints.push((pk, am));
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Parse evm staking mint error: {}", e);
-                }
-            }
-        }
-
-        if !mints.is_empty() {
-            EVM_STAKING_MINTS.lock().extend(mints);
-        }
 
         Ok(())
     }
