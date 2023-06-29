@@ -316,7 +316,7 @@ impl AssetTypeCode {
 
         let mut bytes = vec![0u8; 32];
         bytes[0] = raw_asset_type_code.val.0[31];
-        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
+        f.push(BLSScalar::from_bytes(&bytes).unwrap());
 
         #[allow(deprecated)]
         {

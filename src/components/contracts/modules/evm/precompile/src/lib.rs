@@ -1,6 +1,5 @@
 use ethereum_types::H160;
 use evm::{executor::stack::PrecompileSet, Context};
-use evm_precompile_eth_pairings::EthPairing;
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 

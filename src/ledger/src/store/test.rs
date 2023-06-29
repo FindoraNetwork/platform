@@ -99,9 +99,11 @@ fn test_asset_creation_valid() {
         None,
         None,
     );
-    let token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
+    let token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
         AssetTypePrefix::UserDefined,
         &code,
+        &CFG.checkpoint,
+        state.get_tendermint_height(),
     );
     let asset_create = asset_creation_operation(&asset_body, &keypair);
     let seq_id = state.get_block_commit_count();
