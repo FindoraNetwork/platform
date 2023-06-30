@@ -113,6 +113,78 @@
   },
   {
     "inputs": [],
+    "name": "getClaimOnContractAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "validator",
+        "type": "address"
+      }
+    ],
+    "name": "getValidator",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      },
+      {
+        "internalType": "enum IBaseEnum.PublicKeyType",
+        "name": "",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getValidatorsList",
     "outputs": [
       {
@@ -176,7 +248,7 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct ISystemImporter.DelegatorParam[]",
+        "internalType": "struct IBaseEnum.DelegatorParam[]",
         "name": "dp",
         "type": "tuple[]"
       }
@@ -211,7 +283,7 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct ISystemImporter.UndelegationParam[]",
+        "internalType": "struct IBaseEnum.UndelegationParam[]",
         "name": "udp",
         "type": "tuple[]"
       }
@@ -271,7 +343,7 @@
             "type": "uint256"
           }
         ],
-        "internalType": "struct ISystemImporter.ValidatorParam[]",
+        "internalType": "struct IBaseEnum.ValidatorParam[]",
         "name": "vp",
         "type": "tuple[]"
       }
@@ -591,12 +663,12 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "staker",
+        "name": "validator",
         "type": "address"
       },
       {
         "internalType": "address",
-        "name": "validator",
+        "name": "staker",
         "type": "address"
       },
       {

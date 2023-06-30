@@ -16,9 +16,7 @@ pub mod evm;
 pub mod utils;
 
 use {
-    self::utils::{
-        get_evm_staking_address, get_staking_address, get_validator_memo_and_rate,
-    },
+    self::utils::{get_evm_staking_address, get_validator_memo_and_rate},
     crate::api::DelegationInfo,
     globutils::wallet,
     lazy_static::lazy_static,
@@ -71,9 +69,8 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
 
     let evm_staking_address = get_evm_staking_address()?;
     let url = format!("{}:8545", get_serv_addr()?);
-    let staking_address = get_staking_address(&url, evm_staking_address)?;
     let (validator_memo, rate) =
-        get_validator_memo_and_rate(&url, staking_address, validator_address)?;
+        get_validator_memo_and_rate(&url, evm_staking_address, validator_address)?;
 
     let cr = cr
         .map_or(Ok(rate), |s| {

@@ -646,46 +646,7 @@ pub fn get_evm_staking_address() -> Result<H160> {
     };
     H160::from_str(address).c(d!())
 }
-#[allow(missing_docs)]
-pub fn get_staking_address(url: &str, evm_staking_address: H160) -> Result<H160> {
-    let transport = Http::new(url).c(d!())?;
-    let web3 = Web3::new(transport);
 
-    #[allow(deprecated)]
-    let function = Function {
-        name: "stakingAddr".to_owned(),
-        inputs: vec![],
-        outputs: vec![Param {
-            name: String::new(),
-            kind: ParamType::Address,
-            internal_type: Some(String::from("address")),
-        }],
-        constant: None,
-        state_mutability: StateMutability::View,
-    };
-
-    let data = function.encode_input(&[]).map_err(|e| eg!("{:?}", e))?;
-
-    let ret_data = Runtime::new()
-        .c(d!())?
-        .block_on(web3.eth().call(
-            CallRequest {
-                to: Some(evm_staking_address),
-                data: Some(Bytes(data)),
-                ..Default::default()
-            },
-            Some(BlockId::Number(BlockNumber::Latest)),
-        ))
-        .c(d!())?;
-
-    let ret = function.decode_output(&ret_data.0).c(d!())?;
-
-    if let Some(Token::Address(addr)) = ret.get(0) {
-        Ok(*addr)
-    } else {
-        Err(eg!(" address not found"))
-    }
-}
 #[allow(missing_docs)]
 pub fn get_validator_memo_and_rate(
     url: &str,
@@ -697,7 +658,7 @@ pub fn get_validator_memo_and_rate(
 
     #[allow(deprecated)]
     let function = Function {
-        name: "validators".to_owned(),
+        name: "getValidator".to_owned(),
         inputs: vec![Param {
             name: String::new(),
             kind: ParamType::Address,
@@ -705,47 +666,47 @@ pub fn get_validator_memo_and_rate(
         }],
         outputs: vec![
             Param {
-                name: String::from("public_key"),
+                name: String::new(),
                 kind: ParamType::Bytes,
                 internal_type: Some(String::from("bytes")),
             },
             Param {
-                name: String::from("ty"),
+                name: String::new(),
                 kind: ParamType::Uint(8),
                 internal_type: Some(String::from("enum IBaseEnum.PublicKeyType")),
             },
             Param {
-                name: String::from("memo"),
+                name: String::new(),
                 kind: ParamType::String,
                 internal_type: Some(String::from("string")),
             },
             Param {
-                name: String::from("rate"),
+                name: String::new(),
                 kind: ParamType::Uint(256),
                 internal_type: Some(String::from("uint256")),
             },
             Param {
-                name: String::from("staker"),
+                name: String::new(),
                 kind: ParamType::Address,
                 internal_type: Some(String::from("address")),
             },
             Param {
-                name: String::from("power"),
+                name: String::new(),
                 kind: ParamType::Uint(256),
                 internal_type: Some(String::from("uint256")),
             },
             Param {
-                name: String::from("totalUnboundAmount"),
+                name: String::new(),
                 kind: ParamType::Uint(256),
                 internal_type: Some(String::from("uint256")),
             },
             Param {
-                name: String::from("punishRate"),
+                name: String::new(),
                 kind: ParamType::Uint(256),
                 internal_type: Some(String::from("uint256")),
             },
             Param {
-                name: String::from("beginBlock"),
+                name: String::new(),
                 kind: ParamType::Uint(256),
                 internal_type: Some(String::from("uint256")),
             },
