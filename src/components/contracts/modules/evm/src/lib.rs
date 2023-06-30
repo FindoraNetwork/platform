@@ -27,26 +27,32 @@ use fp_core::{
     transaction::{ActionResult, Executable},
 };
 use fp_evm::TransactionStatus;
-use fp_storage::Borrow;
+use fp_storage::{Borrow, BorrowMut};
+use fp_traits::evm::EthereumDecimalsMapping;
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
+use fp_types::crypto::HA256;
 use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
 };
 use ledger::staking::evm::EVM_STAKING_MINTS;
+use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use precompile::PrecompileSet;
 use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
 pub use runtime::*;
+use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
 use utils::parse_evm_staking_coinbase_mint_event;
 use zei::xfr::sig::XfrPublicKey;
+
+use crate::utils::parse_evm_staking_mint_event;
 
 pub const MODULE_NAME: &str = "evm";
 
@@ -299,7 +305,7 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         req: &abci::RequestBeginBlock,
-    ) -> Result<()> {
+    ) -> Result<U256> {
         let input = utils::build_evm_staking_input(&self.contracts, req)?;
 
         let gas_limit = 9999999;
@@ -315,16 +321,85 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             value,
         )?;
 
-        Ok(())
+        let mut mints = vec![];
+        for log in logs.clone().into_iter() {
+            match parse_evm_staking_mint_event(&self.contracts.staking, log) {
+                Ok((pk, am)) => {
+                    if am != 0 {
+                        mints.push((pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse evm staking mint error: {}", e);
+                }
+            }
+        }
+
+        {
+            let transaction = TransactionV0 {
+                nonce: U256::from(ctx.header.height),
+                gas_price: U256::zero(),
+                gas_limit: U256::from(gas_limit),
+                action: TransactionAction::Call(self.contracts.staking_address),
+                value,
+                input,
+                signature: pnk!(TransactionSignature::new(
+                    0,
+                    H256::from_low_u64_be(1),
+                    H256::from_low_u64_be(2),
+                )),
+            };
+            let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            let transaction_index = txns.len() as u32;
+            let transaction_hash = H256::from_slice(
+                Keccak256::digest(&rlp::encode(&transaction)).as_slice(),
+            );
+            let status = TransactionStatus {
+                transaction_hash,
+                transaction_index,
+                from,
+                to: Some(self.contracts.staking_address),
+                contract_address: None,
+                logs: logs.clone(),
+                logs_bloom: {
+                    let mut bloom: Bloom = Bloom::default();
+                    Self::logs_bloom(&logs, &mut bloom);
+                    bloom
+                },
+            };
+            let receipt = ethereum::ReceiptV0 {
+                state_root: H256::from_low_u64_be(1),
+                used_gas,
+                logs_bloom: status.logs_bloom,
+                logs: status.logs.clone(),
+            };
+            let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            pending_txs.push((transaction, status, receipt));
+
+            TransactionIndex::insert(
+                ctx.db.write().borrow_mut(),
+                &HA256::new(transaction_hash),
+                &(ctx.header.height.into(), transaction_index),
+            )?;
+        }
+
+        let amount = mints.iter().map(|v| v.1).sum::<u64>();
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
+        if !mints.is_empty() {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
+
+        Ok(amount)
     }
 
     pub fn import_validators(
@@ -873,14 +948,18 @@ impl<C: Config> AppModule for App<C> {
         &mut self,
         ctx: &mut Context,
         _req: &abci::RequestEndBlock,
-    ) -> abci::ResponseEndBlock {
+    ) -> (abci::ResponseEndBlock, U256) {
         let mut resp = abci::ResponseEndBlock::default();
-
+        let mut burn_amount = Default::default();
         if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
-            if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
-                tracing::error!("Error on evm staking trigger: {}", e);
-            }
-
+            burn_amount =
+                match self.execute_staking_contract(ctx, &self.abci_begin_block) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::error!("Error on evm staking trigger: {}", e);
+                        Default::default()
+                    }
+                };
             match self.get_validator_list(ctx) {
                 Ok(r) => {
                     if !r.is_empty() {
@@ -891,7 +970,7 @@ impl<C: Config> AppModule for App<C> {
             }
         }
 
-        resp
+        (resp, burn_amount)
     }
 }
 

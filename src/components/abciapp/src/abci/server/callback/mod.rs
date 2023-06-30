@@ -502,6 +502,10 @@ pub fn end_block(
         Default::default()
     };
 
+    if !la.all_commited() && la.block_txn_count() != 0 {
+        pnk!(la.end_block());
+    }
+
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -514,9 +518,6 @@ pub fn end_block(
         }
     }
 
-    if !la.all_commited() && la.block_txn_count() != 0 {
-        pnk!(la.end_block());
-    }
     if td_height > CFG.checkpoint.evm_staking_inital_height {
         if 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
             % VALIDATOR_UPDATE_BLOCK_ITV

@@ -1,5 +1,6 @@
 use crate::context::Context;
 use abci::*;
+use primitive_types::U256;
 use ruc::Result;
 
 /// AppModuleBasic is the standard form for basic non-dependant elements of an application module.
@@ -40,7 +41,7 @@ pub trait AppModule: AppModuleBasic {
         &mut self,
         _ctx: &mut Context,
         _req: &RequestEndBlock,
-    ) -> ResponseEndBlock {
+    ) -> (ResponseEndBlock, U256) {
         Default::default()
     }
 }

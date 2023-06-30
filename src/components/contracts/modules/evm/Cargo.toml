@@ -39,14 +39,13 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
 ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
-
+module-ethereum = { path = "../ethereum" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 hex = "0.4.2"
 module-account = { path = "../account" }
-module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"
 
 [features]

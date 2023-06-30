@@ -83,9 +83,19 @@ impl ModuleManager {
         // Note: adding new modules need to be updated.
         self.account_module.end_block(ctx, req);
         self.ethereum_module.end_block(ctx, req);
-        let mresp = self.evm_module.end_block(ctx, req);
+        let (mresp, burn_amount) = self.evm_module.end_block(ctx, req);
         if !mresp.validator_updates.is_empty() {
             resp.validator_updates = mresp.validator_updates;
+        }
+        match module_account::App::<BaseApp>::burn(
+            ctx,
+            &Address::from(self.evm_module.contracts.staking_address),
+            burn_amount,
+        ) {
+            Ok(_) => todo!(),
+            Err(e) => {
+                tracing::warn!("module_account::App::<BaseApp>::burn error: {:?}", e)
+            }
         }
         self.xhub_module.end_block(ctx, req);
         self.template_module.end_block(ctx, req);

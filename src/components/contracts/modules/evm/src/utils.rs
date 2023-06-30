@@ -230,10 +230,30 @@ pub fn build_validator_updates(
     }
 }
 
+pub fn parse_evm_staking_mint_event(
+    staking_contracts: &Contract,
+    log: Log,
+) -> Result<(XfrPublicKey, u64)> {
+    let event = staking_contracts.event("MintOps").map_err(|e| eg!(e))?;
+    let log = RawLog {
+        topics: log.topics,
+        data: log.data,
+    };
+
+    let result = event.parse_log(log).map_err(|e| eg!(e))?;
+    let public_key_bytes = result.params[0].value.clone().into_bytes().c(d!())?;
+
+    let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
+
+    let amount = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
+
+    Ok((public_key, amount))
+}
+
 pub fn parse_evm_staking_coinbase_mint_event(
     staking_contracts: &Contract,
     log: Log,
-) -> Result<(H160, XfrPublicKey, u64)> {
+) -> Result<(H160, Option<XfrPublicKey>, u64)> {
     let event = staking_contracts
         .event("CoinbaseMint")
         .map_err(|e| eg!(e))?;
@@ -247,15 +267,14 @@ pub fn parse_evm_staking_coinbase_mint_event(
     //let pubkey_type = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
 
     let public_key_bytes = result.params[2].value.clone().into_bytes().c(d!())?;
+    let amount = result.params[3].value.clone().into_uint().c(d!())?.as_u64();
 
     if public_key_bytes.is_empty() {
-        return Err(eg!("pubkey is empty"));
+        return Ok((addr, None, amount));
     }
     let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
 
-    let amount = result.params[3].value.clone().into_uint().c(d!())?.as_u64();
-
-    Ok((addr, public_key, amount))
+    Ok((addr, Some(public_key), amount))
 }
 
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
