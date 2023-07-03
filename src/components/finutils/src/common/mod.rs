@@ -255,16 +255,7 @@ pub fn unstake(
 }
 
 /// Claim rewards from findora network
-pub fn claim(
-    td_addr: Option<&str>,
-    am: Option<&str>,
-    sk_str: Option<&str>,
-) -> Result<()> {
-    let td_addr = td_addr.map(|ta| ta.to_owned()).c(d!()).or_else(|_| {
-        get_td_pubkey()
-            .c(d!())
-            .map(|td_pk| td_pubkey_to_td_addr(&td_pk))
-    })?;
+pub fn claim(td_addr: &str, am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
     let td_addr = hex::decode(td_addr).c(d!())?;
 
     let am = if let Some(i) = am {

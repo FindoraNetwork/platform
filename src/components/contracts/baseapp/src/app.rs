@@ -23,7 +23,7 @@ use module_evm::{
         parse_evm_staking_coinbase_mint_event,
     },
 };
-use primitive_types::{H160, U256};
+use primitive_types::{H160, H256, U256};
 use ruc::*;
 use std::{mem::take, ops::DerefMut, str::FromStr};
 use tracing::{debug, error, info};
@@ -303,6 +303,7 @@ impl crate::BaseApp {
 
                                 let mut staking_contract_found = false;
                                 let mut coinbase_mint_foud = false;
+                                let mut delegator = H256::zero();
 
                                 let claim_on_contract_address =
                                     match H160::from_str(SYSTEM_ADDR).c(d!()).and_then(
@@ -348,8 +349,24 @@ impl crate::BaseApp {
                                                 .unwrap_or_default();
                                         if topic == deposit_asset_topic {
                                             deposit_asset_foud = true;
-                                        } else if topic == coinbase_mint_event_topic {
-                                            coinbase_mint_foud = true;
+                                        } else if topic.starts_with(
+                                            &coinbase_mint_event_topic
+                                                [0..coinbase_mint_event_topic.len() - 1],
+                                        ) {
+                                            if let Some(start) = topic.find(", 0x") {
+                                                println!("start:{}", start);
+                                                coinbase_mint_foud = true;
+                                                delegator = match H256::from_str(
+                                                    &topic[start + 2..topic.len() - 1],
+                                                ) {
+                                                    Ok(v) => v,
+                                                    Err(e) => {
+                                                        resp.code = 1;
+                                                        resp.log = e.to_string();
+                                                        return (resp, vec![]);
+                                                    }
+                                                };
+                                            };
                                         }
                                     }
                                     if key == *"data" {
@@ -386,7 +403,7 @@ impl crate::BaseApp {
                                             let ret =
                                                 parse_evm_staking_coinbase_mint_event(
                                                     &event,
-                                                    vec![event.signature()],
+                                                    vec![event.signature(), delegator],
                                                     data_vec,
                                                 );
 

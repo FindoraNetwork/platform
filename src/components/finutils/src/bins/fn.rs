@@ -280,7 +280,13 @@ fn run() -> Result<()> {
             }
             None => None,
         };
-        let td_addr = m.value_of("validator-td-addr");
+        let td_addr = match m.value_of("validator-td-addr") {
+            Some(v) => v,
+            None => {
+                println!("{}", m.usage());
+                return Ok(());
+            }
+        };
         common::claim(td_addr, am, seckey.as_deref()).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("show") {
         let basic = m.is_present("basic");
