@@ -321,6 +321,9 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
+        let trigger_on_contract_address =
+            get_trigger_on_contract_address::<C>(&self.contracts, ctx, from)?;
+
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input.clone(),
@@ -331,7 +334,11 @@ impl<C: Config> App<C> {
         )?;
 
         let mut mints = vec![];
+
         for log in logs.clone().into_iter() {
+            if log.address != trigger_on_contract_address {
+                continue;
+            }
             match parse_evm_staking_mint_event(&self.contracts.staking, log) {
                 Ok((pk, am)) => {
                     if am != 0 {
@@ -353,13 +360,13 @@ impl<C: Config> App<C> {
                 value,
                 input,
                 signature: pnk!(TransactionSignature::new(
-                    0,
+                    27,
                     H256::from_low_u64_be(1),
                     H256::from_low_u64_be(2),
                 )),
             };
-            let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let transaction_index = txns.len() as u32;
+            let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            let transaction_index = pending_txs.len() as u32;
             let transaction_hash = H256::from_slice(
                 Keccak256::digest(&rlp::encode(&transaction)).as_slice(),
             );
@@ -382,7 +389,6 @@ impl<C: Config> App<C> {
                 logs_bloom: status.logs_bloom,
                 logs: status.logs.clone(),
             };
-            let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             pending_txs.push((transaction, status, receipt));
 
             TransactionIndex::insert(
@@ -736,43 +742,6 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    fn get_claim_on_contract_address(&self, ctx: &Context, from: H160) -> Result<H160> {
-        let function = self
-            .contracts
-            .staking
-            .function("getClaimOnContractAddress")
-            .c(d!())?;
-        let input = function.encode_input(&[]).c(d!())?;
-
-        let gas_limit = 99999999999;
-        let value = U256::zero();
-
-        tracing::info!(
-            target: "evm staking",
-            "systemClaim from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
-            from,
-            gas_limit,
-            value,
-            self.contracts.staking_address,
-            hex::encode(&input)
-        );
-
-        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
-            ctx,
-            input,
-            from,
-            gas_limit,
-            self.contracts.staking_address,
-            value,
-        )?;
-        let ret = function.decode_output(&data).c(d!())?;
-
-        if let Some(Token::Address(addr)) = ret.get(0) {
-            Ok(*addr)
-        } else {
-            Err(eg!("address not found"))
-        }
-    }
     pub fn claim(
         &self,
         ctx: &Context,
@@ -803,6 +772,8 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
+        let claim_on_contract_address =
+            get_claim_on_contract_address::<C>(&self.contracts, ctx, from)?;
 
         let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -814,12 +785,17 @@ impl<C: Config> App<C> {
         )?;
 
         let mut mints = Vec::new();
-        let claim_on_contract_address = self.get_claim_on_contract_address(ctx, from)?;
+
         for log in logs.into_iter() {
             if log.address != claim_on_contract_address {
                 continue;
             }
-            match parse_evm_staking_coinbase_mint_event(&self.contracts.staking, log) {
+            let event = self
+                .contracts
+                .staking
+                .event("CoinbaseMint")
+                .map_err(|e| eg!(e))?;
+            match parse_evm_staking_coinbase_mint_event(event, log.topics, log.data) {
                 Ok((_delegator, _, am)) => {
                     if delegator != _delegator {
                         return Err(eg!("Invalid delegator."));
@@ -971,6 +947,88 @@ impl<C: Config> AppModule for App<C> {
         }
 
         (resp, burn_amount)
+    }
+}
+
+fn get_trigger_on_contract_address<C: Config>(
+    contract: &SystemContracts,
+    ctx: &Context,
+    from: H160,
+) -> Result<H160> {
+    let function = contract
+        .staking
+        .function("getTriggerOnContractAddress")
+        .c(d!())?;
+    let input = function.encode_input(&[]).c(d!())?;
+
+    let gas_limit = 99999999999;
+    let value = U256::zero();
+
+    tracing::info!(
+        target: "evm staking",
+        "getTriggerOnContractAddress from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+        from,
+        gas_limit,
+        value,
+        contract.staking_address,
+        hex::encode(&input)
+    );
+
+    let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        ctx,
+        input,
+        from,
+        gas_limit,
+        contract.staking_address,
+        value,
+    )?;
+    let ret = function.decode_output(&data).c(d!())?;
+
+    if let Some(Token::Address(addr)) = ret.get(0) {
+        Ok(*addr)
+    } else {
+        Err(eg!("address not found"))
+    }
+}
+
+pub fn get_claim_on_contract_address<C: Config>(
+    contract: &SystemContracts,
+    ctx: &Context,
+    from: H160,
+) -> Result<H160> {
+    let function = contract
+        .staking
+        .function("getClaimOnContractAddress")
+        .c(d!())?;
+    let input = function.encode_input(&[]).c(d!())?;
+
+    let gas_limit = 99999999999;
+    let value = U256::zero();
+
+    tracing::info!(
+        target: "evm staking",
+        "getClaimOnContractAddress from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+        from,
+        gas_limit,
+        value,
+       contract.staking_address,
+        hex::encode(&input)
+    );
+
+    let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        ctx,
+        input,
+        from,
+        gas_limit,
+        contract.staking_address,
+        value,
+    )?;
+    let ret = function.decode_output(&data).c(d!())?;
+
+    if let Some(Token::Address(addr)) = ret.get(0) {
+        Ok(*addr)
+    } else {
+        Err(eg!("address not found"))
     }
 }
 

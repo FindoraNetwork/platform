@@ -5,7 +5,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "addr",
+        "name": "delegator",
         "type": "address"
       },
       {
@@ -41,6 +41,25 @@
       }
     ],
     "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "public_key",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "MintOps",
     "type": "event"
   },
   {
@@ -125,6 +144,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "getTriggerOnContractAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -143,11 +175,6 @@
         "internalType": "enum IBaseEnum.PublicKeyType",
         "name": "",
         "type": "uint8"
-      },
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
       },
       {
         "internalType": "uint256",

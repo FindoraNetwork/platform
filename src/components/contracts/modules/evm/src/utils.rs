@@ -250,17 +250,47 @@ pub fn parse_evm_staking_mint_event(
     Ok((public_key, amount))
 }
 
+pub fn coinbase_mint_event() -> Event {
+    Event {
+        name: "CoinbaseMint".to_owned(),
+        inputs: vec![
+            EventParam {
+                name: "addr".to_owned(),
+                kind: ParamType::Address,
+                indexed: true,
+            },
+            EventParam {
+                name: "ty".to_owned(),
+                kind: ParamType::Uint(8),
+                indexed: false,
+            },
+            EventParam {
+                name: "public_key".to_owned(),
+                kind: ParamType::Bytes,
+                indexed: false,
+            },
+            EventParam {
+                name: "amount".to_owned(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+        ],
+        anonymous: false,
+    }
+}
+
+pub fn coinbase_mint_event_topic_str() -> String {
+    let topic = coinbase_mint_event().signature();
+    let temp = hex::encode(topic.as_bytes());
+    "[0x".to_owned() + &*temp + &*"]".to_owned()
+}
+
 pub fn parse_evm_staking_coinbase_mint_event(
-    staking_contracts: &Contract,
-    log: Log,
+    event: &Event,
+    topics: Vec<H256>,
+    data: Vec<u8>,
 ) -> Result<(H160, Option<XfrPublicKey>, u64)> {
-    let event = staking_contracts
-        .event("CoinbaseMint")
-        .map_err(|e| eg!(e))?;
-    let log = RawLog {
-        topics: log.topics,
-        data: log.data,
-    };
+    let log = RawLog { topics, data };
     let result = event.parse_log(log).map_err(|e| eg!(e))?;
     let addr = result.params[0].value.clone().into_address().c(d!())?;
 

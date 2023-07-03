@@ -87,15 +87,12 @@ impl ModuleManager {
         if !mresp.validator_updates.is_empty() {
             resp.validator_updates = mresp.validator_updates;
         }
-        match module_account::App::<BaseApp>::burn(
+        if let Err(e) = module_account::App::<BaseApp>::burn(
             ctx,
             &Address::from(self.evm_module.contracts.staking_address),
             burn_amount,
         ) {
-            Ok(_) => todo!(),
-            Err(e) => {
-                tracing::warn!("module_account::App::<BaseApp>::burn error: {:?}", e)
-            }
+            tracing::warn!("module_account::App::<BaseApp>::burn error: {:?}", e)
         }
         self.xhub_module.end_block(ctx, req);
         self.template_module.end_block(ctx, req);
