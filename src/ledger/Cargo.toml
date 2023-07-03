@@ -38,14 +38,14 @@ fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "evm_bug_test" }
 bitmap = { git = "https://github.com/FindoraNetwork/platform-lib-bitmap", branch = "develop" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "evm_bug_test" }
 merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", branch = "develop" }
 sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "develop" }
 
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "evm_bug_test" }
 [features]
 default = ["fin_storage"]
 diskcache = ["fbnc/diskcache"]
