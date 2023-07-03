@@ -16,6 +16,7 @@ members = [
     "src/components/contracts/modules/evm/precompile/sha3fips",
     "src/components/contracts/modules/evm/precompile/anemoi",
     "src/components/contracts/modules/evm/precompile/blake2",
+    "src/components/contracts/modules/evm/precompile/bn128",
     "src/components/contracts/modules/evm/precompile/utils",
     "src/components/contracts/modules/evm/precompile/utils/macro",
     "src/components/contracts/modules/xhub",

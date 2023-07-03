@@ -1,0 +1,22 @@
+[package]
+name = "evm-precompile-bn128"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm-precompile-utils = { path = "../utils"}
+tracing = "0.1"
+module-evm = { path = "../../../../modules/evm"}
+num_enum = { version = "0.5.4", default-features = false }
+fp-types = {path = "../../../../primitives/types"}
+bn = { package = "findora-bn", git = "https://github.com/FindoraNetwork/findora-bn.git", default-features = false }
+
+[dev-dependencies]
+baseapp = { path = "../../../../baseapp" }
+fp-mocks = { path = "../../../../primitives/mocks" }
+ethereum-types = { version = "0.13.1", default-features = false }
+hex = "0.4"
+pallet-evm-test-vector-support = { version = "0.1.0", path = "../../test-vector-support" }
