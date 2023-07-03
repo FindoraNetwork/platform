@@ -604,6 +604,64 @@ impl<C: Config> App<C> {
 
         Ok(())
     }
+
+    pub fn import_reward(
+        &self,
+        ctx: &Context,
+        from: H160,
+        rewards: &[(H160, u64)],
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("importReward").c(d!())?;
+        let mut reward_tokens = vec![];
+        {
+            let tokens = rewards
+                .iter()
+                .map(|(addr, amount)| {
+                    Token::Tuple(vec![
+                        Token::Address(*addr),
+                        Token::Uint(U256::from(*amount)),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            let mut tmp = vec![];
+            for (index, v) in tokens.iter().enumerate() {
+                tmp.push(v.clone());
+                if index > 0 && 0 == index % 60 {
+                    reward_tokens.push(tmp.clone());
+                    tmp.clear();
+                }
+            }
+            if !tmp.is_empty() {
+                reward_tokens.push(tmp);
+            }
+        }
+        for reward_token in reward_tokens.iter() {
+            let input = function
+                .encode_input(&[Token::Array(reward_token.to_vec())])
+                .c(d!())?;
+            let gas_limit = 99999999999;
+            let value = U256::zero();
+            tracing::info!(
+                target: "evm staking",
+                "importReward from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+                from,
+                gas_limit,
+                value,
+                self.contracts.staking_address,
+                hex::encode(&input)
+            );
+            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+                ctx,
+                input,
+                from,
+                gas_limit,
+                self.contracts.staking_address,
+                value,
+            )?;
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn stake(
         &self,

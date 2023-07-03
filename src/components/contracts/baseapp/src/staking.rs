@@ -6,7 +6,9 @@ use fp_traits::{
     evm::{DecimalsMapping, EthereumDecimalsMapping},
 };
 use fp_types::crypto::Address;
-use ledger::staking::{evm::EVMStaking, Delegation, Validator, BLOCK_HEIGHT_MAX};
+use ledger::staking::{
+    evm::EVMStaking, Delegation, DelegationState, Validator, BLOCK_HEIGHT_MAX,
+};
 use module_evm::{
     system_contracts::SYSTEM_ADDR, DelegatorParam, UndelegationInfos, ValidatorParam,
 };
@@ -133,6 +135,27 @@ impl EVMStaking for BaseApp {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
             tracing::error!(target: "evm staking", "import_undelegations error:{:?}", e);
+            return Err(e);
+        }
+
+        let reward = delegations
+            .values()
+            .filter(|d| d.state == DelegationState::Bond)
+            .map(|d| {
+                (
+                    mapping_address(&d.receiver_pk.unwrap_or(d.id)),
+                    d.rwd_amount,
+                )
+            })
+            .collect::<Vec<_>>();
+        if let Err(e) =
+            self.modules
+                .evm_module
+                .import_reward(&self.deliver_state, from, &reward)
+        {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "import_reward error:{:?}", e);
             return Err(e);
         }
         self.deliver_state.state.write().commit_session();

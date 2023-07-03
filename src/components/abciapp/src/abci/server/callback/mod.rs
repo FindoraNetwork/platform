@@ -244,17 +244,14 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
     if header.height == CFG.checkpoint.evm_staking_inital_height {
-        let validators = la
-            .get_committed_state()
-            .write()
+        let ledger_state = la.get_committed_state().read();
+        let validators = ledger_state
             .get_staking()
             .validator_get_current()
             .map(|v| v.get_validators().values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
 
-        let delegations = la
-            .get_committed_state()
-            .write()
+        let delegations = ledger_state
             .get_staking()
             .get_global_delegation_records()
             .values()
