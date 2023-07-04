@@ -62,25 +62,6 @@ where
             a if a == H160::from_low_u64_be(Modexp::contract_id()) => {
                 Some(Modexp::execute(input, target_gas, context, ctx))
             }
-            // Non-Frontier specific nor Ethereum precompiles :
-            a if a == H160::from_low_u64_be(ECRecoverPublicKey::contract_id()) => {
-                Some(ECRecoverPublicKey::execute(input, target_gas, context, ctx))
-            }
-            a if a == H160::from_low_u64_be(Sha3FIPS256::contract_id()) => {
-                Some(Sha3FIPS256::execute(input, target_gas, context, ctx))
-            }
-            a if a == H160::from_low_u64_be(Sha3FIPS512::contract_id()) => {
-                Some(Sha3FIPS512::execute(input, target_gas, context, ctx))
-            }
-            a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
-                Some(FRC20::<C>::execute(input, target_gas, context, ctx))
-            }
-            a if a == H160::from_low_u64_be(Anemoi::contract_id()) => {
-                Some(Anemoi::execute(input, target_gas, context, ctx))
-            }
-            a if a == H160::from_low_u64_be(Blake2F::contract_id()) => {
-                Some(Blake2F::execute(input, target_gas, context, ctx))
-            }
             a if a == H160::from_low_u64_be(Bn128Add::contract_id()) => {
                 Some(Bn128Add::execute(input, target_gas, context, ctx))
             }
@@ -89,6 +70,15 @@ where
             }
             a if a == H160::from_low_u64_be(Bn128Pairing::contract_id()) => {
                 Some(Bn128Pairing::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(Blake2F::contract_id()) => {
+                Some(Blake2F::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
+                Some(FRC20::<C>::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(Anemoi::contract_id()) => {
+                Some(Anemoi::execute(input, target_gas, context, ctx))
             }
             //a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
             //    Some(EthPairing::execute(input, target_gas, context, ctx))
