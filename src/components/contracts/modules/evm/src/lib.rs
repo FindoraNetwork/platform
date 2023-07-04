@@ -308,7 +308,7 @@ impl<C: Config> App<C> {
     ) -> Result<U256> {
         let input = utils::build_evm_staking_input(&self.contracts, req)?;
 
-        let gas_limit = 9999999;
+        let gas_limit = u64::MAX;
         let value = U256::zero();
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -453,7 +453,7 @@ impl<C: Config> App<C> {
             let input = function
                 .encode_input(&[Token::Array(vs.to_vec())])
                 .c(d!())?;
-            let gas_limit = 99999999999;
+            let gas_limit = u64::MAX;
             let value = U256::zero();
             tracing::info!(
                 target: "evm staking",
@@ -517,7 +517,7 @@ impl<C: Config> App<C> {
             let input = function
                 .encode_input(&[Token::Array(ds.to_vec())])
                 .c(d!())?;
-            let gas_limit = 99999999999;
+            let gas_limit = u64::MAX;
             let value = U256::zero();
             tracing::info!(
                 target: "evm staking",
@@ -581,7 +581,7 @@ impl<C: Config> App<C> {
             let input = function
                 .encode_input(&[Token::Array(info.to_vec())])
                 .c(d!())?;
-            let gas_limit = 99999999999;
+            let gas_limit = u64::MAX;
             let value = U256::zero();
             tracing::info!(
                 target: "evm staking",
@@ -639,7 +639,7 @@ impl<C: Config> App<C> {
             let input = function
                 .encode_input(&[Token::Array(reward_token.to_vec())])
                 .c(d!())?;
-            let gas_limit = 99999999999;
+            let gas_limit = u64::MAX;
             let value = U256::zero();
             tracing::info!(
                 target: "evm staking",
@@ -688,7 +688,7 @@ impl<C: Config> App<C> {
             .encode_input(&[validator, td_pubkey, staker, staker_pk, memo, rate])
             .c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
 
         tracing::info!(
             target: "evm staking",
@@ -733,7 +733,7 @@ impl<C: Config> App<C> {
             .encode_input(&[validator, delegator, delegator_pk])
             .c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
         tracing::info!(
             target: "evm staking",
             "systemDelegate from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
@@ -775,7 +775,7 @@ impl<C: Config> App<C> {
             .encode_input(&[validator, delegator, amount])
             .c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
         let value = U256::zero();
 
         tracing::info!(
@@ -818,7 +818,7 @@ impl<C: Config> App<C> {
             ])
             .c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
         let value = U256::zero();
 
         tracing::info!(
@@ -898,7 +898,7 @@ impl<C: Config> App<C> {
             .encode_input(&[validator, staker, memo, rate])
             .c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
         let value = U256::zero();
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -932,7 +932,7 @@ impl<C: Config> App<C> {
             .c(d!())?;
         let input = func.encode_input(&[]).c(d!())?;
 
-        let gas_limit = 99999999999;
+        let gas_limit = u64::MAX;
         let value = U256::zero();
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -1019,7 +1019,7 @@ fn get_trigger_on_contract_address<C: Config>(
         .c(d!())?;
     let input = function.encode_input(&[]).c(d!())?;
 
-    let gas_limit = 99999999999;
+    let gas_limit = u64::MAX;
     let value = U256::zero();
 
     tracing::info!(
@@ -1060,7 +1060,7 @@ pub fn get_claim_on_contract_address<C: Config>(
         .c(d!())?;
     let input = function.encode_input(&[]).c(d!())?;
 
-    let gas_limit = 99999999999;
+    let gas_limit = u64::MAX;
     let value = U256::zero();
 
     tracing::info!(
