@@ -468,6 +468,8 @@ pub fn end_block(
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
+    let mut la = s.la.write();
+
     if header.height == CFG.checkpoint.evm_staking_inital_height {
         let ledger_state = la.get_committed_state().read();
         let validators = ledger_state
@@ -490,8 +492,6 @@ pub fn end_block(
             panic!()
         };
     }
-
-    let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
     {

@@ -331,6 +331,16 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             value,
         )?;
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
 
         let mut mints = vec![];
 
@@ -348,61 +358,6 @@ impl<C: Config> App<C> {
                     tracing::warn!("Parse evm staking mint error: {}", e);
                 }
             }
-        }
-
-        {
-            let transaction = TransactionV0 {
-                nonce: U256::from(ctx.header.height),
-                gas_price: U256::zero(),
-                gas_limit: U256::from(gas_limit),
-                action: TransactionAction::Call(self.contracts.staking_address),
-                value,
-                input,
-                signature: pnk!(TransactionSignature::new(
-                    27,
-                    H256::from_low_u64_be(1),
-                    H256::from_low_u64_be(2),
-                )),
-            };
-            let transaction_hash = transaction.hash();
-            tracing::info!(
-                "trigger Transaction: {}:{:?}",
-                transaction_hash,
-                transaction
-            );
-            let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let transaction_index = pending_txs.len() as u32;
-
-            let status = TransactionStatus {
-                transaction_hash,
-                transaction_index,
-                from,
-                to: Some(self.contracts.staking_address),
-                contract_address: None,
-                logs: logs.clone(),
-                logs_bloom: {
-                    let mut bloom: Bloom = Bloom::default();
-                    Self::logs_bloom(&logs, &mut bloom);
-                    bloom
-                },
-            };
-            tracing::info!("trigger TransactionStatus: {:?}", status);
-
-            let receipt = ethereum::ReceiptV0 {
-                state_root: H256::from_low_u64_be(1),
-                used_gas,
-                logs_bloom: status.logs_bloom,
-                logs: status.logs.clone(),
-            };
-            tracing::info!("trigger TransactionReceipt: {:?}", receipt);
-
-            pending_txs.push((transaction, status, receipt));
-
-            TransactionIndex::insert(
-                ctx.db.write().borrow_mut(),
-                &HA256::new(transaction_hash),
-                &(ctx.header.height.into(), transaction_index),
-            )?;
         }
 
         let amount = mints.iter().map(|v| v.1).sum::<u64>();
@@ -471,13 +426,23 @@ impl<C: Config> App<C> {
                 self.contracts.staking_address,
                 hex::encode(&input)
             );
-            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
                 ctx,
-                input,
+                input.clone(),
                 from,
                 gas_limit,
                 self.contracts.staking_address,
                 value,
+            )?;
+            Self::store_transaction(
+                ctx,
+                U256::from(gas_limit),
+                from,
+                self.contracts.staking_address,
+                value,
+                input,
+                &logs,
+                used_gas,
             )?;
         }
 
@@ -535,13 +500,23 @@ impl<C: Config> App<C> {
                 self.contracts.staking_address,
                 hex::encode(&input)
             );
-            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
                 ctx,
-                input,
+                input.clone(),
                 from,
                 gas_limit,
                 self.contracts.staking_address,
                 value,
+            )?;
+            Self::store_transaction(
+                ctx,
+                U256::from(gas_limit),
+                from,
+                self.contracts.staking_address,
+                value,
+                input,
+                &logs,
+                used_gas,
             )?;
         }
 
@@ -599,13 +574,23 @@ impl<C: Config> App<C> {
                 self.contracts.staking_address,
                 hex::encode(&input)
             );
-            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
                 ctx,
-                input,
+                input.clone(),
                 from,
                 gas_limit,
                 self.contracts.staking_address,
                 value,
+            )?;
+            Self::store_transaction(
+                ctx,
+                U256::from(gas_limit),
+                from,
+                self.contracts.staking_address,
+                value,
+                input,
+                &logs,
+                used_gas,
             )?;
         }
 
@@ -657,13 +642,23 @@ impl<C: Config> App<C> {
                 self.contracts.staking_address,
                 hex::encode(&input)
             );
-            let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
                 ctx,
-                input,
+                input.clone(),
                 from,
                 gas_limit,
                 self.contracts.staking_address,
                 value,
+            )?;
+            Self::store_transaction(
+                ctx,
+                U256::from(gas_limit),
+                from,
+                self.contracts.staking_address,
+                value,
+                input,
+                &logs,
+                used_gas,
             )?;
         }
         Ok(())
@@ -706,15 +701,24 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             value,
         )?;
-
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
         Ok(())
     }
 
@@ -750,13 +754,24 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             amount,
+        )?;
+
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            amount,
+            input,
+            &logs,
+            used_gas,
         )?;
         Ok(())
     }
@@ -795,15 +810,24 @@ impl<C: Config> App<C> {
             hex::encode(&input)
         );
 
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             value,
         )?;
-
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
         Ok(())
     }
 
@@ -840,13 +864,24 @@ impl<C: Config> App<C> {
         let claim_on_contract_address =
             get_claim_on_contract_address::<C>(&self.contracts, ctx, from)?;
 
-        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             value,
+        )?;
+
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
         )?;
 
         let mut mints = Vec::new();
@@ -919,18 +954,93 @@ impl<C: Config> App<C> {
             hex::encode(&input)
         );
 
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
+            input.clone(),
             from,
             gas_limit,
             self.contracts.staking_address,
             value,
         )?;
 
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
+
         Ok(())
     }
 
+    fn store_transaction(
+        ctx: &Context,
+        gas_limit: U256,
+        from: H160,
+        staking_address: H160,
+        value: U256,
+        input: Vec<u8>,
+        logs: &Vec<Log>,
+        used_gas: U256,
+    ) -> Result<()> {
+        let transaction = TransactionV0 {
+            nonce: U256::from(ctx.header.height),
+            gas_price: U256::zero(),
+            gas_limit: U256::from(gas_limit),
+            action: TransactionAction::Call(staking_address),
+            value,
+            input,
+            signature: pnk!(TransactionSignature::new(
+                27,
+                H256::from_low_u64_be(1),
+                H256::from_low_u64_be(2),
+            )),
+        };
+        let transaction_hash = transaction.hash();
+        tracing::info!(
+            "trigger Transaction: {}:{:?}",
+            transaction_hash,
+            transaction
+        );
+        let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+        let transaction_index = pending_txs.len() as u32;
+
+        let status = TransactionStatus {
+            transaction_hash,
+            transaction_index,
+            from,
+            to: Some(staking_address),
+            contract_address: None,
+            logs: logs.clone(),
+            logs_bloom: {
+                let mut bloom: Bloom = Bloom::default();
+                Self::logs_bloom(&logs, &mut bloom);
+                bloom
+            },
+        };
+        tracing::info!("trigger TransactionStatus: {:?}", status);
+
+        let receipt = ethereum::ReceiptV0 {
+            state_root: H256::from_low_u64_be(1),
+            used_gas,
+            logs_bloom: status.logs_bloom,
+            logs: status.logs.clone(),
+        };
+        tracing::info!("trigger TransactionReceipt: {:?}", receipt);
+
+        pending_txs.push((transaction, status, receipt));
+
+        TransactionIndex::insert(
+            ctx.db.write().borrow_mut(),
+            &HA256::new(transaction_hash),
+            &(ctx.header.height.into(), transaction_index),
+        )?;
+        Ok(())
+    }
     fn get_validator_list(&self, ctx: &Context) -> Result<Vec<abci::ValidatorUpdate>> {
         let func = self
             .contracts
