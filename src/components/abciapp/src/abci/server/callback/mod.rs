@@ -532,12 +532,11 @@ pub fn end_block(
         Default::default()
     };
 
-    if td_height > CFG.checkpoint.evm_staking_inital_height {
-        if 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
+    if td_height > CFG.checkpoint.evm_staking_inital_height
+        && 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
             % VALIDATOR_UPDATE_BLOCK_ITV
-        {
-            resp.validator_updates = evm_resp.validator_updates;
-        }
+    {
+        resp.validator_updates = evm_resp.validator_updates;
     }
 
     resp

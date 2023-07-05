@@ -344,7 +344,7 @@ impl<C: Config> App<C> {
 
         let mut mints = vec![];
 
-        for log in logs.clone().into_iter() {
+        for log in logs.into_iter() {
             if log.address != trigger_on_contract_address {
                 continue;
             }
@@ -977,6 +977,7 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn store_transaction(
         ctx: &Context,
         gas_limit: U256,
@@ -984,13 +985,13 @@ impl<C: Config> App<C> {
         staking_address: H160,
         value: U256,
         input: Vec<u8>,
-        logs: &Vec<Log>,
+        logs: &[Log],
         used_gas: U256,
     ) -> Result<()> {
         let transaction = TransactionV0 {
             nonce: U256::from(ctx.header.height),
             gas_price: U256::zero(),
-            gas_limit: U256::from(gas_limit),
+            gas_limit,
             action: TransactionAction::Call(staking_address),
             value,
             input,
@@ -1002,7 +1003,7 @@ impl<C: Config> App<C> {
         };
         let transaction_hash = transaction.hash();
         tracing::info!(
-            "trigger Transaction: {}:{:?}",
+            "generate Transaction: {}:{:?}",
             transaction_hash,
             transaction
         );
@@ -1015,14 +1016,14 @@ impl<C: Config> App<C> {
             from,
             to: Some(staking_address),
             contract_address: None,
-            logs: logs.clone(),
+            logs: logs.to_vec(),
             logs_bloom: {
                 let mut bloom: Bloom = Bloom::default();
-                Self::logs_bloom(&logs, &mut bloom);
+                Self::logs_bloom(logs, &mut bloom);
                 bloom
             },
         };
-        tracing::info!("trigger TransactionStatus: {:?}", status);
+        tracing::info!("generate TransactionStatus: {:?}", status);
 
         let receipt = ethereum::ReceiptV0 {
             state_root: H256::from_low_u64_be(1),
@@ -1030,7 +1031,7 @@ impl<C: Config> App<C> {
             logs_bloom: status.logs_bloom,
             logs: status.logs.clone(),
         };
-        tracing::info!("trigger TransactionReceipt: {:?}", receipt);
+        tracing::info!("generate TransactionReceipt: {:?}", receipt);
 
         pending_txs.push((transaction, status, receipt));
 
