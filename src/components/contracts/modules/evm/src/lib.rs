@@ -45,7 +45,6 @@ use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
 pub use runtime::*;
-use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
@@ -365,11 +364,15 @@ impl<C: Config> App<C> {
                     H256::from_low_u64_be(2),
                 )),
             };
+            let transaction_hash = transaction.hash();
+            tracing::info!(
+                "trigger Transaction: {}:{:?}",
+                transaction_hash,
+                transaction
+            );
             let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             let transaction_index = pending_txs.len() as u32;
-            let transaction_hash = H256::from_slice(
-                Keccak256::digest(&rlp::encode(&transaction)).as_slice(),
-            );
+
             let status = TransactionStatus {
                 transaction_hash,
                 transaction_index,
@@ -383,12 +386,16 @@ impl<C: Config> App<C> {
                     bloom
                 },
             };
+            tracing::info!("trigger TransactionStatus: {:?}", status);
+
             let receipt = ethereum::ReceiptV0 {
                 state_root: H256::from_low_u64_be(1),
                 used_gas,
                 logs_bloom: status.logs_bloom,
                 logs: status.logs.clone(),
             };
+            tracing::info!("trigger TransactionReceipt: {:?}", receipt);
+
             pending_txs.push((transaction, status, receipt));
 
             TransactionIndex::insert(
