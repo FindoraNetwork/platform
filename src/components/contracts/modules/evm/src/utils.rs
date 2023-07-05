@@ -6,7 +6,6 @@ use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
-use sha3::{Digest, Keccak256};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{
@@ -93,15 +92,6 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         decimal: decimal.as_u64() as u8,
         max_supply: max_supply.as_u64(),
     })
-}
-
-pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
-    let mut hasher = Keccak256::new();
-    hasher.update([0xff]);
-    hasher.update(&caller[..]);
-    hasher.update(&salt[..]);
-    hasher.update(&code_hash[..]);
-    H256::from_slice(hasher.finalize().as_slice()).into()
 }
 
 fn build_address(address: &[u8]) -> Result<Token> {
