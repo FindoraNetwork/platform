@@ -304,15 +304,18 @@ impl TransactionBuilder {
     #[allow(missing_docs)]
     pub fn add_operation_claim(
         mut self,
+        td_addr: Vec<u8>,
         keypair: &XfrKeyPair,
     ) -> RucResult<TransactionBuilder> {
-        self.get_builder_mut().add_operation_claim(keypair, None);
+        self.get_builder_mut()
+            .add_operation_claim(Some(td_addr), keypair, None);
         Ok(self)
     }
 
     #[allow(missing_docs)]
     pub fn add_operation_claim_custom(
         mut self,
+        td_addr: Vec<u8>,
         keypair: &XfrKeyPair,
         am: u64,
     ) -> RucResult<TransactionBuilder> {
@@ -320,7 +323,7 @@ impl TransactionBuilder {
             return Err(eg!("Amount can not be zero"));
         }
         self.get_builder_mut()
-            .add_operation_claim(keypair, Some(am));
+            .add_operation_claim(Some(td_addr), keypair, Some(am));
         Ok(self)
     }
 

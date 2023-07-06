@@ -16,6 +16,7 @@ pub mod evm;
 pub mod utils;
 
 use {
+    self::utils::{get_evm_staking_address, get_validator_memo_and_rate},
     crate::api::DelegationInfo,
     globutils::wallet,
     lazy_static::lazy_static,
@@ -33,10 +34,8 @@ use {
     ruc::*,
     std::{env, fs},
     tendermint::PrivateKey,
-    utils::{
-        get_block_height, get_local_block_height, get_validator_detail,
-        parse_td_validator_keys,
-    },
+    utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
+    web3::types::H160,
     zei::{
         setup::PublicParams,
         xfr::{
@@ -63,17 +62,24 @@ lazy_static! {
 
 /// Updating the information of a staker includes commission_rate and staker_memo
 pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
-    let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
-    let vd = get_validator_detail(&addr).c(d!())?;
+    let pub_key = get_td_pubkey()
+        .map(|i| td_pubkey_to_td_addr_bytes(&i))
+        .c(d!())?;
+    let validator_address = H160::from_slice(&pub_key);
+
+    let evm_staking_address = get_evm_staking_address()?;
+    let url = format!("{}:8545", get_serv_addr()?);
+    let (validator_memo, rate) =
+        get_validator_memo_and_rate(&url, evm_staking_address, validator_address)?;
 
     let cr = cr
-        .map_or(Ok(vd.commission_rate), |s| {
+        .map_or(Ok(rate), |s| {
             s.parse::<f64>()
                 .c(d!("commission rate must be a float number"))
                 .and_then(convert_commission_rate)
         })
         .c(d!())?;
-    let memo = memo.unwrap_or(vd.memo);
+    let memo = memo.unwrap_or(validator_memo);
 
     let td_pubkey = get_td_pubkey().c(d!())?;
 
@@ -249,7 +255,9 @@ pub fn unstake(
 }
 
 /// Claim rewards from findora network
-pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
+pub fn claim(td_addr: &str, am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
+    let td_addr = hex::decode(td_addr).c(d!())?;
+
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
     } else {
@@ -262,7 +270,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
 
     utils::gen_fee_op(&kp).c(d!()).map(|op| {
         builder.add_operation(op);
-        builder.add_operation_claim(&kp, am);
+        builder.add_operation_claim(Some(td_addr), &kp, am);
     })?;
 
     let mut tx = builder.take_transaction();

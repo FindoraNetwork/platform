@@ -15,7 +15,7 @@ use {
     },
     baseapp::BaseApp as AccountBaseAPP,
     config::abci::global_cfg::CFG,
-    ledger::store::LedgerState,
+    ledger::{staking::evm::EVM_STAKING, store::LedgerState},
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
@@ -70,7 +70,10 @@ impl ABCISubmissionServer {
                 ))
             }
         };
-
+        let account_base_app = Arc::new(RwLock::new(account_base_app));
+        if EVM_STAKING.set(account_base_app.clone()).is_err() {
+            return Err(eg!("Invalid usage."));
+        }
         let prng = rand_chacha::ChaChaRng::from_entropy();
         Ok(ABCISubmissionServer {
             la: Arc::new(RwLock::new(
@@ -81,7 +84,7 @@ impl ABCISubmissionServer {
                 )
                 .c(d!())?,
             )),
-            account_base_app: Arc::new(RwLock::new(account_base_app)),
+            account_base_app,
         })
     }
 }

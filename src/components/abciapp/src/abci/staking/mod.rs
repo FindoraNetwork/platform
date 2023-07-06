@@ -4,6 +4,8 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
+use ledger::staking::evm::EVM_STAKING_MINTS;
+
 mod whoami;
 
 #[cfg(test)]
@@ -467,6 +469,13 @@ pub fn system_mint_pay(
     };
 
     mint_entries.append(&mut mints);
+
+    //Mints from evm staking
+    for mint in EVM_STAKING_MINTS.lock().drain(..).map(|(pk, amount)| {
+        MintEntry::new(MintKind::Other, pk, None, amount, ASSET_TYPE_FRA)
+    }) {
+        mint_entries.push(mint)
+    }
 
     if mint_entries.is_empty() {
         None

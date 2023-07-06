@@ -29,7 +29,7 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::Operation,
-        staking::KEEP_HIST,
+        staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -470,6 +470,29 @@ pub fn end_block(
 
     let mut la = s.la.write();
 
+    if header.height == CFG.checkpoint.evm_staking_inital_height {
+        let ledger_state = la.get_committed_state().read();
+        let validators = ledger_state
+            .get_staking()
+            .validator_get_current()
+            .map(|v| v.get_validators().values().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let delegations = ledger_state
+            .get_staking()
+            .get_global_delegation_records()
+            .values()
+            .map(|v| (v.id, v.clone()))
+            .collect();
+
+        if let Err(e) = EVM_STAKING.get().c(d!()).and_then(|staking| {
+            staking.write().import_validators(&validators, &delegations)
+        }) {
+            println!("import_validators error {:?}", e);
+            panic!()
+        };
+    }
+
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -485,25 +508,35 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
+    if td_height <= CFG.checkpoint.evm_staking_inital_height {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
 
-    if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking().deref(),
-        begin_block_req.last_commit_info.as_ref()
-    )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+        staking::system_ops(
+            &mut la.get_committed_state().write(),
+            &header,
+            begin_block_req.last_commit_info.as_ref(),
+            &begin_block_req.byzantine_validators.as_slice(),
+        );
     }
 
-    staking::system_ops(
-        &mut la.get_committed_state().write(),
-        &header,
-        begin_block_req.last_commit_info.as_ref(),
-        &begin_block_req.byzantine_validators.as_slice(),
-    );
-
-    if td_height <= CFG.checkpoint.disable_evm_block_height
+    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let _ = s.account_base_app.write().end_block(req);
+        s.account_base_app.write().end_block(req)
+    } else {
+        Default::default()
+    };
+
+    if td_height > CFG.checkpoint.evm_staking_inital_height
+        && 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
+            % VALIDATOR_UPDATE_BLOCK_ITV
+    {
+        resp.validator_updates = evm_resp.validator_updates;
     }
 
     resp

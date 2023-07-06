@@ -9,9 +9,11 @@ mod app;
 pub mod extensions;
 mod modules;
 mod notify;
+mod staking;
 
 use crate::modules::ModuleManager;
 use abci::Header;
+use config::abci::global_cfg::CFG;
 use ethereum::BlockV0 as Block;
 use evm_precompile::{self, FindoraPrecompiles};
 use fin_db::{FinDB, RocksDB};
@@ -31,10 +33,12 @@ use fp_traits::{
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
 use ledger::data_model::Transaction as FindoraTransaction;
+use ledger::LEDGER_TENDERMINT_BLOCK_HEIGHT;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
+use std::sync::atomic::Ordering;
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::{ChainState, ChainStateOpts};
 use tracing::info;
@@ -94,8 +98,29 @@ impl module_account::Config for BaseApp {
 
 parameter_types! {
     pub ChainId: u64 = *EVM_CAHIN_ID;
-    pub BlockGasLimit: U256 = U256::from(u32::max_value());
     pub const BlockHashCount: u32 = 256;
+}
+pub struct BlockGasLimit;
+impl BlockGasLimit {
+    /// Returns the value of this parameter type.
+    pub fn get() -> U256 {
+        let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+        if td_height < CFG.checkpoint.max_gas_price_limit {
+            U256::from(u32::max_value())
+        } else {
+            U256::from(100000000)
+        }
+    }
+}
+impl<I: From<U256>> ::fp_core::macros::Get<I> for BlockGasLimit {
+    fn get() -> I {
+        let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+        if td_height < CFG.checkpoint.max_gas_price_limit {
+            I::from(U256::from(u32::max_value()))
+        } else {
+            I::from(U256::from(100000000))
+        }
+    }
 }
 
 impl module_ethereum::Config for BaseApp {

@@ -12,6 +12,8 @@ pub static SYSTEM_ADDR: &str = "0x0000000000000000000000000000000000002000";
 pub struct SystemContracts {
     pub bridge: Contract,
     pub bridge_address: H160,
+    pub staking: Contract,
+    pub staking_address: H160,
 }
 
 impl SystemContracts {
@@ -20,10 +22,16 @@ impl SystemContracts {
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
         let bridge_address =
             H160::from_str(&CFG.checkpoint.prism_bridge_address).unwrap_or_default();
+        let abi_str = include_str!("../contracts/EVMStaking.abi.json");
+        let staking = Contract::load(abi_str.as_bytes()).c(d!())?;
+        let staking_address =
+            H160::from_str(&CFG.checkpoint.evm_staking_address).unwrap_or_default();
 
         Ok(Self {
             bridge,
             bridge_address,
+            staking,
+            staking_address,
         })
     }
 }

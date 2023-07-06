@@ -36,7 +36,7 @@ bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetw
 noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
 noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.3-1" }
 fbnc = { version = "0.2.9", default-features = false}
-
+once_cell = "1"
 num-bigint = "0.4.3"
 
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", tag = "v1.0.0" }

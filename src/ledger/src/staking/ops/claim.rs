@@ -5,7 +5,11 @@
 //!
 
 use {
-    crate::{data_model::NoReplayToken, staking::Staking},
+    crate::{
+        data_model::NoReplayToken,
+        staking::{evm::EVM_STAKING, Staking},
+    },
+    config::abci::global_cfg::CFG,
     ruc::*,
     serde::{Deserialize, Serialize},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
@@ -17,6 +21,9 @@ pub struct ClaimOps {
     pub(crate) body: Data,
     pub(crate) pubkey: XfrPublicKey,
     signature: XfrSignature,
+    ///
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub td_addr: Option<Vec<u8>>,
 }
 
 impl ClaimOps {
@@ -28,9 +35,22 @@ impl ClaimOps {
 
     /// Apply new claim to the target `Staking` instance.
     pub fn apply(&self, staking: &mut Staking) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        let cur_height = staking.cur_height() as i64;
+        if cur_height > CFG.checkpoint.evm_staking_inital_height {
+            self.verify()?;
+            let am = self.body.amount.c(d!(eg!("Missing amount.")))?;
+            let td_addr = self.td_addr.clone().c(d!(eg!("Missing validator addr.")))?;
+            EVM_STAKING
+                .get()
+                .c(d!())?
+                .write()
+                .claim(&td_addr, &self.pubkey, am)?;
+            Ok(())
+        } else {
+            self.verify()
+                .c(d!())
+                .and_then(|_| staking.claim(self.pubkey, self.body.amount).c(d!()))
+        }
     }
 
     /// Verify signature.
@@ -55,13 +75,19 @@ impl ClaimOps {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn new(keypair: &XfrKeyPair, amount: Option<u64>, nonce: NoReplayToken) -> Self {
+    pub fn new(
+        td_addr: Option<Vec<u8>>,
+        keypair: &XfrKeyPair,
+        amount: Option<u64>,
+        nonce: NoReplayToken,
+    ) -> Self {
         let body = Data::new(amount, nonce);
         let signature = keypair.sign(&body.to_bytes());
         ClaimOps {
             body,
             pubkey: keypair.get_pk(),
             signature,
+            td_addr,
         }
     }
 
