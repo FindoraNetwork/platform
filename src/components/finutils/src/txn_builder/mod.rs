@@ -8,7 +8,7 @@
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
-    fp_types::crypto::MultiSigner,
+    fp_types::{crypto::MultiSigner, H160},
     globutils::SignatureOf,
     ledger::{
         converter::ConvertAccount,
@@ -623,13 +623,13 @@ impl TransactionBuilder {
     pub fn add_operation_replace_staker(
         &mut self,
         keypair: &XfrKeyPair,
-        new_public_key: XfrPublicKey,
-        new_td_addr: Option<(Vec<u8>, Vec<u8>)>,
+        new_staker_address: H160,
+        td_addr: Vec<u8>,
     ) -> Result<&mut Self> {
         let ops = ReplaceStakerOps::new(
             keypair,
-            new_public_key,
-            new_td_addr,
+            new_staker_address,
+            td_addr,
             self.txn.body.no_replay_token,
         );
         self.add_operation(Operation::ReplaceStaker(ops));

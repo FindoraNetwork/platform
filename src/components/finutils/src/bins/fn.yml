@@ -488,6 +488,12 @@ subcommands:
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:
+        - validator-td-addr:
+            help: stake FRAs to a custom validator
+            short: A
+            long: validator-td-addr
+            takes_value: true
+            value_name: TendermintAddr
         - target:
             help: the public key of new staker, you must be the staker of the validator, you could use `fn setup` to configure your secret key and public key.
             short: t
@@ -495,18 +501,6 @@ subcommands:
             takes_value: true
             value_name: TARGET PUBLIC KEY
             required: true
-        - td_address:
-            help: the tendermint address that you may want to replace.
-            long: td_address
-            takes_value: true
-            value_name: TENDERMINT ADDRESS
-            required: false
-        - td_pubkey:
-            help: the tendermint public key that you may want to replace.
-            long: td_pubkey
-            takes_value: true
-            value_name: TENDERMINT PUBKEY
-            required: false
   - dev:
       about: Manage development clusters on your localhost
       args:

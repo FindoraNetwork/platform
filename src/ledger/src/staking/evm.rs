@@ -1,6 +1,7 @@
 //! For interact with BaseApp (EVM)
 
 use super::{Delegation, Validator};
+use fp_types::H160;
 use once_cell::sync::{Lazy, OnceCell};
 use parking_lot::{Mutex, RwLock};
 use ruc::Result;
@@ -44,6 +45,13 @@ pub trait EVMStaking: Sync + Send + 'static {
         validator: &[u8],
         memo: String,
         rate: [u64; 2],
+    ) -> Result<()>;
+    ///
+    fn replace_delegator(
+        &self,
+        validator: &[u8],
+        staker: &XfrPublicKey,
+        new_staker_address: H160,
     ) -> Result<()>;
     /// claim call
     fn claim(

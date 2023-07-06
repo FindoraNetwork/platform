@@ -837,10 +837,8 @@ pub fn version() -> &'static str {
 }
 
 ///operation to replace the staker.
-pub fn replace_staker(
-    target_pubkey: XfrPublicKey,
-    new_td_addr_pk: Option<(Vec<u8>, Vec<u8>)>,
-) -> Result<()> {
+pub fn replace_staker(target_addr: fp_types::H160, td_addr: &str) -> Result<()> {
+    let td_addr = hex::decode(td_addr).c(d!())?;
     let keypair = get_keypair()?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
@@ -849,7 +847,7 @@ pub fn replace_staker(
         builder.add_operation(op);
     })?;
 
-    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
+    builder.add_operation_replace_staker(&keypair, target_addr, td_addr)?;
     let mut tx = builder.take_transaction();
     tx.sign_to_map(&keypair);
 

@@ -977,6 +977,64 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
+    pub fn replace_delegator(
+        &self,
+        ctx: &Context,
+        validator: H160,
+        staker: H160,
+        new_staker: H160,
+    ) -> Result<()> {
+        let func = self
+            .contracts
+            .staking
+            .function("systemReplaceDelegator")
+            .c(d!())?;
+
+        let validator = Token::Array(vec![Token::Address(validator)]);
+        let staker = Token::Address(staker);
+        let new_staker = Token::Address(new_staker);
+
+        let input = func
+            .encode_input(&[validator, staker, new_staker])
+            .c(d!())?;
+
+        let gas_limit = u64::MAX;
+        let value = U256::zero();
+        let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
+
+        tracing::info!(
+            target: "evm staking",
+            "systemReplaceStaker from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
+
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn store_transaction(
         ctx: &Context,

@@ -25,6 +25,10 @@
 
 #![deny(warnings)]
 
+use std::str::FromStr;
+
+use fp_types::H160;
+
 use {
     clap::{crate_authors, load_yaml, App},
     finutils::common::{self, evm::*},
@@ -416,30 +420,15 @@ fn run() -> Result<()> {
         let target = m
             .value_of("target")
             .c(d!())
-            .and_then(wallet::public_key_from_base64)?;
-        // let new_td_addr_pk = if let Some(new_td_address_str) = m.value_of("td_address") {
-        //     let new_td_address = hex::decode(new_td_address_str)
-        //         .c(d!("`td_address` is invalid hex. "))?;
-
-        //     if new_td_address.len() != 20 {
-        //         return Err(eg!("Invalid tendermint address."));
-        //     }
-
-        //     if let Some(new_td_pk) = m.value_of("td_pubkey") {
-        //         let pk_bytes =
-        //             base64::decode(new_td_pk).c(d!("`td_pubkey` is invalid base64."))?;
-
-        //         let _ = tendermint::PublicKey::from_raw_ed25519(&pk_bytes)
-        //             .c(d!("Invalid tendermint public key."))?;
-
-        //         Some((new_td_address, pk_bytes))
-        //     } else {
-        //         return Err(eg!("missing `td_pubkey`"));
-        //     }
-        // } else {
-        //     None
-        // };
-        common::replace_staker(target, None)?;
+            .and_then(|val| H160::from_str(val).c(d!()))?;
+        let td_addr = match m.value_of("validator-td-addr") {
+            Some(v) => v,
+            None => {
+                println!("{}", m.usage());
+                return Ok(());
+            }
+        };
+        common::replace_staker(target, td_addr)?;
     } else if let Some(m) = matches.subcommand_matches("dev") {
         #[cfg(not(target_arch = "wasm32"))]
         {
