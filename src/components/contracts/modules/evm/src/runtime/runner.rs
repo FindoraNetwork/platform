@@ -51,6 +51,10 @@ impl<C: Config> ActionRunner<C> {
                     gas_price >= C::FeeCalculator::min_gas_price(),
                     "GasPriceTooLow"
                 );
+                ensure!(
+                    gas_price <= C::FeeCalculator::max_gas_price(),
+                    "GasPriceTooHigh"
+                );
                 gas_price
             }
             None => Default::default(),

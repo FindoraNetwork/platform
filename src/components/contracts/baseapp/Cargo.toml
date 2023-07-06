@@ -25,6 +25,7 @@ serde_json = "1.0.40"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
 sha3 = "0.8"
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 
 config = { path = "../../config"}
 

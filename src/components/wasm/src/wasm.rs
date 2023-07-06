@@ -485,8 +485,10 @@ impl TransactionBuilder {
     pub fn add_operation_claim(
         mut self,
         keypair: &XfrKeyPair,
+        td_addr: Vec<u8>,
     ) -> Result<TransactionBuilder, JsValue> {
-        self.get_builder_mut().add_operation_claim(keypair, None);
+        self.get_builder_mut()
+            .add_operation_claim(Some(td_addr), keypair, None);
         Ok(self)
     }
 
@@ -494,13 +496,14 @@ impl TransactionBuilder {
     pub fn add_operation_claim_custom(
         mut self,
         keypair: &XfrKeyPair,
+        td_addr: Vec<u8>,
         am: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         if 0 == am {
             return Err(error_to_jsvalue("Amount can not be zero"));
         }
         self.get_builder_mut()
-            .add_operation_claim(keypair, Some(am));
+            .add_operation_claim(Some(td_addr), keypair, Some(am));
         Ok(self)
     }
 

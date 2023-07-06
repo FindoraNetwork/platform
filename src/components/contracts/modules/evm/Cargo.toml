@@ -25,6 +25,7 @@ sha3 = { version = "0.10", default-features = false }
 hex = "0.4.2"
 ethabi = "17.1.0"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+protobuf = "2.16"
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -38,14 +39,13 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
 ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
-
+module-ethereum = { path = "../ethereum" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 hex = "0.4.2"
 module-account = { path = "../account" }
-module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"
 
 [features]

@@ -1,4 +1,4 @@
-use crate::extensions::SignedExtra;
+use crate::{extensions::SignedExtra, BaseApp};
 use abci::*;
 use config::abci::global_cfg::CFG;
 use enterprise_web3::{
@@ -7,14 +7,25 @@ use enterprise_web3::{
 };
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
+use fp_traits::account::AccountAsset;
 use fp_types::{
     actions::xhub::NonConfidentialOutput, assemble::convert_unchecked_transaction,
+    crypto::Address,
 };
 use fp_utils::tx::EvmRawTxWrapper;
-use module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event};
-use primitive_types::U256;
+use ledger::data_model::ASSET_TYPE_FRA;
+use module_evm::{
+    get_claim_on_contract_address,
+    system_contracts::SYSTEM_ADDR,
+    utils::{
+        coinbase_mint_event, coinbase_mint_event_topic_str,
+        deposit_asset_event_topic_str, parse_deposit_asset_event,
+        parse_evm_staking_coinbase_mint_event,
+    },
+};
+use primitive_types::{H160, H256, U256};
 use ruc::*;
-use std::{mem::take, ops::DerefMut};
+use std::{mem::take, ops::DerefMut, str::FromStr};
 use tracing::{debug, error, info};
 impl crate::BaseApp {
     /// info implements the ABCI interface.
@@ -283,11 +294,34 @@ impl crate::BaseApp {
                     if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code
                     {
                         let deposit_asset_topic = deposit_asset_event_topic_str();
+                        let coinbase_mint_event_topic = coinbase_mint_event_topic_str();
 
                         for evt in resp.events.iter() {
                             if evt.field_type == *"ethereum_ContractLog" {
                                 let mut bridge_contract_found = false;
                                 let mut deposit_asset_foud = false;
+
+                                let mut staking_contract_found = false;
+                                let mut coinbase_mint_foud = false;
+                                let mut delegator = H256::zero();
+
+                                let claim_on_contract_address =
+                                    match H160::from_str(SYSTEM_ADDR).c(d!()).and_then(
+                                        |from| {
+                                            get_claim_on_contract_address::<BaseApp>(
+                                                &self.modules.evm_module.contracts,
+                                                &self.deliver_state,
+                                                from,
+                                            )
+                                        },
+                                    ) {
+                                        Ok(v) => v,
+                                        Err(e) => {
+                                            resp.code = 1;
+                                            resp.log = e.to_string();
+                                            return (resp, vec![]);
+                                        }
+                                    };
 
                                 for pair in evt.attributes.iter() {
                                     let key = String::from_utf8(pair.key.clone())
@@ -302,6 +336,11 @@ impl crate::BaseApp {
                                                 .to_lowercase()
                                         {
                                             bridge_contract_found = true
+                                        } else if addr
+                                            == format!("{:?}", claim_on_contract_address)
+                                                .to_lowercase()
+                                        {
+                                            staking_contract_found = true;
                                         }
                                     }
                                     if key == *"topics" {
@@ -309,29 +348,92 @@ impl crate::BaseApp {
                                             String::from_utf8(pair.value.clone())
                                                 .unwrap_or_default();
                                         if topic == deposit_asset_topic {
-                                            deposit_asset_foud = true
+                                            deposit_asset_foud = true;
+                                        } else if topic.starts_with(
+                                            &coinbase_mint_event_topic
+                                                [0..coinbase_mint_event_topic.len() - 1],
+                                        ) {
+                                            if let Some(start) = topic.find(", 0x") {
+                                                println!("start:{}", start);
+                                                coinbase_mint_foud = true;
+                                                delegator = match H256::from_str(
+                                                    &topic[start + 2..topic.len() - 1],
+                                                ) {
+                                                    Ok(v) => v,
+                                                    Err(e) => {
+                                                        resp.code = 1;
+                                                        resp.log = e.to_string();
+                                                        return (resp, vec![]);
+                                                    }
+                                                };
+                                            };
                                         }
                                     }
-                                    if key == *"data"
-                                        && bridge_contract_found
-                                        && deposit_asset_foud
-                                    {
-                                        let data = String::from_utf8(pair.value.clone())
-                                            .unwrap_or_default();
+                                    if key == *"data" {
+                                        if bridge_contract_found && deposit_asset_foud {
+                                            let data =
+                                                String::from_utf8(pair.value.clone())
+                                                    .unwrap_or_default();
 
-                                        let data_vec =
-                                            serde_json::from_str(&data).unwrap();
+                                            let data_vec =
+                                                serde_json::from_str(&data).unwrap();
 
-                                        let deposit_asset =
-                                            parse_deposit_asset_event(data_vec);
+                                            let deposit_asset =
+                                                parse_deposit_asset_event(data_vec);
 
-                                        match deposit_asset {
-                                            Ok(deposit) => {
-                                                non_confidential_outputs.push(deposit)
+                                            match deposit_asset {
+                                                Ok(deposit) => non_confidential_outputs
+                                                    .push(deposit),
+                                                Err(e) => {
+                                                    resp.code = 1;
+                                                    resp.log = e.to_string();
+                                                }
                                             }
-                                            Err(e) => {
-                                                resp.code = 1;
-                                                resp.log = e.to_string();
+                                        } else if staking_contract_found
+                                            && coinbase_mint_foud
+                                        {
+                                            let data =
+                                                String::from_utf8(pair.value.clone())
+                                                    .unwrap_or_default();
+
+                                            let data_vec: Vec<u8> =
+                                                serde_json::from_str(&data).unwrap();
+
+                                            let event = coinbase_mint_event();
+                                            let ret =
+                                                parse_evm_staking_coinbase_mint_event(
+                                                    &event,
+                                                    vec![event.signature(), delegator],
+                                                    data_vec,
+                                                );
+
+                                            match ret {
+                                                Ok((addr, pub_key, amount)) => {
+                                                    if let Some(pk) = pub_key {
+                                                        non_confidential_outputs.push(
+                                                            NonConfidentialOutput {
+                                                                asset: ASSET_TYPE_FRA,
+                                                                amount,
+                                                                target: pk,
+                                                                decimal: 0,
+                                                                max_supply: 0,
+                                                            },
+                                                        );
+                                                    } else  if let Err(e) = module_account::App::<
+                                                            BaseApp,
+                                                        >::mint(
+                                                            &self.deliver_state,
+                                                            &Address::from(addr),
+                                                            U256::from(amount),
+                                                        ) {
+                                                            resp.code = 2;
+                                                            resp.log = e.to_string();
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    resp.code = 1;
+                                                    resp.log = e.to_string();
+                                                }
                                             }
                                         }
                                     }
