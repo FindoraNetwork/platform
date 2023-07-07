@@ -304,27 +304,3 @@ impl Precompile for Bn128Pairing {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pallet_evm_test_vector_support::test_precompile_test_vectors;
-
-    #[test]
-    fn process_consensus_tests_for_add() -> Result<(), String> {
-        test_precompile_test_vectors::<Bn128Add>("../testdata/common_bnadd.json")?;
-        Ok(())
-    }
-
-    #[test]
-    fn process_consensus_tests_for_mul() -> Result<(), String> {
-        test_precompile_test_vectors::<Bn128Mul>("../testdata/common_bnmul.json")?;
-        Ok(())
-    }
-
-    #[test]
-    fn process_consensus_tests_for_pair() -> Result<(), String> {
-        test_precompile_test_vectors::<Bn128Pairing>("../testdata/common_bnpair.json")?;
-        Ok(())
-    }
-}

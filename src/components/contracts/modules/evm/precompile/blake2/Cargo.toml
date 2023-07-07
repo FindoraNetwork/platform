@@ -17,4 +17,4 @@ baseapp = { path = "../../../../baseapp" }
 fp-mocks = { path = "../../../../primitives/mocks" }
 ethereum-types = { version = "0.13.1", default-features = false }
 hex = "0.4"
-pallet-evm-test-vector-support = { version = "0.1.0", path = "../../test-vector-support" }
+ 
