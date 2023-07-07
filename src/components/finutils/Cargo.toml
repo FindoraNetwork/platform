@@ -6,7 +6,7 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-tokio = "1.10.1"
+
 hex = "0.4.2"
 base64 = "0.12"
 clap = { version = "2.33.3", features = ["yaml"] }
@@ -25,7 +25,6 @@ zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = "1.0"
 rucv4 = { package = "ruc", version = "4.0" }
 nix = "0.25"
-web3 = "0.19.0"
 ledger = { path = "../../ledger" }
 
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", tag = "v1.0.0" }
@@ -42,6 +41,8 @@ tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", feat
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
 chaindev = { git = "https://github.com/FindoraNetwork/chaindev", branch = "platform", default-features = false, features = ["tendermint_based", "vsdb_sled_engine"] }
+web3 = "0.19.0"
+tokio = "1.10.1"
 
 [dev-dependencies]
 
