@@ -54,10 +54,5 @@ pub trait EVMStaking: Sync + Send + 'static {
         new_staker_address: H160,
     ) -> Result<()>;
     /// claim call
-    fn claim(
-        &self,
-        td_addr: &[u8],
-        delegator_pk: &XfrPublicKey,
-        amount: u64,
-    ) -> Result<()>;
+    fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()>;
 }
