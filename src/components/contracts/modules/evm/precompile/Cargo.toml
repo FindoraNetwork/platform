@@ -16,6 +16,8 @@ evm-precompile-frc20 = {path = "./frc20"}
 evm-precompile-modexp = {path = "./modexp"}
 evm-precompile-sha3fips = {path = "./sha3fips"}
 evm-precompile-anemoi = {path = "./anemoi"}
+evm-precompile-blake2 = {path = "./blake2"}
+evm-precompile-bn128 = {path = "./bn128"}
 fp-core = {path = "../../../primitives/core"}
 module-evm = {path = "../../../modules/evm"}
 parking_lot = "0.12"
