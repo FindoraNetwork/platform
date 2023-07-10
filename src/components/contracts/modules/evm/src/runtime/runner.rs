@@ -1,6 +1,7 @@
 use super::stack::FindoraStackState;
 // use crate::precompile::PrecompileSet;
 use crate::{App, Config};
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     executor::stack::{StackExecutor, StackSubstateMetadata},
@@ -51,10 +52,12 @@ impl<C: Config> ActionRunner<C> {
                     gas_price >= C::FeeCalculator::min_gas_price(),
                     "GasPriceTooLow"
                 );
-                ensure!(
-                    gas_price <= C::FeeCalculator::max_gas_price(),
-                    "GasPriceTooHigh"
-                );
+                if ctx.header.height > CFG.checkpoint.max_gas_price_limit {
+                    ensure!(
+                        gas_price <= C::FeeCalculator::max_gas_price(),
+                        "GasPriceTooHigh"
+                    );
+                }
                 gas_price
             }
             None => Default::default(),

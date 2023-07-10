@@ -102,11 +102,6 @@
         "type": "address"
       },
       {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
-      },
-      {
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
@@ -127,7 +122,7 @@
     ],
     "name": "delegate",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -433,6 +428,24 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "validators",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address",
+        "name": "newDelegator",
+        "type": "address"
+      }
+    ],
+    "name": "replaceDelegator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "rewardAddr",
     "outputs": [
@@ -496,7 +509,7 @@
     ],
     "name": "stake",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -523,11 +536,6 @@
         "internalType": "address",
         "name": "delegator",
         "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
       }
     ],
     "name": "systemClaim",
@@ -556,6 +564,29 @@
     "name": "systemDelegate",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "validators",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address",
+        "name": "oldDelegator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "newDelegator",
+        "type": "address"
+      }
+    ],
+    "name": "systemReplaceDelegator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -716,11 +747,6 @@
       {
         "internalType": "address",
         "name": "validator",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "staker",
         "type": "address"
       },
       {

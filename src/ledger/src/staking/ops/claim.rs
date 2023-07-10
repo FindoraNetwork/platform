@@ -38,13 +38,12 @@ impl ClaimOps {
         let cur_height = staking.cur_height() as i64;
         if cur_height > CFG.checkpoint.evm_staking_inital_height {
             self.verify()?;
-            let am = self.body.amount.c(d!(eg!("Missing amount.")))?;
             let td_addr = self.td_addr.clone().c(d!(eg!("Missing validator addr.")))?;
             EVM_STAKING
                 .get()
                 .c(d!())?
                 .write()
-                .claim(&td_addr, &self.pubkey, am)?;
+                .claim(&td_addr, &self.pubkey)?;
             Ok(())
         } else {
             self.verify()

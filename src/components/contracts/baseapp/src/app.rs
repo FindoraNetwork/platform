@@ -305,7 +305,9 @@ impl crate::BaseApp {
                                 let mut coinbase_mint_foud = false;
                                 let mut delegator = H256::zero();
 
-                                let claim_on_contract_address =
+                                let claim_on_contract_address = if td_height
+                                    > CFG.checkpoint.evm_staking_inital_height
+                                {
                                     match H160::from_str(SYSTEM_ADDR).c(d!()).and_then(
                                         |from| {
                                             get_claim_on_contract_address::<BaseApp>(
@@ -321,8 +323,10 @@ impl crate::BaseApp {
                                             resp.log = e.to_string();
                                             return (resp, vec![]);
                                         }
-                                    };
-
+                                    }
+                                } else {
+                                    Default::default()
+                                };
                                 for pair in evt.attributes.iter() {
                                     let key = String::from_utf8(pair.key.clone())
                                         .unwrap_or_default();
@@ -349,12 +353,15 @@ impl crate::BaseApp {
                                                 .unwrap_or_default();
                                         if topic == deposit_asset_topic {
                                             deposit_asset_foud = true;
-                                        } else if topic.starts_with(
-                                            &coinbase_mint_event_topic
-                                                [0..coinbase_mint_event_topic.len() - 1],
-                                        ) {
+                                        } else if td_height
+                                            > CFG.checkpoint.evm_staking_inital_height
+                                            && topic.starts_with(
+                                                &coinbase_mint_event_topic[0
+                                                    ..coinbase_mint_event_topic.len()
+                                                        - 1],
+                                            )
+                                        {
                                             if let Some(start) = topic.find(", 0x") {
-                                                println!("start:{}", start);
                                                 coinbase_mint_foud = true;
                                                 delegator = match H256::from_str(
                                                     &topic[start + 2..topic.len() - 1],
@@ -389,7 +396,9 @@ impl crate::BaseApp {
                                                     resp.log = e.to_string();
                                                 }
                                             }
-                                        } else if staking_contract_found
+                                        } else if td_height
+                                            > CFG.checkpoint.evm_staking_inital_height
+                                            && staking_contract_found
                                             && coinbase_mint_foud
                                         {
                                             let data =
