@@ -4,8 +4,12 @@
 //!
 
 use {
-    crate::data_model::{NoReplayToken, Transaction},
-    crate::staking::Staking,
+    crate::{
+        data_model::{NoReplayToken, Transaction},
+        staking::{evm::EVM_STAKING, Staking},
+    },
+    config::abci::global_cfg::CFG,
+    fp_types::H160,
     ruc::*,
     serde::{Deserialize, Serialize},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
@@ -23,18 +27,15 @@ impl ReplaceStakerOps {
     ///create a new replace operation.
     pub fn new(
         keypair: &XfrKeyPair,
-        new_public_key: XfrPublicKey,
-        new_tendermint_params: Option<(Vec<u8>, Vec<u8>)>,
+        new_staker_address: H160,
+        td_addr: Vec<u8>,
         nonce: NoReplayToken,
     ) -> Self {
-        let new_tendermint_params = new_tendermint_params.map(|p| TendermintParams {
-            address: p.0,
-            pubkey: p.1,
-        });
-
         let body = Data {
-            new_public_key,
-            new_tendermint_params,
+            new_public_key: XfrPublicKey::default(),
+            new_tendermint_params: None,
+            new_staker_address: Some(new_staker_address),
+            td_addr: Some(td_addr),
             nonce,
         };
 
@@ -70,14 +71,34 @@ impl ReplaceStakerOps {
         _tx: &Transaction,
     ) -> Result<()> {
         self.verify()?;
-        dbg!(staking_simulator.check_and_replace_staker(
-            &self.pubkey,
-            self.body.new_public_key,
-            self.body
-                .new_tendermint_params
+        let cur_height = staking_simulator.cur_height() as i64;
+        if cur_height > CFG.checkpoint.evm_staking_inital_height {
+            let validator = self
+                .body
+                .td_addr
                 .clone()
-                .map(|p| (p.address, p.pubkey)),
-        ))
+                .ok_or(eg!("replace staker validator not found"))?;
+
+            let new_staker_address = self
+                .body
+                .new_staker_address
+                .ok_or(eg!("replace staker new_staker_address not found"))?;
+
+            EVM_STAKING.get().c(d!())?.write().replace_delegator(
+                &validator,
+                &self.pubkey,
+                new_staker_address,
+            )
+        } else {
+            dbg!(staking_simulator.check_and_replace_staker(
+                &self.pubkey,
+                self.body.new_public_key,
+                self.body
+                    .new_tendermint_params
+                    .clone()
+                    .map(|p| (p.address, p.pubkey)),
+            ))
+        }
     }
 
     #[inline(always)]
@@ -104,6 +125,10 @@ impl ReplaceStakerOps {
 pub struct Data {
     pub new_public_key: XfrPublicKey,
     pub new_tendermint_params: Option<TendermintParams>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_staker_address: Option<H160>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub td_addr: Option<Vec<u8>>,
     nonce: NoReplayToken,
 }
 

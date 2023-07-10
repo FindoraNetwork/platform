@@ -308,15 +308,34 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
 
-    fn claim(
+    fn replace_delegator(
         &self,
-        td_addr: &[u8],
-        delegator_pk: &XfrPublicKey,
-        amount: u64,
+        validator: &[u8],
+        staker: &XfrPublicKey,
+        new_staker_address: H160,
     ) -> Result<()> {
+        let validator = H160::from_slice(validator);
+        let staker_address = mapping_address(staker);
+
+        if let Err(e) = self.modules.evm_module.replace_delegator(
+            &self.deliver_state,
+            validator,
+            staker_address,
+            new_staker_address,
+        ) {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "replace_delegator error:{:?}", e);
+            return Err(e);
+        }
+
+        self.deliver_state.state.write().commit_session();
+        self.deliver_state.db.write().commit_session();
+        Ok(())
+    }
+    fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()> {
         let validator = H160::from_slice(td_addr);
         let delegator = mapping_address(delegator_pk);
-        let amount = U256::from(amount);
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
         if let Err(e) = self.modules.evm_module.claim(
             &self.deliver_state,
@@ -324,7 +343,6 @@ impl EVMStaking for BaseApp {
             validator,
             delegator,
             delegator_pk,
-            amount,
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
@@ -346,7 +364,7 @@ fn mapping_rate(rate: [u64; 2]) -> U256 {
     U256::from(rate[0].saturating_mul(deciamls) / rate[1])
 }
 
-fn mapping_address(pk: &XfrPublicKey) -> H160 {
+pub fn mapping_address(pk: &XfrPublicKey) -> H160 {
     let result = Keccak256::digest(pk.as_bytes());
     H160::from_slice(&result.as_slice()[..20])
 }
