@@ -325,7 +325,7 @@ impl EVMStaking for BaseApp {
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
-            tracing::error!(target: "evm staking", "claim error:{:?}", e);
+            tracing::error!(target: "evm staking", "replace_delegator error:{:?}", e);
             return Err(e);
         }
 
