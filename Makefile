@@ -370,7 +370,7 @@ build_musl_fn_macos_base:
 build_musl_fn_macos:
 	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
 	docker run -d --rm --name fn_macos musl_fn_macos
-	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn
+	docker cp fn_macos:/platform/target/x86_64-apple-darwin/release/fn fn
 	tar -czvf fn_macos.tar.gz fn
 	rm fn
 
