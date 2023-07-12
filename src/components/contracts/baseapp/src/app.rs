@@ -320,7 +320,7 @@ impl crate::BaseApp {
                                     ) {
                                         Ok(v) => v,
                                         Err(e) => {
-                                            resp.code = 1;
+                                            resp.code = 101;
                                             resp.log = e.to_string();
                                             return (resp, vec![]);
                                         }
@@ -363,10 +363,10 @@ impl crate::BaseApp {
                                             )
                                         {
                                             let hashes = topic
-                                                .strip_prefix("[")
-                                                .and_then(|v| v.strip_suffix("]"))
+                                                .strip_prefix('[')
+                                                .and_then(|v| v.strip_suffix(']'))
                                                 .unwrap_or(&topic)
-                                                .split(",")
+                                                .split(", ")
                                                 .collect::<Vec<_>>();
 
                                             let mut validator_flag = false;
@@ -374,13 +374,13 @@ impl crate::BaseApp {
                                                 validator_flag = true;
 
                                                 let s = v
-                                                    .strip_prefix(" ")
-                                                    .and_then(|v| v.strip_suffix(" "))
+                                                    .strip_prefix(' ')
+                                                    .and_then(|v| v.strip_suffix(' '))
                                                     .unwrap_or(v);
                                                 validator = match H256::from_str(s) {
                                                     Ok(v) => v,
                                                     Err(e) => {
-                                                        resp.code = 1;
+                                                        resp.code = 102;
                                                         resp.log = e.to_string();
                                                         return (resp, vec![]);
                                                     }
@@ -391,13 +391,13 @@ impl crate::BaseApp {
                                                 delegator_flag = true;
 
                                                 let s = v
-                                                    .strip_prefix(" ")
-                                                    .and_then(|v| v.strip_suffix(" "))
+                                                    .strip_prefix(' ')
+                                                    .and_then(|v| v.strip_suffix(' '))
                                                     .unwrap_or(v);
                                                 delegator = match H256::from_str(s) {
                                                     Ok(v) => v,
                                                     Err(e) => {
-                                                        resp.code = 1;
+                                                        resp.code = 103;
                                                         resp.log = e.to_string();
                                                         return (resp, vec![]);
                                                     }
@@ -423,7 +423,7 @@ impl crate::BaseApp {
                                                 Ok(deposit) => non_confidential_outputs
                                                     .push(deposit),
                                                 Err(e) => {
-                                                    resp.code = 1;
+                                                    resp.code = 104;
                                                     resp.log = e.to_string();
                                                 }
                                             }
@@ -470,12 +470,12 @@ impl crate::BaseApp {
                                                             &Address::from(addr),
                                                             U256::from(amount),
                                                         ) {
-                                                            resp.code = 2;
+                                                            resp.code = 105;
                                                             resp.log = e.to_string();
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    resp.code = 1;
+                                                    resp.code = 106;
                                                     resp.log = e.to_string();
                                                 }
                                             }
@@ -490,13 +490,13 @@ impl crate::BaseApp {
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
-                    resp.code = 1;
+                    resp.code = 107;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
                     (resp, non_confidential_outputs)
                 }
             }
         } else {
-            resp.code = 1;
+            resp.code = 108;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
             (resp, non_confidential_outputs)
         }
