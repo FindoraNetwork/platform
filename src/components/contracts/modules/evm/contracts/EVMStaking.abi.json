@@ -5,14 +5,14 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "delegator",
+        "name": "validator",
         "type": "address"
       },
       {
-        "indexed": false,
-        "internalType": "enum IBaseEnum.PublicKeyType",
-        "name": "ty",
-        "type": "uint8"
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
       },
       {
         "indexed": false,
@@ -82,29 +82,11 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "SYSTEM_ADDR",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
         "name": "validator",
         "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
       }
     ],
     "name": "claim",
@@ -238,6 +220,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "importCoinBase",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -488,6 +483,19 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "setSystemAddr",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "validator",
         "type": "address"
       },
@@ -515,6 +523,19 @@
   {
     "inputs": [],
     "name": "stakingAddr",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "systemAddr",
     "outputs": [
       {
         "internalType": "address",
@@ -717,6 +738,11 @@
         "internalType": "enum IBaseEnum.ByztineBehavior[]",
         "name": "behavior",
         "type": "uint8[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "preIssueAmount",
+        "type": "uint256"
       }
     ],
     "name": "trigger",
