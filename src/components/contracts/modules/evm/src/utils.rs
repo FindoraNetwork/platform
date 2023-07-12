@@ -105,6 +105,7 @@ fn build_address(address: &[u8]) -> Result<Token> {
 pub fn build_evm_staking_input(
     sc: &SystemContracts,
     req: &abci::RequestBeginBlock,
+    pre_issue_amount: u64,
 ) -> Result<Vec<u8>> {
     let header = req.get_header();
     let commit_info = req.get_last_commit_info();
@@ -153,6 +154,7 @@ pub fn build_evm_staking_input(
             Token::Array(unsigned),
             Token::Array(byzantines),
             Token::Array(behaviors),
+            Token::Uint(U256::from(pre_issue_amount)),
         ])
         .c(d!())?;
 

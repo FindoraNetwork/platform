@@ -468,13 +468,22 @@ impl crate::BaseApp {
     }
 
     #[cfg(any(feature = "abci_mock", test))]
-    pub fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
+    pub fn end_block(
+        &mut self,
+        _req: &RequestEndBlock,
+        _ff_addr_balance: u64,
+    ) -> ResponseEndBlock {
         Default::default()
     }
 
     #[cfg(all(not(feature = "abci_mock"), not(test)))]
-    pub fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
-        self.modules.end_block(&mut self.deliver_state, req)
+    pub fn end_block(
+        &mut self,
+        req: &RequestEndBlock,
+        ff_addr_balance: u64,
+    ) -> ResponseEndBlock {
+        self.modules
+            .end_block(&mut self.deliver_state, req, ff_addr_balance)
     }
 
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {

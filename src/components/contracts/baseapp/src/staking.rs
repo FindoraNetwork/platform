@@ -22,6 +22,7 @@ impl EVMStaking for BaseApp {
         &self,
         validators: &[Validator],
         delegations: &BTreeMap<XfrPublicKey, Delegation>,
+        coinbase_balance: u64,
     ) -> Result<()> {
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
@@ -156,6 +157,16 @@ impl EVMStaking for BaseApp {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();
             tracing::error!(target: "evm staking", "import_reward error:{:?}", e);
+            return Err(e);
+        }
+        if let Err(e) = self.modules.evm_module.import_coinbase_balance(
+            &self.deliver_state,
+            from,
+            coinbase_balance,
+        ) {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            tracing::error!(target: "evm staking", "import_coinbase_balance error:{:?}", e);
             return Err(e);
         }
         self.deliver_state.state.write().commit_session();
