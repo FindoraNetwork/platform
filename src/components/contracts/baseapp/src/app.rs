@@ -303,6 +303,7 @@ impl crate::BaseApp {
 
                                 let mut staking_contract_found = false;
                                 let mut coinbase_mint_foud = false;
+                                let mut validator = H256::zero();
                                 let mut delegator = H256::zero();
 
                                 let claim_on_contract_address = if td_height
@@ -361,11 +362,22 @@ impl crate::BaseApp {
                                                         - 1],
                                             )
                                         {
-                                            if let Some(start) = topic.find(", 0x") {
-                                                coinbase_mint_foud = true;
-                                                delegator = match H256::from_str(
-                                                    &topic[start + 2..topic.len() - 1],
-                                                ) {
+                                            let hashes = topic
+                                                .strip_prefix("[")
+                                                .and_then(|v| v.strip_suffix("]"))
+                                                .unwrap_or(&topic)
+                                                .split(",")
+                                                .collect::<Vec<_>>();
+
+                                            let mut validator_flag = false;
+                                            if let Some(v) = hashes.get(1) {
+                                                validator_flag = true;
+
+                                                let s = v
+                                                    .strip_prefix(" ")
+                                                    .and_then(|v| v.strip_suffix(" "))
+                                                    .unwrap_or(v);
+                                                validator = match H256::from_str(s) {
                                                     Ok(v) => v,
                                                     Err(e) => {
                                                         resp.code = 1;
@@ -374,6 +386,25 @@ impl crate::BaseApp {
                                                     }
                                                 };
                                             };
+                                            let mut delegator_flag = false;
+                                            if let Some(v) = hashes.get(2) {
+                                                delegator_flag = true;
+
+                                                let s = v
+                                                    .strip_prefix(" ")
+                                                    .and_then(|v| v.strip_suffix(" "))
+                                                    .unwrap_or(v);
+                                                delegator = match H256::from_str(s) {
+                                                    Ok(v) => v,
+                                                    Err(e) => {
+                                                        resp.code = 1;
+                                                        resp.log = e.to_string();
+                                                        return (resp, vec![]);
+                                                    }
+                                                };
+                                            };
+                                            coinbase_mint_foud =
+                                                validator_flag && delegator_flag;
                                         }
                                     }
                                     if key == *"data" {
@@ -412,7 +443,11 @@ impl crate::BaseApp {
                                             let ret =
                                                 parse_evm_staking_coinbase_mint_event(
                                                     &event,
-                                                    vec![event.signature(), delegator],
+                                                    vec![
+                                                        event.signature(),
+                                                        validator,
+                                                        delegator,
+                                                    ],
                                                     data_vec,
                                                 );
 
