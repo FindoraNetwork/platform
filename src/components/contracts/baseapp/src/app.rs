@@ -320,7 +320,7 @@ impl crate::BaseApp {
                                     ) {
                                         Ok(v) => v,
                                         Err(e) => {
-                                            resp.code = 101;
+                                            resp.code = 1;
                                             resp.log = e.to_string();
                                             return (resp, vec![]);
                                         }
@@ -380,7 +380,7 @@ impl crate::BaseApp {
                                                 validator = match H256::from_str(s) {
                                                     Ok(v) => v,
                                                     Err(e) => {
-                                                        resp.code = 102;
+                                                        resp.code = 1;
                                                         resp.log = e.to_string();
                                                         return (resp, vec![]);
                                                     }
@@ -397,7 +397,7 @@ impl crate::BaseApp {
                                                 delegator = match H256::from_str(s) {
                                                     Ok(v) => v,
                                                     Err(e) => {
-                                                        resp.code = 103;
+                                                        resp.code = 1;
                                                         resp.log = e.to_string();
                                                         return (resp, vec![]);
                                                     }
@@ -423,7 +423,7 @@ impl crate::BaseApp {
                                                 Ok(deposit) => non_confidential_outputs
                                                     .push(deposit),
                                                 Err(e) => {
-                                                    resp.code = 104;
+                                                    resp.code = 1;
                                                     resp.log = e.to_string();
                                                 }
                                             }
@@ -470,12 +470,12 @@ impl crate::BaseApp {
                                                             &Address::from(addr),
                                                             U256::from(amount),
                                                         ) {
-                                                            resp.code = 105;
+                                                            resp.code = 2;
                                                             resp.log = e.to_string();
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    resp.code = 106;
+                                                    resp.code = 1;
                                                     resp.log = e.to_string();
                                                 }
                                             }
@@ -490,13 +490,13 @@ impl crate::BaseApp {
                 }
                 Err(e) => {
                     error!(target: "baseapp", "Ethereum transaction deliver error: {e}");
-                    resp.code = 107;
+                    resp.code = 1;
                     resp.log = format!("Ethereum transaction deliver error: {e}");
                     (resp, non_confidential_outputs)
                 }
             }
         } else {
-            resp.code = 108;
+            resp.code = 1;
             resp.log = String::from("Failed to convert transaction when deliver tx!");
             (resp, non_confidential_outputs)
         }
