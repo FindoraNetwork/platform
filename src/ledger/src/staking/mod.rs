@@ -99,8 +99,8 @@ lazy_static! {
     pub static ref CHAN_D_RWD_HIST: DRHCP = chan!();
 }
 
-// Reserved accounts of Findora Foundation.
-const FF_ADDR_LIST: [&str; 8] = [
+/// Reserved accounts of Findora Foundation.
+pub const FF_ADDR_LIST: [&str; 8] = [
     "fra1s9c6p0656as48w8su2gxntc3zfuud7m66847j6yh7n8wezazws3s68p0m9",
     "fra1zjfttcnvyv9ypy2d4rcg7t4tw8n88fsdzpggr0y2h827kx5qxmjshwrlx7",
     "fra18rfyc9vfyacssmr5x7ku7udyd5j5vmfkfejkycr06e4as8x7n3dqwlrjrc",
@@ -110,8 +110,8 @@ const FF_ADDR_LIST: [&str; 8] = [
     "fra1mjdr0mgn2e0670hxptpzu9tmf0ary8yj8nv90znjspwdupv9aacqwrg3dx",
     "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
 ];
-
-const FF_ADDR_EXTRA_120_0000: &str =
+///
+pub const FF_ADDR_EXTRA_120_0000: &str =
     "fra1dkn9w5c674grdl6gmvj0s8zs0z2nf39zrmp3dpq5rqnnf9axwjrqexqnd6";
 
 /// SEE: <https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b>

@@ -41,6 +41,7 @@ pub trait AppModule: AppModuleBasic {
         &mut self,
         _ctx: &mut Context,
         _req: &RequestEndBlock,
+        _ff_addr_balance: u64,
     ) -> (ResponseEndBlock, U256) {
         Default::default()
     }

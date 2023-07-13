@@ -127,7 +127,7 @@ fn test_abci_deliver_tx() {
 fn test_abci_end_block() {
     let mut req = RequestEndBlock::default();
     req.height = 2;
-    let _ = BASE_APP.lock().unwrap().end_block(&req);
+    let _ = BASE_APP.lock().unwrap().end_block(&req, 0);
 }
 
 fn test_abci_commit() {

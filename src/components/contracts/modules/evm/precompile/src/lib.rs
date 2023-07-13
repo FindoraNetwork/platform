@@ -4,12 +4,11 @@ use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
 use evm_precompile_anemoi::Anemoi;
-use evm_precompile_basic::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
+use evm_precompile_basic::{ECRecover, Identity, Ripemd160, Sha256};
 use evm_precompile_blake2::Blake2F;
 use evm_precompile_bn128::{Bn128Add, Bn128Mul, Bn128Pairing};
 use evm_precompile_frc20::FRC20;
 use evm_precompile_modexp::Modexp;
-use evm_precompile_sha3fips::{Sha3FIPS256, Sha3FIPS512};
 use fp_core::context::Context as Context2;
 use module_evm::precompile::PrecompileId;
 use module_evm::Config;
