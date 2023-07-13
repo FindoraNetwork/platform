@@ -134,6 +134,7 @@ impl<C: Config> AppModule for App<C> {
         &mut self,
         ctx: &mut Context,
         req: &RequestEndBlock,
+        _ff_addr_balance: u64,
     ) -> (ResponseEndBlock, U256) {
         let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
         Default::default()

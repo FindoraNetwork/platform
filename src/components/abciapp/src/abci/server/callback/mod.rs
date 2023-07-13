@@ -2,6 +2,13 @@
 //! # Impl function of tendermint ABCI
 //!
 
+use globutils::wallet;
+use ledger::{
+    data_model::ASSET_TYPE_FRA,
+    staking::{FF_ADDR_EXTRA_120_0000, FF_ADDR_LIST},
+};
+use zei::xfr::asset_record::AssetRecordType;
+
 mod utils;
 
 use {
@@ -472,23 +479,27 @@ pub fn end_block(
 
     if header.height == CFG.checkpoint.evm_staking_inital_height {
         let ledger_state = la.get_committed_state().read();
-        let validators = ledger_state
-            .get_staking()
+        let staking = ledger_state.get_staking();
+        let validators = staking
             .validator_get_current()
             .map(|v| v.get_validators().values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
 
-        let delegations = ledger_state
-            .get_staking()
+        let delegations = staking
             .get_global_delegation_records()
             .values()
             .map(|v| (v.id, v.clone()))
             .collect();
+        let coinbase_balance = staking.coinbase_balance();
 
         if let Err(e) = EVM_STAKING.get().c(d!()).and_then(|staking| {
-            staking.write().import_validators(&validators, &delegations)
+            staking.write().import_validators(
+                &validators,
+                &delegations,
+                coinbase_balance,
+            )
         }) {
-            println!("import_validators error {:?}", e);
+            tracing::error!(target: "evm staking", "import_validators error:{:?}", e);
             panic!()
         };
     }
@@ -527,7 +538,26 @@ pub fn end_block(
     let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        s.account_base_app.write().end_block(req)
+        let mut sum = 0;
+        let ledger = la.get_committed_state().read();
+        let mut addrs = FF_ADDR_LIST.to_vec();
+        addrs.push(FF_ADDR_EXTRA_120_0000);
+        for fra_addr in addrs.iter() {
+            for (_, (utxo, _)) in pnk!(wallet::public_key_from_bech32(fra_addr)
+                .and_then(|pub_key| ledger.get_owned_utxos(&pub_key)))
+            {
+                if AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+                    == utxo.0.record.get_record_type()
+                    && Some(ASSET_TYPE_FRA) == utxo.0.record.asset_type.get_asset_type()
+                {
+                    if let Some(v) = utxo.0.record.amount.get_amount() {
+                        sum += v;
+                    };
+                }
+            }
+        }
+
+        s.account_base_app.write().end_block(req, sum)
     } else {
         Default::default()
     };

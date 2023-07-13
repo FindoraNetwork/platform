@@ -105,6 +105,7 @@ fn build_address(address: &[u8]) -> Result<Token> {
 pub fn build_evm_staking_input(
     sc: &SystemContracts,
     req: &abci::RequestBeginBlock,
+    pre_issue_amount: u64,
 ) -> Result<Vec<u8>> {
     let header = req.get_header();
     let commit_info = req.get_last_commit_info();
@@ -153,6 +154,7 @@ pub fn build_evm_staking_input(
             Token::Array(unsigned),
             Token::Array(byzantines),
             Token::Array(behaviors),
+            Token::Uint(U256::from(pre_issue_amount)),
         ])
         .c(d!())?;
 
@@ -245,14 +247,14 @@ pub fn coinbase_mint_event() -> Event {
         name: "CoinbaseMint".to_owned(),
         inputs: vec![
             EventParam {
-                name: "addr".to_owned(),
+                name: "validator".to_owned(),
                 kind: ParamType::Address,
                 indexed: true,
             },
             EventParam {
-                name: "ty".to_owned(),
-                kind: ParamType::Uint(8),
-                indexed: false,
+                name: "delegator".to_owned(),
+                kind: ParamType::Address,
+                indexed: true,
             },
             EventParam {
                 name: "public_key".to_owned(),
@@ -282,19 +284,17 @@ pub fn parse_evm_staking_coinbase_mint_event(
 ) -> Result<(H160, Option<XfrPublicKey>, u64)> {
     let log = RawLog { topics, data };
     let result = event.parse_log(log).map_err(|e| eg!(e))?;
-    let addr = result.params[0].value.clone().into_address().c(d!())?;
-
-    //let pubkey_type = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
+    let delegator = result.params[1].value.clone().into_address().c(d!())?;
 
     let public_key_bytes = result.params[2].value.clone().into_bytes().c(d!())?;
     let amount = result.params[3].value.clone().into_uint().c(d!())?.as_u64();
 
     if public_key_bytes.is_empty() {
-        return Ok((addr, None, amount));
+        return Ok((delegator, None, amount));
     }
     let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
 
-    Ok((addr, Some(public_key), amount))
+    Ok((delegator, Some(public_key), amount))
 }
 
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {

@@ -39,6 +39,7 @@ use fp_types::{
     crypto::{Address, HA160},
 };
 use ledger::staking::evm::EVM_STAKING_MINTS;
+use ledger::staking::FRA_PRE_ISSUE_AMOUNT;
 use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use precompile::PrecompileSet;
 use protobuf::RepeatedField;
@@ -304,8 +305,11 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         req: &abci::RequestBeginBlock,
+        ff_addr_balance: u64,
     ) -> Result<U256> {
-        let input = utils::build_evm_staking_input(&self.contracts, req)?;
+        let pre_issue_amount = FRA_PRE_ISSUE_AMOUNT - ff_addr_balance;
+        let input =
+            utils::build_evm_staking_input(&self.contracts, req, pre_issue_amount)?;
 
         let gas_limit = u64::MAX;
         let value = U256::zero();
@@ -663,7 +667,48 @@ impl<C: Config> App<C> {
         }
         Ok(())
     }
+    pub fn import_coinbase_balance(
+        &self,
+        ctx: &Context,
+        from: H160,
+        coinbase_balance: u64,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("importCoinBase").c(d!())?;
 
+        let input = function
+            .encode_input(&[Token::Uint(U256::from(coinbase_balance))])
+            .c(d!())?;
+        let gas_limit = u64::MAX;
+        let value = U256::zero();
+        tracing::info!(
+            target: "evm staking",
+            "importCoinBase from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            from,
+            gas_limit,
+            value,
+            self.contracts.staking_address,
+            hex::encode(&input)
+        );
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+        Self::store_transaction(
+            ctx,
+            U256::from(gas_limit),
+            from,
+            self.contracts.staking_address,
+            value,
+            input,
+            &logs,
+            used_gas,
+        )?;
+        Ok(())
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn stake(
         &self,
@@ -1153,18 +1198,22 @@ impl<C: Config> AppModule for App<C> {
         &mut self,
         ctx: &mut Context,
         _req: &abci::RequestEndBlock,
+        ff_addr_balance: u64,
     ) -> (abci::ResponseEndBlock, U256) {
         let mut resp = abci::ResponseEndBlock::default();
         let mut burn_amount = Default::default();
         if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
-            burn_amount =
-                match self.execute_staking_contract(ctx, &self.abci_begin_block) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        tracing::error!("Error on evm staking trigger: {}", e);
-                        Default::default()
-                    }
-                };
+            burn_amount = match self.execute_staking_contract(
+                ctx,
+                &self.abci_begin_block,
+                ff_addr_balance,
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("Error on evm staking trigger: {}", e);
+                    Default::default()
+                }
+            };
             match self.get_validator_list(ctx) {
                 Ok(r) => {
                     if !r.is_empty() {

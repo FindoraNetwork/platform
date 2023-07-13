@@ -22,6 +22,7 @@ pub trait EVMStaking: Sync + Send + 'static {
         &self,
         validators: &[Validator],
         delegations: &BTreeMap<XfrPublicKey, Delegation>,
+        coinbase_balance: u64,
     ) -> Result<()>;
     /// stake call
     fn stake(
