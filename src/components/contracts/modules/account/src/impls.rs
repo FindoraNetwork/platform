@@ -2,7 +2,7 @@ use crate::{storage::*, App, Config};
 use config::abci::global_cfg::CFG;
 use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
 use fp_core::{account::SmartAccount, context::Context};
-use fp_storage::{Borrow, BorrowMut};
+use fp_storage::BorrowMut;
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
 use primitive_types::{H160, U256};
@@ -10,7 +10,7 @@ use ruc::*;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
     fn total_issuance(ctx: &Context) -> U256 {
-        TotalIssuance::get(ctx.state.read().borrow()).unwrap_or_default()
+        TotalIssuance::get(&ctx.state.read()).unwrap_or_default()
     }
 
     fn account_of(
@@ -20,9 +20,9 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     ) -> Option<SmartAccount> {
         let version = height.unwrap_or(0);
         if version == 0 {
-            AccountStore::get(ctx.state.read().borrow(), who)
+            AccountStore::get(&ctx.state.read(), who)
         } else {
-            AccountStore::get_ver(ctx.state.read().borrow(), who, version)
+            AccountStore::get_ver(&ctx.state.read(), who, version)
         }
     }
 
@@ -207,7 +207,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn allowance(ctx: &Context, owner: &Address, spender: &Address) -> U256 {
-        Allowances::get(ctx.state.read().borrow(), owner, spender).unwrap_or_default()
+        Allowances::get(&ctx.state.read(), owner, spender).unwrap_or_default()
     }
 
     fn approve(

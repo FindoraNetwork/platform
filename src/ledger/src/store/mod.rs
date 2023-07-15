@@ -1369,6 +1369,7 @@ impl LedgerStatus {
 
         // Apply memo updates
         for (code, memo) in block.memo_updates.drain() {
+            #[allow(unused_mut)]
             let mut asset = self.asset_types.get_mut(&code).unwrap();
             asset.properties.memo = memo;
         }

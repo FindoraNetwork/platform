@@ -359,6 +359,11 @@ impl EthApi for EthApiImpl {
                 .create_context_at(block.header.number.as_u64())
                 .ok_or_else(|| internal_err("failed to create context"))?;
 
+            let curr_height = account_base_app.read().current_block_number().unwrap();
+            if curr_height > U256::from(CFG.checkpoint.storage_query_optimize) {
+                ctx.state.write().create_query_cache();
+            }
+
             ctx.header
                 .mut_time()
                 .set_seconds(block.header.timestamp as i64);

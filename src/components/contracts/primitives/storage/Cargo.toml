@@ -15,11 +15,11 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.9.5"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 
 # primitives
 fp-core = { path = "../core" }
 config = { path = "../../../config"}
 
 [dev-dependencies]
-temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.5" }
+temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }

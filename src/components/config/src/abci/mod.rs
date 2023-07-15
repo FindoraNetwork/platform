@@ -141,6 +141,8 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_validator_whitelist_v3")]
     pub validator_whitelist_v3: Vec<String>,
+
+    pub storage_query_optimize: u64,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -246,6 +248,7 @@ lazy_static! {
         validator_whitelist_v2: vec![],
         validator_whitelist_v3_height: 0,
         validator_whitelist_v3: vec![],
+        storage_query_optimize: 0,
     };
 }
 
@@ -577,6 +580,7 @@ lazy_static! {
             "37D3228A650F591522698BECDF42DCE5D1113D88".to_string(),
             "577F8548D8F834D39D26350D2A3A928F478AF5FD".to_string(),
         ],
+        storage_query_optimize: 100000000,
     };
 }
 

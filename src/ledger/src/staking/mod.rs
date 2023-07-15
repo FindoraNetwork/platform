@@ -366,7 +366,7 @@ impl Staking {
         self.validator_info
             .range(0..=h)
             .rev()
-            .next()
+            .next_back()
             .map(|(_, v)| v)
     }
 
@@ -391,7 +391,7 @@ impl Staking {
         self.validator_info
             .range_mut(0..=h)
             .rev()
-            .next()
+            .next_back()
             .map(|(_, v)| v)
     }
 
