@@ -2,7 +2,7 @@ use crate::storage::*;
 use crate::App;
 use fin_db::{FinDB, RocksDB};
 use fp_core::{account::SmartAccount, context::Context};
-use fp_storage::{Borrow, BorrowMut};
+use fp_storage::BorrowMut;
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
 use fp_types::U256;
@@ -63,12 +63,12 @@ fn test_accounts_set_get() {
     );
     assert_eq!(
         account,
-        AccountStore::get(ctx.state.read().borrow(), &address).unwrap()
+        AccountStore::get(&ctx.state.read(), &address).unwrap()
     );
     assert!(ctx.state.write().commit(1).is_ok());
     assert_eq!(
         account,
-        AccountStore::get(ctx.state.read().borrow(), &address).unwrap()
+        AccountStore::get(&ctx.state.read(), &address).unwrap()
     );
 }
 

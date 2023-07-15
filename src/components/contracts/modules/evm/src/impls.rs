@@ -3,7 +3,7 @@ use crate::{App, Config};
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
 use fp_evm::Account;
-use fp_storage::{Borrow, BorrowMut};
+use fp_storage::BorrowMut;
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, OnChargeEVMTransaction},
@@ -16,8 +16,7 @@ impl<C: Config> App<C> {
     /// Check whether an account is empty.
     pub fn is_account_empty(ctx: &Context, address: &HA160) -> bool {
         let account = Self::account_basic(ctx, address);
-        let code_len =
-            AccountCodes::decode_len(ctx.state.read().borrow(), address).unwrap_or(0);
+        let code_len = AccountCodes::decode_len(&ctx.state.read(), address).unwrap_or(0);
 
         account.nonce == U256::zero() && account.balance == U256::zero() && code_len == 0
     }
@@ -48,9 +47,9 @@ impl<C: Config> App<C> {
 
         let version = height.unwrap_or(0);
         if version == 0 {
-            AccountCodes::get_bytes(ctx.state.read().borrow(), address)
+            AccountCodes::get_bytes(&ctx.state.read(), address)
         } else {
-            AccountCodes::get_ver_bytes(ctx.state.read().borrow(), address, version)
+            AccountCodes::get_ver_bytes(&ctx.state.read(), address, version)
         }
     }
 
@@ -63,9 +62,9 @@ impl<C: Config> App<C> {
     ) -> Option<H256> {
         let version = height.unwrap_or(0);
         if version == 0 {
-            AccountStorages::get(ctx.state.read().borrow(), address, index)
+            AccountStorages::get(&ctx.state.read(), address, index)
         } else {
-            AccountStorages::get_ver(ctx.state.read().borrow(), address, index, version)
+            AccountStorages::get_ver(&ctx.state.read(), address, index, version)
         }
     }
 

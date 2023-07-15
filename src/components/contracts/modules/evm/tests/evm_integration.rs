@@ -7,7 +7,6 @@ use baseapp::{BaseApp, ChainId};
 use ethereum_types::{H160, H256, U256};
 use fp_evm::{CallOrCreateInfo, Runner};
 use fp_mocks::*;
-use fp_storage::Borrow;
 use fp_types::{
     actions::ethereum::Action as EthereumAction, actions::evm::Call, actions::Action,
     assemble::UncheckedTransaction,
@@ -157,7 +156,7 @@ fn test_deploy_commit(contract_address: H160) {
         .create_query_context(Some(0), false)
         .unwrap();
     assert!(AccountCodes::contains_key(
-        ctx.state.read().borrow(),
+        &ctx.state.read(),
         &contract_address.into()
     ));
 }

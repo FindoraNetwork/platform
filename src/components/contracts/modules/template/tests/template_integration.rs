@@ -119,7 +119,7 @@ fn test_abci_deliver_tx() {
     assert_eq!(u64::from_be_bytes(resp.data.try_into().unwrap()), 10);
 
     assert_eq!(
-        ValueStore::get(BASE_APP.lock().unwrap().deliver_state.state.read().borrow()),
+        ValueStore::get(&BASE_APP.lock().unwrap().deliver_state.state.read()),
         Some(10)
     );
 }

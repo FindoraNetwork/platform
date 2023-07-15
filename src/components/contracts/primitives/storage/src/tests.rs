@@ -44,11 +44,11 @@ fn storage_value_works() {
 
     assert!(Number::put(state.write().borrow_mut(), &10).is_ok());
 
-    assert_eq!(Number::get(state.read().borrow()), Some(10));
-    assert!(Number::exists(state.read().borrow()));
+    assert_eq!(Number::get(&state.read()), Some(10));
+    assert!(Number::exists(&state.read()));
     Number::delete(state.write().borrow_mut());
-    assert_eq!(Number::get(state.read().borrow()), None);
-    assert!(!Number::exists(state.read().borrow()));
+    assert_eq!(Number::get(&state.read()), None);
+    assert!(!Number::exists(&state.read()));
 }
 
 #[test]
@@ -65,33 +65,21 @@ fn storage_map_test() {
     assert!(Account::insert(state.write().borrow_mut(), &"b".to_string(), &20).is_ok());
     assert!(Account::insert(state.write().borrow_mut(), &"c".to_string(), &30).is_ok());
 
+    assert_eq!(Account::get(&state.read(), &"abc".to_string()), Some(10));
     assert_eq!(
-        Account::get(state.read().borrow(), &"abc".to_string()),
-        Some(10)
-    );
-    assert_eq!(
-        Account::get_unique_prefix(state.read().borrow(), &"ab".to_string()),
+        Account::get_unique_prefix(&state.read(), &"ab".to_string()),
         Some(("abc".to_string(), 10))
     );
-    assert!(Account::contains_key(
-        state.read().borrow(),
-        &"abc".to_string()
-    ));
+    assert!(Account::contains_key(&state.read(), &"abc".to_string()));
     Account::remove(state.write().borrow_mut(), &"abc".to_string());
-    assert_eq!(
-        Account::get(state.read().borrow(), &"abc".to_string()),
-        None
-    );
-    assert!(!Account::contains_key(
-        state.read().borrow(),
-        &"abc".to_string()
-    ),);
+    assert_eq!(Account::get(&state.read(), &"abc".to_string()), None);
+    assert!(!Account::contains_key(&state.read(), &"abc".to_string()),);
 
-    let kvs = Account::iterate(state.read().borrow());
+    let kvs = Account::iterate(&state.read());
     assert_eq!(kvs, vec![("b".to_string(), 20), ("c".to_string(), 30)]);
 
     state.write().commit(1).unwrap();
-    let kvs = Account::iterate(state.read().borrow());
+    let kvs = Account::iterate(&state.read());
     assert_eq!(kvs, vec![("b".to_string(), 20), ("c".to_string(), 30)]);
 }
 
@@ -108,23 +96,23 @@ fn storage_double_map_test() {
     assert!(Data::insert(state.write().borrow_mut(), &2, &3, &30).is_ok());
     assert!(Data::insert(state.write().borrow_mut(), &2, &4, &40).is_ok());
 
-    assert_eq!(Data::get(state.read().borrow(), &1, &2), Some(10));
-    assert!(Data::contains_key(state.read().borrow(), &1, &2));
+    assert_eq!(Data::get(&state.read(), &1, &2), Some(10));
+    assert!(Data::contains_key(&state.read(), &1, &2));
     Data::remove(state.write().borrow_mut(), &1, &2);
-    assert_eq!(Data::get(state.read().borrow(), &1, &2), None);
-    assert!(!Data::contains_key(state.read().borrow(), &1, &2));
+    assert_eq!(Data::get(&state.read(), &1, &2), None);
+    assert!(!Data::contains_key(&state.read(), &1, &2));
 
-    let kvs = Data::iterate_prefix(state.read().borrow(), &1);
+    let kvs = Data::iterate_prefix(&state.read(), &1);
     assert_eq!(kvs, vec![(3, 20)]);
 
-    let kvs = Data::iterate_prefix(state.read().borrow(), &2);
+    let kvs = Data::iterate_prefix(&state.read(), &2);
     assert_eq!(kvs, vec![(3, 30), (4, 40)]);
 
     Data::remove_prefix(state.write().borrow_mut(), &2);
-    let kvs = Data::iterate_prefix(state.read().borrow(), &2);
+    let kvs = Data::iterate_prefix(&state.read(), &2);
     assert_eq!(kvs, vec![]);
 
     state.write().commit(1).unwrap();
-    let kvs = Data::iterate_prefix(state.read().borrow(), &1);
+    let kvs = Data::iterate_prefix(&state.read(), &1);
     assert_eq!(kvs, vec![(3, 20)]);
 }

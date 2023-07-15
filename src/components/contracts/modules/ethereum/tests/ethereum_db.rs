@@ -2,7 +2,7 @@ use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};
 use fin_db::{FinDB, RocksDB};
 use fp_core::context::Context;
-use fp_storage::{Borrow, BorrowMut, RwLock};
+use fp_storage::{BorrowMut, RwLock};
 use fp_types::crypto::HA256;
 use fp_types::{H256, U256};
 use module_ethereum::storage::TransactionIndex;
@@ -72,8 +72,7 @@ fn test_eth_db_migrate_txn_index() {
 
     //Confirm transaction index values were migrated to rocksdb instance from the context.
     for txn in txns {
-        let value: Option<(U256, u32)> =
-            TransactionIndex::get(ctx.db.read().borrow(), &txn.0);
+        let value: Option<(U256, u32)> = TransactionIndex::get(&ctx.db.read(), &txn.0);
         assert!(value.is_some());
         assert_eq!(value.unwrap(), txn.1);
     }
