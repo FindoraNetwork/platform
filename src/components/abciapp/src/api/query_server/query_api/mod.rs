@@ -732,6 +732,10 @@ impl QueryApi {
                     web::get().to(query_asset),
                 )
                 .route(
+                    &ApiRoutes::GetDerivedAssetCode.with_arg_template("code"),
+                    web::get().to(get_derived_asset_code),
+                )
+                .route(
                     &ApiRoutes::GlobalState.route(),
                     web::get().to(query_global_state),
                 )
