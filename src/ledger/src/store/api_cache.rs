@@ -144,7 +144,6 @@ impl ApiCache {
     /// Cache issuance records
     pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
         let new_records = issuance.body.records.to_vec();
-
         macro_rules! save_issuance {
             ($maps: tt, $key: tt) => {
                 #[allow(unused_mut)]
