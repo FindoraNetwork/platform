@@ -16,7 +16,7 @@ use fp_core::{
 };
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
-use fp_storage::{Borrow, BorrowMut};
+use fp_storage::BorrowMut;
 use fp_types::crypto::Address;
 use fp_types::{
     actions::evm as EvmAction,
@@ -472,13 +472,13 @@ impl<C: Config> App<C> {
         id: Option<BlockId>,
     ) -> Option<Vec<TransactionStatus>> {
         let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
-        CurrentTransactionStatuses::get(ctx.db.read().borrow(), &hash)
+        CurrentTransactionStatuses::get(&ctx.db.read(), &hash)
     }
 
     /// Get the block with given block id.
     pub fn current_block(&self, ctx: &Context, id: Option<BlockId>) -> Option<Block> {
         let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
-        CurrentBlock::get(ctx.db.read().borrow(), &hash)
+        CurrentBlock::get(&ctx.db.read(), &hash)
     }
 
     /// Get receipts with given block id.
@@ -488,12 +488,12 @@ impl<C: Config> App<C> {
         id: Option<BlockId>,
     ) -> Option<Vec<ethereum::ReceiptV0>> {
         let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
-        CurrentReceipts::get(ctx.db.read().borrow(), &hash)
+        CurrentReceipts::get(&ctx.db.read(), &hash)
     }
 
     /// Get current block hash
     pub fn current_block_hash(ctx: &Context) -> Option<H256> {
-        if let Some(number) = CurrentBlockNumber::get(ctx.db.read().borrow()) {
+        if let Some(number) = CurrentBlockNumber::get(&ctx.db.read()) {
             Self::get_hash(ctx, number)
         } else {
             None
@@ -502,7 +502,7 @@ impl<C: Config> App<C> {
 
     /// Get current block number
     pub fn current_block_number(ctx: &Context) -> Option<U256> {
-        CurrentBlockNumber::get(ctx.db.read().borrow())
+        CurrentBlockNumber::get(&ctx.db.read())
     }
 
     /// Get header hash of given block id.
@@ -519,7 +519,7 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
+        TransactionIndex::get(&ctx.db.read(), &HA256::new(hash))
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {
@@ -532,7 +532,7 @@ impl<C: Config> App<C> {
     }
 
     fn get_hash(ctx: &Context, number: U256) -> Option<H256> {
-        if let Some(hash) = BlockHash::get(ctx.db.read().borrow(), &number) {
+        if let Some(hash) = BlockHash::get(&ctx.db.read(), &number) {
             return Some(hash.h256());
         }
         None
@@ -541,7 +541,7 @@ impl<C: Config> App<C> {
     pub fn migrate(ctx: &mut Context) -> Result<()> {
         //Migrate existing transaction indices from chain-state to rocksdb.
         let txn_idxs: Vec<(HA256, (U256, u32))> =
-            TransactionIndex::iterate(ctx.state.read().borrow());
+            TransactionIndex::iterate(&ctx.state.read());
         let txn_idxs_cnt = txn_idxs.len();
 
         for idx in txn_idxs {
