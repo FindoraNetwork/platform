@@ -116,7 +116,6 @@ pub fn staker_update(
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -186,7 +185,6 @@ pub fn stake(
     .map(|principal_op| builder.add_operation(principal_op))?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -230,7 +228,6 @@ pub fn stake_append(
     .map(|principal_op| builder.add_operation(principal_op))?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -282,7 +279,6 @@ pub fn unstake(
     })?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -313,7 +309,6 @@ pub fn claim(
     })?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -750,7 +745,6 @@ fn gen_undelegate_tx(
     }
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(owner_kp);
     tx.sign_to_map(owner_kp);
 
     Ok(tx)
@@ -781,7 +775,6 @@ fn gen_delegate_tx(
     })?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(owner_kp);
     tx.sign_to_map(owner_kp);
 
     Ok(tx)
@@ -841,7 +834,6 @@ pub fn create_asset_x(
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(kp);
     tx.sign_to_map(kp);
 
     utils::send_tx(&tx).map(|_| asset_code)
@@ -884,7 +876,6 @@ pub fn issue_asset_x(
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(kp);
     tx.sign_to_map(kp);
 
     utils::send_tx(&tx)
@@ -1556,7 +1547,6 @@ pub fn replace_staker(
     builder.add_operation_replace_staker(&keypair, target_addr, td_addr)?;
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&keypair);
     tx.sign_to_map(&keypair);
 
     utils::send_tx(&tx).c(d!())?;
