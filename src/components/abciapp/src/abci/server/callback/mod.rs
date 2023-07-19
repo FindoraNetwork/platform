@@ -7,7 +7,7 @@ use ledger::{
     data_model::ASSET_TYPE_FRA,
     staking::{FF_ADDR_EXTRA_120_0000, FF_ADDR_LIST},
 };
-use zei::xfr::asset_record::AssetRecordType;
+use zei::noah_api::xfr::asset_record::AssetRecordType;
 
 mod utils;
 
@@ -37,9 +37,9 @@ use {
         converter::is_convert_account,
         data_model::{Operation, Transaction},
         staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
+        fbnc::{new_mapx, Mapx},
         store::{
             api_cache,
-            fbnc::{new_mapx, Mapx},
         },
         LEDGER_TENDERMINT_BLOCK_HEIGHT,
     },

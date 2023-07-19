@@ -232,7 +232,7 @@ pub fn parse_evm_staking_mint_event(
     let result = event.parse_log(log).map_err(|e| eg!(e))?;
     let public_key_bytes = result.params[0].value.clone().into_bytes().c(d!())?;
 
-    let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
+    let public_key = XfrPublicKey::noah_from_bytes(public_key_bytes.as_slice()).c(d!())?;
 
     let amount = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
 
@@ -289,7 +289,7 @@ pub fn parse_evm_staking_coinbase_mint_event(
     if public_key_bytes.is_empty() {
         return Ok((delegator, None, amount));
     }
-    let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
+    let public_key = XfrPublicKey::noah_from_bytes(public_key_bytes.as_slice()).c(d!())?;
 
     Ok((delegator, Some(public_key), amount))
 }

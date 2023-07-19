@@ -4,7 +4,7 @@ use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
 use evm_precompile_anemoi::{Anemoi254, Anemoi381};
-use evm_precompile_basic::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
+use evm_precompile_basic::{ECRecover, Identity, Ripemd160, Sha256};
 use evm_precompile_blake2::Blake2F;
 use evm_precompile_bn128::{Bn128Add, Bn128Mul, Bn128Pairing};
 use evm_precompile_frc20::FRC20;

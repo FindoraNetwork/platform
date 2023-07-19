@@ -41,10 +41,9 @@ use {
     ruc::*,
     std::{env, fs},
     tendermint::PrivateKey,
-    utils::{get_block_height, get_local_block_height, get_validator_detail, parse_td_validator_keys},
+    utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
     web3::types::H160,
-    zei::noah_api{
-        setup::PublicParams,
+    zei::noah_api::{
         anon_xfr::{
             nullify,
             structs::{
@@ -291,6 +290,7 @@ pub fn unstake(
 
 /// Claim rewards from findora network
 pub fn claim(
+    td_addr: &str,
     am: Option<&str>,
     sk_str: Option<&str>,
     is_address_eth: bool,
@@ -1541,8 +1541,7 @@ pub fn version() -> &'static str {
 
 ///operation to replace the staker.
 pub fn replace_staker(
-    target_pubkey: XfrPublicKey,
-    new_td_addr_pk: Option<(Vec<u8>, Vec<u8>)>,
+    target_addr: fp_types::H160, td_addr: &str,
     is_address_eth: bool,
 ) -> Result<()> {
     let td_addr = hex::decode(td_addr).c(d!())?;
@@ -1554,7 +1553,7 @@ pub fn replace_staker(
         builder.add_operation(op);
     })?;
 
-    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
+    builder.add_operation_replace_staker(&keypair, target_addr, td_addr)?;
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&keypair);

@@ -22,7 +22,7 @@ use {
     ruc::*,
     serde::{self, Deserialize, Serialize},
     serde_json::Value,
-    sha2::{Digest, Sha256},
+    sha2::{Digest},
     std::{
         collections::{BTreeMap, HashMap},
         str::FromStr,

@@ -7,7 +7,6 @@
 
 use {
     credentials::CredUserSecretKey,
-    curve25519_dalek::scalar::Scalar,
     digest::Digest,
     fp_types::{crypto::MultiSigner, H160},
     globutils::{wallet, Serialized, SignatureOf},

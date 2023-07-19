@@ -28,7 +28,7 @@ once_cell = "1.10.0"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
 sha3 = "0.8"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "feat-secp-support" }
 
 config = { path = "../../config"}
 
