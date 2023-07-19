@@ -39,7 +39,7 @@ use {
         ops::{Deref, DerefMut},
         sync::atomic::Ordering,
     },
-    zei::XfrPublicKey
+    zei::XfrPublicKey,
 };
 
 // The top 50~ candidate validators

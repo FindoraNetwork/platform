@@ -1532,7 +1532,8 @@ pub fn version() -> &'static str {
 
 ///operation to replace the staker.
 pub fn replace_staker(
-    target_addr: fp_types::H160, td_addr: &str,
+    target_addr: fp_types::H160,
+    td_addr: &str,
     is_address_eth: bool,
 ) -> Result<()> {
     let td_addr = hex::decode(td_addr).c(d!())?;

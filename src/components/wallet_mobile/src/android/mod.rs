@@ -348,7 +348,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
     let keypair = &*(keypair_ptr as *mut types::XfrKeyPair);
     let oar = throw_exception!(
         env,
-        rs_open_client_asset_record(record, owner_memo, &XfrKeyPair::from_noah(keypair).unwrap())
+        rs_open_client_asset_record(
+            record,
+            owner_memo,
+            &XfrKeyPair::from_noah(keypair).unwrap()
+        )
     );
     Box::into_raw(Box::new(types::OpenAssetRecord::from(oar))) as jlong
 }

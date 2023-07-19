@@ -2,6 +2,7 @@
 //! # Access Ledger Data
 //!
 
+use ledger::data_model::AssetTypePrefix;
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -27,7 +28,6 @@ use {
     std::{collections::BTreeMap, mem, sync::Arc},
     zei::{OwnerMemo, XfrPublicKey},
 };
-use ledger::data_model::AssetTypePrefix;
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -157,13 +157,12 @@ pub async fn get_derived_asset_code(
 ) -> actix_web::Result<web::Json<AssetTypeCode>> {
     let qs = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
-        let derived_asset_code =
-            AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                AssetTypePrefix::UserDefined,
-                &token_code,
-                &CFG.checkpoint,
-                qs.ledger_cloned.get_tendermint_height()
-            );
+        let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+            AssetTypePrefix::UserDefined,
+            &token_code,
+            &CFG.checkpoint,
+            qs.ledger_cloned.get_tendermint_height(),
+        );
         Ok(web::Json(derived_asset_code))
     } else {
         Err(actix_web::error::ErrorBadRequest(

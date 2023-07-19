@@ -22,7 +22,7 @@ use {
     ruc::*,
     serde::{self, Deserialize, Serialize},
     serde_json::Value,
-    sha2::{Digest},
+    sha2::Digest,
     std::{
         collections::{BTreeMap, HashMap},
         str::FromStr,
@@ -855,7 +855,7 @@ pub fn get_validator_memo_and_rate(
     let web3 = Web3::new(transport);
 
     #[allow(deprecated)]
-        let function = Function {
+    let function = Function {
         name: "getValidator".to_owned(),
         inputs: vec![Param {
             name: String::new(),

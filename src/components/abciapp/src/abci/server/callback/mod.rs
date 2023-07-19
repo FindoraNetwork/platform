@@ -36,11 +36,9 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::{Operation, Transaction},
-        staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
         fbnc::{new_mapx, Mapx},
-        store::{
-            api_cache,
-        },
+        staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
+        store::api_cache,
         LEDGER_TENDERMINT_BLOCK_HEIGHT,
     },
     parking_lot::{Mutex, RwLock},

@@ -110,7 +110,7 @@ impl crate::BaseApp {
                                     Default::default()
                                 };
                             let state_list = if let Ok(mut state_list) =
-                            PENDING_STATE_UPDATE_LIST.lock()
+                                PENDING_STATE_UPDATE_LIST.lock()
                             {
                                 take(&mut *state_list)
                             } else {
@@ -238,7 +238,7 @@ impl crate::BaseApp {
                                 Default::default()
                             };
                         let state_list = if let Ok(mut state_list) =
-                        REMOVE_PENDING_STATE_UPDATE_LIST.lock()
+                            REMOVE_PENDING_STATE_UPDATE_LIST.lock()
                         {
                             let v = state_list.deref_mut();
                             take(v)
@@ -336,14 +336,14 @@ impl crate::BaseApp {
                                             .unwrap_or_default();
                                         if addr
                                             == CFG
-                                            .checkpoint
-                                            .prism_bridge_address
-                                            .to_lowercase()
+                                                .checkpoint
+                                                .prism_bridge_address
+                                                .to_lowercase()
                                         {
                                             bridge_contract_found = true
                                         } else if addr
                                             == format!("{:?}", claim_on_contract_address)
-                                            .to_lowercase()
+                                                .to_lowercase()
                                         {
                                             staking_contract_found = true;
                                         }
@@ -357,10 +357,10 @@ impl crate::BaseApp {
                                         } else if td_height
                                             > CFG.checkpoint.evm_staking_inital_height
                                             && topic.starts_with(
-                                            &coinbase_mint_event_topic[0
-                                                ..coinbase_mint_event_topic.len()
-                                                - 1],
-                                        )
+                                                &coinbase_mint_event_topic[0
+                                                    ..coinbase_mint_event_topic.len()
+                                                        - 1],
+                                            )
                                         {
                                             let hashes = topic
                                                 .strip_prefix('[')
