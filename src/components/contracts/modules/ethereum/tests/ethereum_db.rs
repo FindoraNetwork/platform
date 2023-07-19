@@ -1,3 +1,5 @@
+#![allow(suspicious_double_ref_op)]
+
 use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};
 use fin_db::{FinDB, RocksDB};
@@ -91,17 +93,15 @@ fn test_eth_db_migrate_block_data() {
 
     //Store blocks with default state roots
     for i in 1..6 {
-        let root_hash = H256::default();
         let block_id = Some(BlockId::Number(U256::from(i)));
-        let _ = app.store_block(ctx.borrow_mut(), U256::from(i), root_hash.as_bytes());
+        let _ = app.store_block(ctx.borrow_mut(), U256::from(i));
         blocks.push(app.current_block(ctx.borrow(), block_id));
     }
 
     //Store blocks with random state roots
     for k in 6..11 {
-        let root_hash = H256::random();
         let block_id = Some(BlockId::Number(U256::from(k)));
-        let _ = app.store_block(ctx.borrow_mut(), U256::from(k), root_hash.as_bytes());
+        let _ = app.store_block(ctx.borrow_mut(), U256::from(k));
         blocks.push(app.current_block(ctx.borrow(), block_id));
     }
 

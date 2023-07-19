@@ -1,4 +1,5 @@
 #![allow(clippy::field_reassign_with_default)]
+#![allow(suspicious_double_ref_op)]
 
 //! Template module integration tests.
 use abci::*;

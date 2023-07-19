@@ -1709,6 +1709,7 @@ impl LedgerStatus {
     // that is ever false, it's a bug).
     //
     // This drains every field of `block` except `txns` and `temp_sids`.
+    #[allow(unused_mut)]
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
 
