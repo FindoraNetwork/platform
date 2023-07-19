@@ -364,11 +364,7 @@ impl Staking {
         &self,
         h: BlockHeight,
     ) -> Option<&ValidatorData> {
-        self.validator_info
-            .range(0..=h)
-            .rev()
-            .next()
-            .map(|(_, v)| v)
+        self.validator_info.range(0..=h).next_back().map(|(_, v)| v)
     }
 
     /// Remove the validators that will be used for the specified height.
@@ -391,8 +387,7 @@ impl Staking {
     ) -> Option<&mut ValidatorData> {
         self.validator_info
             .range_mut(0..=h)
-            .rev()
-            .next()
+            .next_back()
             .map(|(_, v)| v)
     }
 

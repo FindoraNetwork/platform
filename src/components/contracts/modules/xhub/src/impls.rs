@@ -1,7 +1,7 @@
 use crate::storage::*;
 use crate::{App, Config};
 use fp_core::{context::Context, ensure, transaction::ActionResult};
-use fp_storage::{Borrow, BorrowMut};
+use fp_storage::BorrowMut;
 use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialTransfer;
 use fp_types::{actions::xhub::NonConfidentialOutput, crypto::Address};
@@ -52,13 +52,12 @@ impl<C: Config> App<C> {
         ctx: &Context,
         mut outputs: Vec<NonConfidentialOutput>,
     ) -> Result<()> {
-        let ops =
-            if let Some(mut ori_outputs) = PendingUTXOs::get(ctx.db.read().borrow()) {
-                ori_outputs.append(&mut outputs);
-                ori_outputs
-            } else {
-                outputs
-            };
+        let ops = if let Some(mut ori_outputs) = PendingUTXOs::get(&ctx.db.read()) {
+            ori_outputs.append(&mut outputs);
+            ori_outputs
+        } else {
+            outputs
+        };
         PendingUTXOs::put(ctx.db.write().borrow_mut(), &ops)
     }
 
