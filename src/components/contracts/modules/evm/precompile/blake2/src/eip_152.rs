@@ -69,6 +69,8 @@ pub fn compress(h: &mut [u64; 8], m: [u64; 16], t: [u64; 2], f: bool, rounds: us
     v[12] ^= t[0];
     v[13] ^= t[1];
 
+
+
     if f {
         v[14] = !v[14] // Invert all bits if the last-block-flag is set.
     }
