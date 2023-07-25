@@ -23,11 +23,17 @@ do
             echo -n "killed abci: "
             killed=true
         fi
-        kill -9 $tdmt
         kill -9 $abci
-        tdmt_pids+=("$tdmt")
         echo -en "${YEL}$abci ${NC}"
     fi
+    if [ ! -z "$tdmt" ] && ([ -z "$Node" ] || [ "$Node" = "$node" ]); then
+            if [ "$killed" = false ]; then
+                echo -n "killed abci: "
+                killed=true
+            fi
+            kill -9 $tdmt
+            tdmt_pids+=("$tdmt")
+        fi
 done
 
 if [ "$killed" = true ]; then

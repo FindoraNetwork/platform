@@ -40,5 +40,5 @@ echo $COMMITMENT_STRING
 cat anon-keys-temp.keys | jq -r '.xfr_secret_key' > /tmp/tmp-sec-key
 echo "Bar 2 Abar Conversion demo script executed successfully!"
 
-sleep 5
+sleep 10
 target/release/fn owned-abars -s /tmp/tmp-sec-key  -c $COMMITMENT_STRING
