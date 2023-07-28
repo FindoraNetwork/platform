@@ -117,9 +117,9 @@ pub fn transfer_from_account(
     amount: u64,
     address: Option<&str>,
     eth_phrase: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let fra_kp = get_keypair(is_address_fra)?;
+    let fra_kp = get_keypair(is_address_eth)?;
 
     let target = match address {
         Some(s) => {
@@ -219,9 +219,9 @@ fn one_shot_abci_query(
 /// Query contract account info by abci/query
 pub fn contract_account_info(
     address: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<(Address, SmartAccount)> {
-    let fra_kp = get_keypair(is_address_fra)?;
+    let fra_kp = get_keypair(is_address_eth)?;
 
     let address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,

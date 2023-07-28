@@ -898,6 +898,11 @@ pub fn transfer_to_utxo_from_account(
     sk: String,
     nonce: u64,
 ) -> Result<String, JsValue> {
+
+    if !recipient.is_ed25519() {
+        return eg!("recipient can only be ed25519 address").map_err(error_to_js_value);
+    }
+
     let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
     let mut s = [0u8; 32];
     s.copy_from_slice(&seed);
@@ -1862,6 +1867,7 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use ruc::eg;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
