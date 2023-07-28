@@ -28,7 +28,6 @@ use fp_core::{
 };
 use fp_evm::TransactionStatus;
 use fp_storage::BorrowMut;
-use fp_traits::evm::EthereumDecimalsMapping;
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
@@ -49,10 +48,9 @@ pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
-use utils::parse_evm_staking_coinbase_mint_event;
 use zei::xfr::sig::XfrPublicKey;
 
-use crate::utils::parse_evm_staking_mint_event;
+use crate::utils::{deposit_asset_event, parse_deposit_asset_event};
 
 pub const MODULE_NAME: &str = "evm";
 
@@ -306,7 +304,7 @@ impl<C: Config> App<C> {
         ctx: &Context,
         req: &abci::RequestBeginBlock,
         ff_addr_balance: u64,
-    ) -> Result<U256> {
+    ) -> Result<()> {
         let pre_issue_amount = FRA_PRE_ISSUE_AMOUNT - ff_addr_balance;
         let input =
             utils::build_evm_staking_input(&self.contracts, req, pre_issue_amount)?;
@@ -324,8 +322,6 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let trigger_on_contract_address =
-            get_trigger_on_contract_address::<C>(&self.contracts, ctx, from)?;
 
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -345,33 +341,30 @@ impl<C: Config> App<C> {
             &logs,
             used_gas,
         )?;
-
         let mut mints = vec![];
-
-        for log in logs.into_iter() {
-            if log.address != trigger_on_contract_address {
+        let addr = H160::from_str(&CFG.checkpoint.prism_bridge_address).c(d!())?;
+        let signature = deposit_asset_event().signature();
+        for log in logs.iter() {
+            if log.address != addr {
                 continue;
             }
-            match parse_evm_staking_mint_event(&self.contracts.staking, log) {
-                Ok((pk, am)) => {
-                    if am != 0 {
-                        mints.push((pk, am));
+            match log.topics.get(0).cloned() {
+                Some(v) => {
+                    if v != signature {
+                        continue;
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("Parse evm staking mint error: {}", e);
-                }
+                None => continue,
+            }
+            if let Ok(output) = parse_deposit_asset_event(log.data.to_vec()) {
+                mints.push((output.target, output.amount));
             }
         }
-
-        let amount = mints.iter().map(|v| v.1).sum::<u64>();
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
         if !mints.is_empty() {
             EVM_STAKING_MINTS.lock().extend(mints);
         }
 
-        Ok(amount)
+        Ok(())
     }
 
     pub fn import_validators(
@@ -605,7 +598,7 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         from: H160,
-        rewards: &[(H160, u64)],
+        rewards: &[(H160, U256)],
     ) -> Result<()> {
         let function = self.contracts.staking.function("importReward").c(d!())?;
         let mut reward_tokens = vec![];
@@ -613,10 +606,7 @@ impl<C: Config> App<C> {
             let tokens = rewards
                 .iter()
                 .map(|(addr, amount)| {
-                    Token::Tuple(vec![
-                        Token::Address(*addr),
-                        Token::Uint(U256::from(*amount)),
-                    ])
+                    Token::Tuple(vec![Token::Address(*addr), Token::Uint(*amount)])
                 })
                 .collect::<Vec<_>>();
             let mut tmp = vec![];
@@ -667,48 +657,7 @@ impl<C: Config> App<C> {
         }
         Ok(())
     }
-    pub fn import_coinbase_balance(
-        &self,
-        ctx: &Context,
-        from: H160,
-        coinbase_balance: u64,
-    ) -> Result<()> {
-        let function = self.contracts.staking.function("importCoinBase").c(d!())?;
 
-        let input = function
-            .encode_input(&[Token::Uint(U256::from(coinbase_balance))])
-            .c(d!())?;
-        let gas_limit = u64::MAX;
-        let value = U256::zero();
-        tracing::info!(
-            target: "evm staking",
-            "importCoinBase from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
-            from,
-            gas_limit,
-            value,
-            self.contracts.staking_address,
-            hex::encode(&input)
-        );
-        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
-            ctx,
-            input.clone(),
-            from,
-            gas_limit,
-            self.contracts.staking_address,
-            value,
-        )?;
-        Self::store_transaction(
-            ctx,
-            U256::from(gas_limit),
-            from,
-            self.contracts.staking_address,
-            value,
-            input,
-            &logs,
-            used_gas,
-        )?;
-        Ok(())
-    }
     #[allow(clippy::too_many_arguments)]
     pub fn stake(
         &self,
@@ -882,7 +831,6 @@ impl<C: Config> App<C> {
         from: H160,
         validator: H160,
         delegator: H160,
-        delegator_pk: &XfrPublicKey,
     ) -> Result<()> {
         let function = self.contracts.staking.function("systemClaim").c(d!())?;
         let input = function
@@ -901,8 +849,6 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             hex::encode(&input)
         );
-        let claim_on_contract_address =
-            get_claim_on_contract_address::<C>(&self.contracts, ctx, from)?;
 
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -923,37 +869,29 @@ impl<C: Config> App<C> {
             &logs,
             used_gas,
         )?;
-
-        let mut mints = Vec::new();
-
-        for log in logs.into_iter() {
-            if log.address != claim_on_contract_address {
+        let mut mints = vec![];
+        let addr = H160::from_str(&CFG.checkpoint.prism_bridge_address).c(d!())?;
+        let signature = deposit_asset_event().signature();
+        for log in logs.iter() {
+            if log.address != addr {
                 continue;
             }
-            let event = self
-                .contracts
-                .staking
-                .event("CoinbaseMint")
-                .map_err(|e| eg!(e))?;
-            match parse_evm_staking_coinbase_mint_event(event, log.topics, log.data) {
-                Ok((_delegator, _, am)) => {
-                    if delegator != _delegator {
-                        return Err(eg!("Invalid delegator."));
-                    }
-                    if am != 0 {
-                        mints.push((*delegator_pk, am));
+            match log.topics.get(0).cloned() {
+                Some(v) => {
+                    if v != signature {
+                        continue;
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("Parse claim mint error: {}", e);
-                }
+                None => continue,
+            }
+
+            if let Ok(output) = parse_deposit_asset_event(log.data.to_vec()) {
+                mints.push((output.target, output.amount));
             }
         }
-
         if !mints.is_empty() {
             EVM_STAKING_MINTS.lock().extend(mints);
         }
-
         Ok(())
     }
 
@@ -1199,11 +1137,11 @@ impl<C: Config> AppModule for App<C> {
         ctx: &mut Context,
         _req: &abci::RequestEndBlock,
         ff_addr_balance: u64,
-    ) -> (abci::ResponseEndBlock, U256) {
+    ) -> abci::ResponseEndBlock {
         let mut resp = abci::ResponseEndBlock::default();
-        let mut burn_amount = Default::default();
+
         if ctx.header.height > CFG.checkpoint.evm_staking_inital_height {
-            burn_amount = match self.execute_staking_contract(
+            match self.execute_staking_contract(
                 ctx,
                 &self.abci_begin_block,
                 ff_addr_balance,
@@ -1224,48 +1162,7 @@ impl<C: Config> AppModule for App<C> {
             }
         }
 
-        (resp, burn_amount)
-    }
-}
-
-fn get_trigger_on_contract_address<C: Config>(
-    contract: &SystemContracts,
-    ctx: &Context,
-    from: H160,
-) -> Result<H160> {
-    let function = contract
-        .staking
-        .function("getTriggerOnContractAddress")
-        .c(d!())?;
-    let input = function.encode_input(&[]).c(d!())?;
-
-    let gas_limit = u64::MAX;
-    let value = U256::zero();
-
-    tracing::info!(
-        target: "evm staking",
-        "getTriggerOnContractAddress from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
-        from,
-        gas_limit,
-        value,
-        contract.staking_address,
-        hex::encode(&input)
-    );
-
-    let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
-        ctx,
-        input,
-        from,
-        gas_limit,
-        contract.staking_address,
-        value,
-    )?;
-    let ret = function.decode_output(&data).c(d!())?;
-
-    if let Some(Token::Address(addr)) = ret.get(0) {
-        Ok(*addr)
-    } else {
-        Err(eg!("address not found"))
+        resp
     }
 }
 

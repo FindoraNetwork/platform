@@ -203,9 +203,10 @@ impl<C: Config> ActionRunner<C> {
         } else {
             // TODO: store error execution on pending tx later.
             Err(eg!(
-                "Execute system error: {:?}, data is: {}",
+                "Execute system error: {:?}, data is: {}, info:{}",
                 result,
-                hex::encode(data)
+                hex::encode(&data),
+                String::from_utf8_lossy(&data)
             ))
         }
     }
