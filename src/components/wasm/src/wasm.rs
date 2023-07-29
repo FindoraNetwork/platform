@@ -62,7 +62,7 @@ use {
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
-    ruc::{d, err::RucResult},
+    ruc::{d, err::RucResult, eg},
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
@@ -900,7 +900,7 @@ pub fn transfer_to_utxo_from_account(
 ) -> Result<String, JsValue> {
 
     if !recipient.is_ed25519() {
-        return eg!("recipient can only be ed25519 address").map_err(error_to_js_value);
+        return Err(eg!("recipient can only be ed25519 address")).map_err(error_to_jsvalue);
     }
 
     let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
@@ -1867,7 +1867,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use ruc::eg;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
