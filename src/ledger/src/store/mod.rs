@@ -730,16 +730,19 @@ impl LedgerState {
     }
 
     #[allow(missing_docs)]
-    pub fn get_utxos(&self, sid_list: &[TxoSID]) -> Vec<Option<AuthenticatedUtxo>> {
+    pub fn get_utxos(
+        &self,
+        sid_list: &[TxoSID],
+    ) -> Result<Vec<Option<AuthenticatedUtxo>>> {
         let mut utxos = vec![];
         for sid in sid_list.iter() {
             let utxo = self.status.get_utxo(*sid);
             if let Some(utxo) = utxo {
-                let txn_location = self.status.txo_to_txn_location.get(sid).unwrap();
-                let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
+                let txn_location = self.status.txo_to_txn_location.get(sid).c(d!())?;
+                let authenticated_txn = self.get_transaction(txn_location.0)?;
                 let authenticated_spent_status = self.get_utxo_status(*sid);
                 let state_commitment_data =
-                    self.status.state_commitment_data.as_ref().unwrap().clone();
+                    self.status.state_commitment_data.clone().c(d!())?;
                 let utxo_location = txn_location.1;
                 let auth_utxo = AuthenticatedUtxo {
                     utxo,
@@ -754,7 +757,7 @@ impl LedgerState {
             }
         }
 
-        utxos
+        Ok(utxos)
     }
 
     #[allow(missing_docs)]
