@@ -1,4 +1,4 @@
-FROM rust:1.66.0-slim
+FROM rust:1.70.0-slim
 
 RUN apt update -y && apt upgrade -y && apt install -y unzip wget make pkg-config
 RUN wget -nc -P /opt/ https://www.openssl.org/source/openssl-1.1.1s.tar.gz
@@ -7,18 +7,18 @@ RUN wget -nc -P /opt/ https://dl.google.com/android/repository/android-ndk-r25c-
 ENV PATH="/opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
 ENV ANDROID_NDK_HOME /opt/android-ndk-r25c/
-RUN tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt
-WORKDIR /opt/openssl-1.1.1s
+RUN mkdir -p /opt/aarch64/ && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt/aarch64
+WORKDIR /opt/aarch64/openssl-1.1.1s
 RUN ./Configure android-arm64 --prefix=/opt/aarch64-linux/ssl
 RUN make -j `nproc` && make install
 
-RUN rm -rvf /opt/openssl-1.1.1s && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt
-WORKDIR /opt/openssl-1.1.1s
+RUN mkdir -p /opt/armv7a/ && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt/armv7a
+WORKDIR /opt/armv7a/openssl-1.1.1s
 RUN ./Configure android-arm --prefix=/opt/armv7a-linux/ssl
 RUN make -j `nproc` && make install
 
-RUN rm -rvf /opt/openssl-1.1.1s && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt
-WORKDIR /opt/openssl-1.1.1s
+RUN mkdir -p /opt/x86_64/ && tar -xvf /opt/openssl-1.1.1s.tar.gz -C /opt/x86_64
+WORKDIR /opt/x86_64/openssl-1.1.1s
 RUN ./Configure android-x86_64 --prefix=/opt/x86_64-linux/ssl
 RUN make -j `nproc` && make install
 

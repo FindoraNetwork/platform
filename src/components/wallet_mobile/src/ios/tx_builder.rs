@@ -213,9 +213,13 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate_parti
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
     builder: &TransactionBuilder,
+    td_addr: *const c_char,
     keypair: &XfrKeyPair,
 ) -> *mut TransactionBuilder {
-    if let Ok(info) = builder.clone().add_operation_claim(keypair) {
+    let td_addr = c_char_to_string(td_addr);
+    let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
+    let td_address = hex::decode(addr).expect("addr format error!");
+    if let Ok(info) = builder.clone().add_operation_claim(td_address,keypair) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -225,11 +229,15 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim_custom(
     builder: &TransactionBuilder,
+    td_addr: *const c_char,
     keypair: &XfrKeyPair,
     am: *const c_char,
 ) -> *mut TransactionBuilder {
     let am = parse_u64(am);
-    if let Ok(info) = builder.clone().add_operation_claim_custom(keypair, am) {
+    let td_addr = c_char_to_string(td_addr);
+    let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
+    let td_address = hex::decode(addr).expect("addr format error!");
+    if let Ok(info) = builder.clone().add_operation_claim_custom(td_address,keypair, am) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
