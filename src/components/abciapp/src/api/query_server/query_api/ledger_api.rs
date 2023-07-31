@@ -121,8 +121,10 @@ pub async fn query_utxos(
     if sid_list.len() > 10 || sid_list.is_empty() {
         return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
     }
-
-    Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
+    match ledger.get_utxos(sid_list.as_slice()) {
+        Ok(v) => Ok(web::Json(v)),
+        Err(e) => Err(actix_web::error::ErrorBadRequest(format!("{:?}", e))),
+    }
 }
 
 /// query asset according to `AssetType`
