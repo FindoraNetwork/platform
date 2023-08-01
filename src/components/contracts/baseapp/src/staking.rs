@@ -119,6 +119,7 @@ impl EVMStaking for BaseApp {
                 });
             }
         }
+        undelegation_infos.sort_by(|a, b| a.height.cmp(&b.height));
 
         if let Err(e) = self.modules.evm_module.import_delegators(
             &self.deliver_state,
@@ -328,17 +329,19 @@ impl EVMStaking for BaseApp {
     fn replace_delegator(
         &self,
         validator: &[u8],
-        staker: &XfrPublicKey,
-        new_staker_address: H160,
+        delegator: &XfrPublicKey,
+        new_delegator_address: H160,
+        new_delegator_pk: Option<Vec<u8>>,
     ) -> Result<()> {
         let validator = H160::from_slice(validator);
-        let staker_address = mapping_address(staker);
+        let delegator_address = mapping_address(delegator);
 
         if let Err(e) = self.modules.evm_module.replace_delegator(
             &self.deliver_state,
             validator,
-            staker_address,
-            new_staker_address,
+            delegator_address,
+            new_delegator_address,
+            new_delegator_pk,
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();

@@ -623,12 +623,14 @@ impl TransactionBuilder {
     pub fn add_operation_replace_staker(
         &mut self,
         keypair: &XfrKeyPair,
-        new_staker_address: H160,
+        new_delegator: H160,
+        new_delegator_pk: Option<Vec<u8>>,
         td_addr: Vec<u8>,
     ) -> Result<&mut Self> {
         let ops = ReplaceStakerOps::new(
             keypair,
-            new_staker_address,
+            new_delegator,
+            new_delegator_pk,
             td_addr,
             self.txn.body.no_replay_token,
         );

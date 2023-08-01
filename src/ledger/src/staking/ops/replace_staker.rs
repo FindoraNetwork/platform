@@ -27,14 +27,16 @@ impl ReplaceStakerOps {
     ///create a new replace operation.
     pub fn new(
         keypair: &XfrKeyPair,
-        new_staker_address: H160,
+        new_delegator: H160,
+        new_delegator_pk: Option<Vec<u8>>,
         td_addr: Vec<u8>,
         nonce: NoReplayToken,
     ) -> Self {
         let body = Data {
             new_public_key: XfrPublicKey::default(),
             new_tendermint_params: None,
-            new_staker_address: Some(new_staker_address),
+            new_delegator: Some(new_delegator),
+            new_delegator_pk,
             td_addr: Some(td_addr),
             nonce,
         };
@@ -79,15 +81,16 @@ impl ReplaceStakerOps {
                 .clone()
                 .ok_or(eg!("replace staker validator not found"))?;
 
-            let new_staker_address = self
+            let new_delegator_address = self
                 .body
-                .new_staker_address
+                .new_delegator
                 .ok_or(eg!("replace staker new_staker_address not found"))?;
 
             EVM_STAKING.get().c(d!())?.write().replace_delegator(
                 &validator,
                 &self.pubkey,
-                new_staker_address,
+                new_delegator_address,
+                self.body.new_delegator_pk.clone(),
             )
         } else {
             dbg!(staking_simulator.check_and_replace_staker(
@@ -126,7 +129,9 @@ pub struct Data {
     pub new_public_key: XfrPublicKey,
     pub new_tendermint_params: Option<TendermintParams>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub new_staker_address: Option<H160>,
+    pub new_delegator: Option<H160>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_delegator_pk: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub td_addr: Option<Vec<u8>>,
     nonce: NoReplayToken,

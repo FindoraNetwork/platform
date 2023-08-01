@@ -959,8 +959,9 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         validator: H160,
-        staker: H160,
-        new_staker: H160,
+        delegator: H160,
+        new_delegator: H160,
+        new_delegator_pk: Option<Vec<u8>>,
     ) -> Result<()> {
         let func = self
             .contracts
@@ -969,11 +970,12 @@ impl<C: Config> App<C> {
             .c(d!())?;
 
         let validator = Token::Array(vec![Token::Address(validator)]);
-        let staker = Token::Address(staker);
-        let new_staker = Token::Address(new_staker);
+        let delegator = Token::Address(delegator);
+        let new_delegator = Token::Address(new_delegator);
+        let new_delegator_pk = Token::Bytes(new_delegator_pk.unwrap_or(vec![]));
 
         let input = func
-            .encode_input(&[validator, staker, new_staker])
+            .encode_input(&[validator, delegator, new_delegator, new_delegator_pk])
             .c(d!())?;
 
         let gas_limit = u64::MAX;
@@ -982,7 +984,7 @@ impl<C: Config> App<C> {
 
         tracing::info!(
             target: "evm staking",
-            "systemReplaceStaker from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
+            "systemReplaceDelegator from:{:?} gas_limit:{} value:{} contracts_address:{:?} input:{}",
             from,
             gas_limit,
             value,

@@ -51,8 +51,9 @@ pub trait EVMStaking: Sync + Send + 'static {
     fn replace_delegator(
         &self,
         validator: &[u8],
-        staker: &XfrPublicKey,
-        new_staker_address: H160,
+        delegator: &XfrPublicKey,
+        new_delegator_address: H160,
+        new_delegator_pk: Option<Vec<u8>>,
     ) -> Result<()>;
     /// claim call
     fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()>;
