@@ -39,4 +39,6 @@ pub struct CallRequest {
     pub data: Option<Bytes>,
     /// Nonce
     pub nonce: Option<U256>,
+    /// type
+    pub r#type: Option<U256>,
 }
