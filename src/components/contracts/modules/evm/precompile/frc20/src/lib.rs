@@ -302,18 +302,18 @@ impl<C: Config> FRC20<C> {
         input.expect_arguments(2)?;
 
         let caller = C::AddressMapping::convert_to_account_id(context.caller);
-        let spender: H160 = input.read::<Address>()?.into();
-        if spender == H160::zero() {
+        let s: H160 = input.read::<Address>()?.into();
+        if s == H160::zero() {
             return Err(error("FRC20: approve to the zero address"));
         }
-        let spender_id = C::AddressMapping::convert_to_account_id(spender);
+        let spender_id = C::AddressMapping::convert_to_account_id(s);
         let amount: U256 = input.read()?;
         debug!(target: "evm",
             "FRC20#approve: sender: {:?}, spender: {:?}, amount: {:?}",
-            context.caller, spender, amount
+            context.caller, s, amount
         );
 
-        C::AccountAsset::approve(state, &caller, &spender_id, amount)
+        C::AccountAsset::approve(state, &caller, context.caller, &spender_id, s, amount)
             .map_err(|e| error(format!("{e:?}")))?;
 
         Ok(PrecompileOutput {
@@ -324,7 +324,7 @@ impl<C: Config> FRC20<C> {
                 .log3(
                     APPROVAL_EVENT_SELECTOR,
                     context.caller,
-                    spender,
+                    s,
                     EvmDataWriter::new().write(amount).build(),
                 )
                 .build(),
@@ -420,7 +420,9 @@ impl<C: Config> FRC20<C> {
         C::AccountAsset::approve(
             state,
             &from_id,
+            from,
             &caller,
+            context.caller,
             allowance.saturating_sub(amount),
         )
         .map_err(|e| error(format!("{e:?}")))?;

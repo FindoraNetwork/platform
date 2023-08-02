@@ -39,6 +39,9 @@ lazy_static! {
         Arc::new(Mutex::new(vec![]));
     pub static ref REMOVE_PENDING_STATE_UPDATE_LIST: Arc<Mutex<Vec<(H160, H256)>>> =
         Arc::new(Mutex::new(vec![]));
+    pub static ref TOTAL_ISSUANCE: Arc<Mutex<Option<U256>>> = Arc::new(Mutex::new(None));
+    pub static ref ALLOWANCES: Arc<Mutex<Vec<((H160, H160), U256)>>> =
+        Arc::new(Mutex::new(vec![]));
 }
 
 fn gen_redis_client() -> r2d2::Pool<Client> {
