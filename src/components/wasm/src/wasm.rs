@@ -62,7 +62,7 @@ use {
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
-    ruc::{d, err::RucResult, eg},
+    ruc::{d, eg, err::RucResult},
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
@@ -898,9 +898,9 @@ pub fn transfer_to_utxo_from_account(
     sk: String,
     nonce: u64,
 ) -> Result<String, JsValue> {
-
     if !recipient.is_ed25519() {
-        return Err(eg!("recipient can only be ed25519 address")).map_err(error_to_jsvalue);
+        return Err(eg!("recipient can only be ed25519 address"))
+            .map_err(error_to_jsvalue);
     }
 
     let seed = hex::decode(sk).map_err(error_to_jsvalue)?;

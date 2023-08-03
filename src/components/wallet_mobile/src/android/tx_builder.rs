@@ -305,9 +305,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .expect("Couldn't get java string!")
         .into();
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
-    let td_address = hex::decode(addr) .expect("addr format error!");
+    let td_address = hex::decode(addr).expect("addr format error!");
     let keypair = &*(keypair as *mut KeyPair);
-    let builder = builder.clone().add_operation_claim(td_address,keypair).unwrap();
+    let builder = builder
+        .clone()
+        .add_operation_claim(td_address, keypair)
+        .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
 
@@ -325,14 +328,18 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     let builder = &*(builder as *mut TransactionBuilder);
     let keypair = &*(keypair as *mut KeyPair);
     let td_addr: String = env
-    .get_string(td_addr)
-    .expect("Couldn't get java string!")
-    .into();
+        .get_string(td_addr)
+        .expect("Couldn't get java string!")
+        .into();
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
-    let td_address = hex::decode(addr) .expect("addr format error!");
+    let td_address = hex::decode(addr).expect("addr format error!");
     let builder = builder
         .clone()
-        .add_operation_claim_custom(td_address, &XfrKeyPair::from_noah(keypair).unwrap(), parseU64(env, am))
+        .add_operation_claim_custom(
+            td_address,
+            &XfrKeyPair::from_noah(keypair).unwrap(),
+            parseU64(env, am),
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }

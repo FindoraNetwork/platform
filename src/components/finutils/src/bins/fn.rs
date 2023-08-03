@@ -1118,9 +1118,12 @@ fn run() -> Result<()> {
 
 fn read_file_path(path: Option<&str>) -> Result<Option<String>> {
     Ok(match path {
-        Some(path) => {
-            Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?.trim().to_string())
-        }
+        Some(path) => Some(
+            fs::read_to_string(path)
+                .c(d!("Failed to read seckey file"))?
+                .trim()
+                .to_string(),
+        ),
         None => None,
     })
 }

@@ -1,7 +1,6 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 #![allow(clippy::too_many_arguments)]
-#![allow(suspicious_double_ref_op)]
 
 extern crate core;
 

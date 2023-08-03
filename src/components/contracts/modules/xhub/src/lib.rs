@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
-#![allow(suspicious_double_ref_op)]
 
 mod basic;
 mod impls;

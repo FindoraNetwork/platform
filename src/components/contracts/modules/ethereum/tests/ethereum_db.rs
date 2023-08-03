@@ -1,4 +1,3 @@
-#![allow(suspicious_double_ref_op)]
 
 use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};

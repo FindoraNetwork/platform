@@ -1,5 +1,4 @@
 #![allow(clippy::field_reassign_with_default)]
-#![allow(suspicious_double_ref_op)]
 
 mod utils;
 
