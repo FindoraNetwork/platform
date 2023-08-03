@@ -11,6 +11,10 @@ args:
 subcommands:
   - genkey:
       about: Generate a random Findora public key/private key Pair
+      args:
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - show:
       about: View Validator status and accumulated rewards
       args:
@@ -18,6 +22,9 @@ subcommands:
             help: show basic account info
             short: b
             long: basic
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - setup:
       about: Setup environment variables for staking transactions
       args:
@@ -80,6 +87,9 @@ subcommands:
         - force:
             help: ignore warning and stake FRAs to your target node
             long: force
+        - eth-address:
+            help: generate eth address
+            long: eth-address
       groups:
         - staking-flags:
             args:
@@ -119,6 +129,9 @@ subcommands:
             long: validator-memo-logo
             takes_value: true
             value_name: Logo
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
@@ -140,6 +153,9 @@ subcommands:
             long: amount
             takes_value: true
             value_name: Amount
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - claim:
       about: Claim accumulated FRA rewards
       args:
@@ -160,6 +176,9 @@ subcommands:
             long: seckey
             takes_value: true
             value_name: SECRET KEY
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - delegate:
       about: Delegating operations
       args:
@@ -185,6 +204,9 @@ subcommands:
             conflicts_with:
               - amount
               - validator
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - undelegate:
       about: Undelegating operations
       args:
@@ -204,6 +226,9 @@ subcommands:
             long: validator
             takes_value: true
             value_name: VALIDATOR ADDRESS
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - transfer:
       about: Transfer tokens from one address to another
       args:
@@ -247,6 +272,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - transfer-batch:
       about: Transfer tokens from one address to many others
       args:
@@ -281,6 +309,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - wallet:
       about: manipulates a findora wallet
       args:
@@ -307,6 +338,9 @@ subcommands:
             value_name: SECRET KEY
             conflicts_with:
               - create
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - asset:
       about: manipulate custom asset
       groups:
@@ -405,6 +439,9 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - account:
       about: Return user contract account information or fra balance if secret key is provided
       args:
@@ -426,6 +463,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -457,6 +497,9 @@ subcommands:
             takes_value: true
             value_name: LOWLEVEL
             required: false
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
@@ -480,6 +523,9 @@ subcommands:
             takes_value: true
             value_name: MNEMONIC
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - gen-eth-key:
       about: Generate an Ethereum address
   - owned-abars:
@@ -505,6 +551,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -529,6 +578,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
@@ -547,6 +599,9 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - owned-utxos:
       about: List owned UTXOs for a public key
       args:
@@ -556,6 +611,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
@@ -579,6 +637,9 @@ subcommands:
             takes_value: true
             value_name: TXO SID
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - convert-abar-to-bar:
       about: Convert a ABAR to BAR
       args:
@@ -617,6 +678,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:
@@ -654,6 +718,9 @@ subcommands:
             takes_value: true
             value_name: Amount
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
@@ -691,6 +758,9 @@ subcommands:
             takes_value: true
             value_name: Asset
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - anon-fetch-merkle-proof:
       about: Query to fetch mtleaf info
       args:
@@ -719,6 +789,9 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:
@@ -749,6 +822,9 @@ subcommands:
             value_name: TENDERMINT PUBKEY
             required: false
             allow_hyphen_values: true
+        - eth-address:
+            help: generate eth address
+            long: eth-address
   - dev:
       about: Manage development clusters on your localhost
       args:
