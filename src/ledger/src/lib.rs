@@ -12,8 +12,6 @@ pub mod converter;
 pub mod staking;
 #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 pub mod store;
-pub mod utils;
-pub use fbnc;
 
 use {ruc::*, std::sync::atomic::AtomicI64};
 

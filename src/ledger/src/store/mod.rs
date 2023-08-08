@@ -5,6 +5,9 @@
 pub mod api_cache;
 pub mod helpers;
 mod test;
+pub mod utils;
+
+pub use fbnc;
 
 use {
     crate::{

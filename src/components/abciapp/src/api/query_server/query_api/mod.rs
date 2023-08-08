@@ -33,9 +33,11 @@ use {
         sync::Arc,
     },
     tracing::info,
-    zei::noah_algebra::serialization::NoahFromToBytes,
-    zei::noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-    zei::{OwnerMemo, XfrPublicKey},
+    zei::{
+        noah_algebra::serialization::NoahFromToBytes,
+        noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
+        OwnerMemo, XfrPublicKey
+    },
 };
 
 /// Returns the git commit hash and commit date of this build

@@ -13,7 +13,7 @@ use ledger::{
         AssetTypeCode, StateCommitmentData, Transaction, BLACK_HOLE_PUBKEY_STAKING,
     },
     staking::{td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA},
-    utils::fra_gen_initial_tx,
+    store::utils::fra_gen_initial_tx,
 };
 use ruc::*;
 use serde::{Deserialize, Serialize};

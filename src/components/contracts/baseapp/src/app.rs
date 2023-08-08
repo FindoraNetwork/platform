@@ -464,14 +464,14 @@ impl crate::BaseApp {
                                                             },
                                                         );
                                                     } else  if let Err(e) = module_account::App::<
-                                                        BaseApp,
-                                                    >::mint(
-                                                        &self.deliver_state,
-                                                        &Address::from(addr),
-                                                        U256::from(amount),
-                                                    ) {
-                                                        resp.code = 2;
-                                                        resp.log = e.to_string();
+                                                            BaseApp,
+                                                        >::mint(
+                                                            &self.deliver_state,
+                                                            &Address::from(addr),
+                                                            U256::from(amount),
+                                                        ) {
+                                                            resp.code = 2;
+                                                            resp.log = e.to_string();
                                                     }
                                                 }
                                                 Err(e) => {

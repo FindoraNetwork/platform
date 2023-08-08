@@ -36,9 +36,11 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::{Operation, Transaction},
-        fbnc::{new_mapx, Mapx},
         staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
-        store::api_cache,
+        store::{
+            api_cache,
+            fbnc::{new_mapx, Mapx},
+        },
         LEDGER_TENDERMINT_BLOCK_HEIGHT,
     },
     parking_lot::{Mutex, RwLock},
@@ -88,31 +90,31 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let commitment = state.get_state_commitment();
     let la_hash = commitment.0.as_ref().to_vec();
 
-    let td_height = state.get_tendermint_height() as i64;
-    TENDERMINT_BLOCK_HEIGHT.swap(td_height, Ordering::Relaxed);
-    LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(td_height, Ordering::Relaxed);
+    let h = state.get_tendermint_height() as i64;
+    TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
+    LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
-    resp.set_last_block_height(td_height);
-    if 0 < td_height {
-        if CFG.checkpoint.disable_evm_block_height < td_height
-            && td_height < CFG.checkpoint.enable_frc20_height
+    resp.set_last_block_height(h);
+    if 0 < h {
+        if CFG.checkpoint.disable_evm_block_height < h
+            && h < CFG.checkpoint.enable_frc20_height
         {
             resp.set_last_block_app_hash(la_hash);
-        } else if td_height < CFG.checkpoint.enable_ed25519_triple_masking_height {
+        } else if h < CFG.checkpoint.enable_ed25519_triple_masking_height {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            resp.set_last_block_app_hash(app_hash("info", td_height, la_hash, cs_hash));
+            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
         } else {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
             let tm_hash = state.get_anon_state_commitment().0;
             resp.set_last_block_app_hash(app_hash_v2(
-                "info", td_height, la_hash, cs_hash, tm_hash,
+                "info", h, la_hash, cs_hash, tm_hash,
             ));
         }
     }
 
     drop(state);
 
-    info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
+    info!(target: "abciapp", "======== Last committed height: {} ========", h);
 
     if la.all_commited() {
         la.begin_block();
@@ -138,7 +140,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
 
     let tx_catalog = try_tx_catalog(req.get_tx(), false);
 
-    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    let h = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
@@ -156,7 +158,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                             }
                         }
                     }
-                    if td_height > CFG.checkpoint.check_signatures_num {
+                    if h > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
                                 let mut body_signatures = op.body_signatures.clone();
@@ -188,8 +190,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
                     } else if is_tm_transaction(&tx)
-                        && td_height
-                            < CFG.checkpoint.enable_ed25519_triple_masking_height
+                        && h < CFG.checkpoint.enable_ed25519_triple_masking_height
                     {
                         resp.code = 1;
                         resp.log = "Triple Masking is disabled".to_owned();
@@ -202,8 +203,8 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             resp
         }
         TxCatalog::EvmTx => {
-            if CFG.checkpoint.disable_evm_block_height < td_height
-                && td_height < CFG.checkpoint.enable_frc20_height
+            if CFG.checkpoint.disable_evm_block_height < h
+                && h < CFG.checkpoint.enable_frc20_height
             {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
@@ -236,7 +237,7 @@ pub fn begin_block(
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
-        ledger::fbnc::flush_data();
+        ledger::store::fbnc::flush_data();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }

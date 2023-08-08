@@ -22,7 +22,7 @@ use {
             check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
             FRA_PRE_ISSUE_AMOUNT,
         },
-        utils::fra_gen_initial_tx,
+        store::utils::fra_gen_initial_tx,
     },
     ruc::*,
     serde::Serialize,

@@ -2,7 +2,6 @@
 //! # Access Ledger Data
 //!
 
-use ledger::data_model::AssetTypePrefix;
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -14,7 +13,7 @@ use {
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            ABARData, ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo,
+            ABARData, ATxoSID, AssetType, AssetTypeCode, AssetTypePrefix, AuthenticatedUtxo,
             StateCommitmentData, TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
