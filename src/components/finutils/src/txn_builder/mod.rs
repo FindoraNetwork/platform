@@ -1881,7 +1881,7 @@ mod tests {
         ledger::{
             data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
             store::LedgerState,
-            utils::fra_gen_initial_tx,
+            store::utils::fra_gen_initial_tx,
         },
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,

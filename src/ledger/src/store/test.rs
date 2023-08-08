@@ -9,7 +9,7 @@ use {
             TransferAssetBody, TransferType, TxOutput, TxnEffect, TxoRef, TxoSID,
             ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        utils::{create_definition_transaction, fra_gen_initial_tx},
+        store::utils::{create_definition_transaction, fra_gen_initial_tx},
     },
     rand_core::SeedableRng,
     zei::noah_algebra::prelude::{One, Zero},

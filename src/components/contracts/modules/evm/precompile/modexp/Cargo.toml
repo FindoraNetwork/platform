@@ -16,4 +16,4 @@ num = { version = "0.4", features = ["alloc"] }
 [dev-dependencies]
 hex = "0.4.2"
 fp-mocks = { path = "../../../../primitives/mocks" }
-pallet-evm-test-vector-support = { version = "0.1.0", path = "../../test-vector-support" }
+

@@ -139,6 +139,7 @@ fn run() -> Result<()> {
         common::undelegate(seckey.as_deref(), param, is_address_eth).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("asset") {
         if m.is_present("create") {
+            let seckey = read_file_path(m.value_of("seckey")).c(d!())?;
             let memo = m.value_of("memo");
             if memo.is_none() {
                 println!("{}", m.usage());
@@ -163,6 +164,7 @@ fn run() -> Result<()> {
             };
             let token_code = m.value_of("code");
             common::create_asset(
+                seckey.as_deref(),
                 memo.unwrap(),
                 decimal,
                 max_units,
@@ -1133,11 +1135,11 @@ fn tip_fail(e: impl fmt::Display) {
     eprintln!(
         "\x1b[35;01mTips\x1b[01m:\n\tPlease send your error messages to us,\n\tif you can't understand their meanings ~^!^~\x1b[00m"
     );
-    eprintln!("\n{e}",);
+    eprintln!("\n{e}");
 }
 
 fn tip_success() {
-    println!(
+    eprintln!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
 }

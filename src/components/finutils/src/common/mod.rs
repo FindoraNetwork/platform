@@ -792,6 +792,7 @@ fn gen_delegate_tx(
 /// Create a custom asset for a findora account. If no token code string provided,
 /// it will generate a random new one.
 pub fn create_asset(
+    sk_str: Option<&str>,
     memo: &str,
     decimal: u8,
     max_units: Option<u64>,
@@ -799,7 +800,7 @@ pub fn create_asset(
     token_code: Option<&str>,
     is_address_eth: bool,
 ) -> Result<()> {
-    let kp = get_keypair(is_address_eth).c(d!())?;
+    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
 
     let code = if token_code.is_none() {
         AssetTypeCode::gen_random()

@@ -17,7 +17,7 @@ use {
 
 /// An opaque 34-byte cryptographic identifier.
 #[derive(
-    Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug, Default,
+    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
 )]
 pub struct Address32([u8; 32]);
 
@@ -266,7 +266,7 @@ impl Verify for MultiSignature {
                 match secp256k1_ecdsa_recover(sig.as_ref(), &msg_hashed) {
                     Ok(pubkey) => {
                         Address32::from(H160::from(H256::from_slice(
-                            Keccak256::digest(pubkey).as_slice(),
+                            Keccak256::digest(&pubkey).as_slice(),
                         ))) == signer.clone()
                     }
                     _ => false,

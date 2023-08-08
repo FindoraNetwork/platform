@@ -1,6 +1,7 @@
-use zei::noah_api::xfr::structs::AssetType;
+use zei::{
+    noah_api::xfr::structs::AssetType, XfrPublicKey
+};
 use serde::{Deserialize, Serialize};
-use zei::XfrPublicKey;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {

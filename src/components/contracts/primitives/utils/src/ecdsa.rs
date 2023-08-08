@@ -359,7 +359,7 @@ impl SecpPair {
     pub fn address(&self) -> H160 {
         let mut res = [0u8; 64];
         res.copy_from_slice(&self.public.serialize()[1..65]);
-        H160::from(H256::from_slice(Keccak256::digest(res).as_slice()))
+        H160::from(H256::from_slice(Keccak256::digest(&res).as_slice()))
     }
 
     /// Sign a message.

@@ -6,10 +6,13 @@ use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
-use zei::noah_algebra::serialization::NoahFromToBytes;
-use zei::noah_api::xfr::structs::AssetType;
-use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
-use zei::XfrPublicKey;
+use zei::{
+    noah_algebra::serialization::NoahFromToBytes,
+    noah_api::xfr::structs::{
+        AssetType, ASSET_TYPE_LENGTH
+    },
+    XfrPublicKey
+};
 
 pub fn deposit_asset_event() -> Event {
     Event {
