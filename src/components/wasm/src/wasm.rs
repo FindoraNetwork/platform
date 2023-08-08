@@ -2065,6 +2065,17 @@ pub fn restore_keypair_from_mnemonic_ed25519(
 }
 
 #[wasm_bindgen]
+/// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
+/// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
+pub fn restore_keypair_from_mnemonic_secp256k1(
+    phrase: &str,
+) -> Result<XfrKeyPair, JsValue> {
+    wallet::restore_keypair_from_mnemonic_secp256k1(phrase)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip44 form.
 pub fn restore_keypair_from_mnemonic_bip44(

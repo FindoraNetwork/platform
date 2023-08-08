@@ -547,15 +547,21 @@ pub fn get_serv_addr() -> Result<&'static str> {
 }
 
 /// Get keypair from config file
-pub fn get_keypair(_is_address_eth: bool) -> Result<XfrKeyPair> {
+pub fn get_keypair(is_address_eth: bool) -> Result<XfrKeyPair> {
     if let Some(m_path) = MNEMONIC.as_ref() {
         fs::read_to_string(m_path)
             .c(d!("can not read mnemonic from 'owner-mnemonic-path'"))
             .and_then(|m| {
                 let k = m.trim();
-                wallet::restore_keypair_from_mnemonic_default(k)
-                    .c(d!("invalid 'owner-mnemonic'"))
-                    .or_else(|e| wallet::restore_keypair_from_seckey_base64(k).c(d!(e)))
+                let kp = if is_address_eth {
+                    wallet::restore_keypair_from_mnemonic_secp256k1(k)
+                        .c(d!("invalid 'owner-mnemonic'"))
+                } else {
+                    wallet::restore_keypair_from_mnemonic_default(k)
+                        .c(d!("invalid 'owner-mnemonic'"))
+                };
+
+                kp.or_else(|e| wallet::restore_keypair_from_seckey_base64(k).c(d!(e)))
             })
     } else {
         Err(eg!("'owner-mnemonic-path' has not been set"))
@@ -602,10 +608,14 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key(_is_address_eth: bool) -> (String, String, String, XfrKeyPair) {
+pub fn gen_key(is_address_eth: bool) -> (String, String, String, XfrKeyPair) {
     let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
+        let kp = if is_address_eth {
+            pnk!(wallet::restore_keypair_from_mnemonic_secp256k1(&mnemonic))
+        } else {
+            pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic))
+        };
 
         if let Some(key) = serde_json::to_string_pretty(&kp)
             .ok()
