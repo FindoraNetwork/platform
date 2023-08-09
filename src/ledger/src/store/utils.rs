@@ -3,10 +3,11 @@
 //!
 
 use {
+    super::helpers,
     crate::{
         data_model::{
-            AssetRules, AssetTypeCode, DefineAsset, DefineAssetBody, IssueAsset,
-            IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
+            AssetRules, AssetTypeCode, IssueAsset,
+            IssueAssetBody, IssuerKeyPair, Memo, Operation,
             Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
         },
         staking::FRA_PRE_ISSUE_AMOUNT,
@@ -14,35 +15,15 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-    zei::noah_api::xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        structs::AssetRecordTemplate,
+    zei::{
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        noah_api::xfr::{
+            asset_record::{build_blind_asset_record, AssetRecordType},
+            structs::AssetRecordTemplate,
+        },
+        BlindAssetRecord, XfrKeyPair
     },
-    zei::{BlindAssetRecord, XfrKeyPair},
 };
-
-/// Create a transaction to define a custom asset
-pub fn create_definition_transaction(
-    code: &AssetTypeCode,
-    keypair: &XfrKeyPair,
-    asset_rules: AssetRules,
-    memo: Option<Memo>,
-    seq_id: u64,
-) -> Result<Transaction> {
-    let issuer_key = IssuerPublicKey {
-        key: *keypair.get_pk_ref(),
-    };
-    let asset_body =
-        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
-    let asset_create =
-        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
-
-    Ok(Transaction::from_operation(
-        Operation::DefineAsset(asset_create),
-        seq_id,
-    ))
-}
 
 /// Define and Issue FRA.
 /// Currently this should only be used for tests.
@@ -56,7 +37,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let mut tx = pnk!(create_definition_transaction(
+    let mut tx = pnk!(helpers::create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {

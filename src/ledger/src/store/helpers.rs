@@ -25,6 +25,28 @@ use {
     zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
+/// Create a transaction to define a custom asset
+pub fn create_definition_transaction(
+    code: &AssetTypeCode,
+    keypair: &XfrKeyPair,
+    asset_rules: AssetRules,
+    memo: Option<Memo>,
+    seq_id: u64,
+) -> Result<Transaction> {
+    let issuer_key = IssuerPublicKey {
+        key: *keypair.get_pk_ref(),
+    };
+    let asset_body =
+        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
+    let asset_create =
+        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
+
+    Ok(Transaction::from_operation(
+        Operation::DefineAsset(asset_create),
+        seq_id,
+    ))
+}
+
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> XfrKeyPair {

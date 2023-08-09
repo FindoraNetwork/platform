@@ -522,7 +522,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
         // get the transaction, ownership addresses, and memos associated with each transaction
         let (addresses, owner_memos) = {
-            let mut _addresses: Vec<XfrAddress> = vec![];
+            let mut addresses: Vec<XfrAddress> = vec![];
             for sid in txo_sids.iter() {
                 let key = ledger
                     .get_utxo_light(*sid)
@@ -532,11 +532,11 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                     .0
                     .record
                     .public_key;
-                _addresses.push(XfrAddress { key });
+                addresses.push(XfrAddress { key });
             }
 
             let owner_memos = curr_txn.get_owner_memos_ref();
-            (_addresses, owner_memos)
+            (addresses, owner_memos)
         };
 
         let classify_op = |op: &Operation| {
