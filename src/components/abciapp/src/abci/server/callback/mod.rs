@@ -140,7 +140,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
 
     let tx_catalog = try_tx_catalog(req.get_tx(), false);
 
-    let h = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
@@ -158,7 +158,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                             }
                         }
                     }
-                    if h > CFG.checkpoint.check_signatures_num {
+                    if td_height > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
                                 let mut body_signatures = op.body_signatures.clone();
@@ -190,7 +190,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
                     } else if is_tm_transaction(&tx)
-                        && h < CFG.checkpoint.enable_ed25519_triple_masking_height
+                        && td_height < CFG.checkpoint.enable_ed25519_triple_masking_height
                     {
                         resp.code = 1;
                         resp.log = "Triple Masking is disabled".to_owned();
@@ -203,8 +203,8 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             resp
         }
         TxCatalog::EvmTx => {
-            if CFG.checkpoint.disable_evm_block_height < h
-                && h < CFG.checkpoint.enable_frc20_height
+            if CFG.checkpoint.disable_evm_block_height < td_height
+                && td_height < CFG.checkpoint.enable_frc20_height
             {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();

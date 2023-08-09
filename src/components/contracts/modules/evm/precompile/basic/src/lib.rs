@@ -55,7 +55,7 @@ impl LinearCostPrecompile for ECRecover {
 
     fn execute(
         i: &[u8],
-        _: u64
+        _: u64,
     ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
         let mut input = [0u8; 128];
         input[..min(i.len(), 128)].copy_from_slice(&i[..min(i.len(), 128)]);

@@ -17,7 +17,6 @@ tracing = "0.1"
 module-evm = { path = "../../../../modules/evm"}
 num_enum = { version = "0.5.4", default-features = false }
 platform-lib-noah = { git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
-config = { path = "../../../../../config" }
 
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }

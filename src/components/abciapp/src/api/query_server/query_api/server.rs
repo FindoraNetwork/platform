@@ -54,7 +54,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.issuances.get(issuer))
+            .unwrap()
+            .issuances
+            .get(issuer)
     }
 
     /// Returns the set of records issued by a certain token code.
@@ -66,7 +68,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.token_code_issuances.get(code))
+            .unwrap()
+            .token_code_issuances
+            .get(code)
     }
 
     /// return `DefineAsset` according to `IssuerPublicKey`
@@ -75,11 +79,13 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<DefineAsset>> {
-        self.ledger_cloned.api_cache.as_ref().and_then(|api| {
-            api.created_assets
-                .get(issuer)
-                .map(|d| d.iter().map(|(_, v)| v).collect())
-        })
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .unwrap()
+            .created_assets
+            .get(issuer)
+            .map(|d| d.iter().map(|(_, v)| v).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -94,7 +100,9 @@ impl QueryServer {
             .ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.coinbase_oper_hist.get(address))
+            .unwrap()
+            .coinbase_oper_hist
+            .get(address)
         {
             let len = hist.len();
             if len > start {
@@ -146,7 +154,9 @@ impl QueryServer {
             .ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.claim_hist_txns.get(address))
+            .unwrap()
+            .claim_hist_txns
+            .get(address)
         {
             let len = hist.len();
             if len > start {
@@ -211,7 +221,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.related_transactions.get(&address))
+            .unwrap()
+            .related_transactions
+            .get(&address)
             .map(|d| d.iter().map(|(k, _)| k).collect())
     }
 
@@ -225,7 +237,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.related_transfers.get(&code))
+            .unwrap()
+            .related_transfers
+            .get(&code)
             .map(|d| d.iter().map(|(k, _)| k).collect())
     }
 
@@ -235,7 +249,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.utxos_to_map_index.get(&txo_sid))
+            .unwrap()
+            .utxos_to_map_index
+            .get(&txo_sid)
     }
 
     /// Returns the authenticated txn (id, hash) of a given txo_sid.
@@ -244,7 +260,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.txo_to_txnid.get(&txo_sid))
+            .unwrap()
+            .txo_to_txnid
+            .get(&txo_sid)
     }
 
     /// Returns the transaction hash of a given txn_sid.
@@ -253,7 +271,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.txn_sid_to_hash.get(&txn_sid))
+            .unwrap()
+            .txn_sid_to_hash
+            .get(&txn_sid)
     }
 
     /// Returns the transaction sid of a given txn_hash.
@@ -262,7 +282,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.txn_hash_to_sid.get(&txn_hash))
+            .unwrap()
+            .txn_hash_to_sid
+            .get(&txn_hash)
     }
 
     /// Returns most recent commits at query_server side.
@@ -277,7 +299,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.owner_memos.get(&txo_sid))
+            .unwrap()
+            .owner_memos
+            .get(&txo_sid)
     }
 
     /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
@@ -361,7 +385,9 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.staking_global_rate_hist.get(height))
+            .unwrap()
+            .staking_global_rate_hist
+            .get(height)
     }
 
     /// update after a new block is created

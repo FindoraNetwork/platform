@@ -1,4 +1,3 @@
-
 use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};
 use fin_db::{FinDB, RocksDB};

@@ -266,7 +266,7 @@ impl Verify for MultiSignature {
                 match secp256k1_ecdsa_recover(sig.as_ref(), &msg_hashed) {
                     Ok(pubkey) => {
                         Address32::from(H160::from(H256::from_slice(
-                            Keccak256::digest(&pubkey).as_slice(),
+                            Keccak256::digest(pubkey).as_slice(),
                         ))) == signer.clone()
                     }
                     _ => false,

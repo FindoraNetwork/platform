@@ -42,7 +42,7 @@ impl EVMStaking for BaseApp {
                     memo: serde_json::to_string(&v.memo).c(d!())?,
                     rate: mapping_rate(v.commission_rate),
                     staker: mapping_address(&v.id),
-                    staker_pk: v.id.noah_to_bytes().to_vec(),
+                    staker_pk: v.id.noah_to_bytes(),
                     power: U256::from(v.td_power),
                     begin_block: U256::from(begin_block),
                 });
@@ -112,7 +112,7 @@ impl EVMStaking for BaseApp {
                 delegators.push(DelegatorParam {
                     validator: *validator_address,
                     delegator: delegator_address,
-                    delegator_pk: public_key.noah_to_bytes().to_vec(),
+                    delegator_pk: public_key.noah_to_bytes(),
                     bound_amount,
                     unbound_amount,
                 });
@@ -183,7 +183,7 @@ impl EVMStaking for BaseApp {
         memo: String,
         rate: [u64; 2],
     ) -> Result<()> {
-        let staker_pk = staker.noah_to_bytes().to_vec();
+        let staker_pk = staker.noah_to_bytes();
         let staker_address = mapping_address(staker);
 
         let amount =
@@ -225,7 +225,7 @@ impl EVMStaking for BaseApp {
         amount: u64,
         td_addr: &[u8],
     ) -> Result<()> {
-        let delegator_pk = delegator.noah_to_bytes().to_vec();
+        let delegator_pk = delegator.noah_to_bytes();
         let delegator_address = mapping_address(delegator);
 
         let amount =

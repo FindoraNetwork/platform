@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
-#![allow(clippy::too_many_arguments)]
 
 extern crate core;
 
@@ -45,14 +44,13 @@ use precompile::PrecompileSet;
 use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
+pub use runtime::*;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
 use utils::parse_evm_staking_coinbase_mint_event;
 use zei::noah_algebra::serialization::NoahFromToBytes;
 use zei::XfrPublicKey;
-
-pub use runtime::*;
 
 use crate::utils::parse_evm_staking_mint_event;
 

@@ -22,5 +22,3 @@ fp-core = {path = "../../../primitives/core"}
 module-evm = {path = "../../../modules/evm"}
 parking_lot = "0.12"
 evm-precompile-eth-pairings = { path = "./eth-pairings" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6" }
