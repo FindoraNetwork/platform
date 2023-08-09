@@ -13,7 +13,7 @@ use module_evm::{
     get_claim_on_contract_address, system_contracts::SYSTEM_ADDR, DelegatorParam,
     UndelegationInfos, ValidatorParam,
 };
-use ruc::{d, Result, RucResult};
+use ruc::{d, eg, Result, RucResult};
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, str::FromStr};
 use zei::xfr::sig::XfrPublicKey;
@@ -354,6 +354,9 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
     fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()> {
+        if td_addr.len() != 20 {
+            return Err(eg!("td_addr length error"));
+        }
         let validator = H160::from_slice(td_addr);
         let delegator = mapping_address(delegator_pk);
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
