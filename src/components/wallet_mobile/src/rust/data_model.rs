@@ -270,10 +270,7 @@ impl OwnerMemo {
         let noah_owner_memo: NoahOwnerMemo =
             val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
-            memo: NoahOwnerMemo {
-                blind_share: noah_owner_memo.blind_share,
-                lock: noah_owner_memo.lock,
-            },
+            memo: noah_owner_memo,
         })
     }
 

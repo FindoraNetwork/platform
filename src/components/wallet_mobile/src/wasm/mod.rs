@@ -6,7 +6,7 @@ use credentials::{
 };
 use ruc::{d, err::RucResult};
 use wasm_bindgen::prelude::*;
-use zei::noah_api::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::{XfrKeyPair, XfrPublicKey};
 use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
 
 #[wasm_bindgen]
@@ -225,7 +225,7 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
         self.0.transaction()
     }
 
@@ -394,7 +394,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if the transaction cannot be balanced.
     pub fn balance(self) -> Result<TransferOperationBuilder, JsValue> {
         let builder =
-            self.0.balance().c(d!()).map_err(|e| {
+            self.0.balance(None).c(d!()).map_err(|e| {
                 JsValue::from_str(&format!("Error balancing txn: {}", e))
             })?;
         Ok(TransferOperationBuilder(builder))

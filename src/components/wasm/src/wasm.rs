@@ -124,22 +124,6 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
-pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
-    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    let derived_asset_code =
-        AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
-            AssetTypePrefix::UserDefined,
-            &original_asset_code,
-        );
-
-    Ok(derived_asset_code.to_base64())
-}
-
-#[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
     let code: [u8; ASSET_TYPE_LENGTH] =
