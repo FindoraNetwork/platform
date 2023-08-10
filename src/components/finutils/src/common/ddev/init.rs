@@ -17,8 +17,10 @@ use ledger::{
 };
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use zei::noah_api::xfr::asset_record::AssetRecordType;
-use zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::{
+    noah_api::xfr::asset_record::AssetRecordType,
+    XfrKeyPair, XfrPublicKey, XfrSecretKey
+};
 
 #[derive(Deserialize)]
 struct TmValidators {

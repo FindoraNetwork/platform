@@ -43,22 +43,23 @@ use {
     tendermint::PrivateKey,
     utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
     web3::types::H160,
-    zei::noah_api::{
-        anon_xfr::{
-            nullify,
-            structs::{
-                AnonAssetRecord, Commitment, MTLeafInfo, OpenAnonAssetRecordBuilder,
+    zei::{
+        noah_api::{
+            anon_xfr::{
+                nullify,
+                structs::{
+                    AnonAssetRecord, Commitment, MTLeafInfo, OpenAnonAssetRecordBuilder,
+                },
             },
-        },
-        xfr::{
-            asset_record::{
-                AssetRecordType,
-                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            xfr::{
+                asset_record::{
+                    AssetRecordType,
+                    AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                },
+                structs::{XfrAmount, XfrAssetType},
             },
-            structs::{XfrAmount, XfrAssetType},
-        },
+        },XfrKeyPair, XfrPublicKey, XfrSecretKey
     },
-    zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 lazy_static! {
@@ -568,8 +569,7 @@ pub fn get_keypair(is_address_eth: bool) -> Result<XfrKeyPair> {
     }
 }
 
-///Get tendermint public key
-pub(crate) fn get_td_pubkey() -> Result<Vec<u8>> {
+fn get_td_pubkey() -> Result<Vec<u8>> {
     if let Some(key_path) = TD_KEY.as_ref() {
         fs::read_to_string(key_path)
             .c(d!("can not read key file from path"))
@@ -643,7 +643,7 @@ fn restore_keypair_from_str_with_default(
     is_address_eth: bool,
 ) -> Result<XfrKeyPair> {
     if let Some(sk) = sk_str {
-        serde_json::from_str::<XfrSecretKey>(&format!("\"{sk}\"",))
+        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk.trim()))
             .map(|sk| sk.into_keypair())
             .c(d!("Invalid secret key"))
     } else {
@@ -785,6 +785,7 @@ fn gen_delegate_tx(
     })?;
 
     let mut tx = builder.build_and_take_transaction()?;
+
     tx.sign_to_map(owner_kp);
 
     Ok(tx)
@@ -1557,7 +1558,6 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_addr, td_addr)?;
-
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign_to_map(&keypair);
 

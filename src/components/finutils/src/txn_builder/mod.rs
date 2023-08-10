@@ -2206,7 +2206,7 @@ mod tests {
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].clone(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
@@ -2239,7 +2239,7 @@ mod tests {
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].clone(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);

@@ -22,7 +22,7 @@ use {
     ruc::*,
     serde::{self, Deserialize, Serialize},
     serde_json::Value,
-    sha2::Digest,
+    sha2::{Digest, Sha256},
     std::{
         collections::{BTreeMap, HashMap},
         str::FromStr,
@@ -35,16 +35,18 @@ use {
         types::{BlockId, BlockNumber, Bytes, CallRequest, H160},
         Web3,
     },
-    zei::noah_api::{
-        anon_xfr::structs::{
-            AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
+    zei::{
+        noah_api::{
+            anon_xfr::structs::{
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
+            },
+            xfr::{
+                asset_record::{open_blind_asset_record, AssetRecordType},
+                structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
+            },
         },
-        xfr::{
-            asset_record::{open_blind_asset_record, AssetRecordType},
-            structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
-        },
+        BlindAssetRecord, XfrKeyPair, XfrPublicKey
     },
-    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 ///////////////////////////////////////
@@ -63,16 +65,19 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
     let tx_bytes = serde_json::to_vec(tx).c(d!())?;
 
-    let _ = attohttpc::post(url)
+    let ret = attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&tx_bytes)
         .send()
         .c(d!("fail to send transaction"))?
         .error_for_status()
-        .c(d!())?;
-    let tx_hash = sha2::Sha256::digest(tx_bytes);
+        .c(d!())
+        .map(|_| ());
+
+    let tx_hash = Sha256::digest(tx_bytes);
     println!("{}", hex::encode(tx_hash));
-    Ok(())
+
+    ret
 }
 
 /// Fee is needless in a `UpdateValidator` operation
@@ -90,8 +95,7 @@ pub fn set_initial_validators() -> Result<()> {
 pub fn load_tendermint_priv_validator_key(
     key_path: impl AsRef<std::path::Path>,
 ) -> Result<ValidatorKey> {
-    let k =
-        std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
+    let k = std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
     let v_keys = parse_td_validator_keys(&k).c(d!())?;
     Ok(v_keys)
 }
@@ -144,7 +148,6 @@ pub fn transfer_batch(
     builder.add_operation(op);
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(owner_kp);
     tx.sign_to_map(owner_kp);
 
     send_tx(&tx).c(d!())
@@ -210,10 +213,7 @@ pub fn gen_transfer_op_xx(
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((
-            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).c(d!())?,
-            TX_FEE_MIN,
-        ));
+        target_list.push((XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).c(d!())?, TX_FEE_MIN));
         op_fee += TX_FEE_MIN;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);

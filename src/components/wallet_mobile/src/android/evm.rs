@@ -1,10 +1,11 @@
-use super::{jStringToString, parseU64};
 use crate::rust::account::{get_serialized_address, EVMTransactionBuilder};
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use zei::noah_api::keys::PublicKey;
 use zei::XfrPublicKey;
+
+use super::{jStringToString, parseU64};
 
 #[no_mangle]
 /// # Safety

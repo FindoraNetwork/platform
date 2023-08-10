@@ -18,20 +18,22 @@ use fp_types::{
     transaction::UncheckedTransaction,
     U256,
 };
-use fp_utils::ecdsa::SecpPair;
-use fp_utils::tx::EvmRawTxWrapper;
-use ledger::data_model::AssetTypeCode;
-use ledger::data_model::ASSET_TYPE_FRA;
-use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
+use fp_utils::{
+    ecdsa::SecpPair, tx::EvmRawTxWrapper
+};
+use ledger::data_model::{
+    AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING
+};
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
-use zei::noah_api::xfr::asset_record::AssetRecordType;
-use zei::XfrKeyPair;
-use zei::XfrPublicKey;
+use zei::{
+    noah_api::xfr::asset_record::AssetRecordType,
+    XfrKeyPair, XfrPublicKey
+};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -41,20 +43,13 @@ pub fn transfer_to_account(
     lowlevel_data: Option<&str>,
     is_address_eth: bool,
 ) -> Result<()> {
-    let mut builder = utils::new_tx_builder()?;
+    let mut builder = utils::new_tx_builder().c(d!())?;
 
-    let kp = get_keypair(is_address_eth)?;
+    let kp = get_keypair(is_address_eth).c(d!())?;
 
     let asset = if let Some(asset) = asset {
         let asset = AssetTypeCode::new_from_base64(asset)?;
         Some(asset)
-    } else {
-        None
-    };
-
-    let lowlevel_data = if let Some(data) = lowlevel_data {
-        let data = hex::decode(data).c(d!())?;
-        Some(data)
     } else {
         None
     };
@@ -69,29 +64,30 @@ pub fn transfer_to_account(
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )?;
+    ).c(d!())?;
 
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
         None => MultiSigner::Xfr(kp.get_pk()),
     };
 
+    let lowlevel_data = if let Some(data) = lowlevel_data {
+        let data = hex::decode(data).c(d!())?;
+        Some(data)
+    } else {
+        None
+    };
+
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(
-            &kp,
-            target_address,
-            amount,
-            asset,
-            lowlevel_data,
-        )?
+        .add_operation_convert_account(&kp, target_address, amount, asset, lowlevel_data)
+        .c(d!())?
         .sign(&kp);
 
     let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
     tx.sign_to_map(&kp);
-    utils::send_tx(&tx)?;
-    Ok(())
+
+    utils::send_tx(&tx).c(d!())
 }
 
 #[allow(missing_docs)]
