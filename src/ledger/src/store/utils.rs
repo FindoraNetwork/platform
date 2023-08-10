@@ -57,7 +57,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         FRA_PRE_ISSUE_AMOUNT / 2,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk().into_noah().unwrap(),
+        fra_owner_kp.get_pk().into_noah(),
     );
 
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -72,7 +72,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
             (
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                    record: BlindAssetRecord::from_noah(&ba),
                     lien: None,
                 },
                 None,

@@ -1442,10 +1442,10 @@ impl BarToAbarOps {
     pub fn input_record(&self) -> BlindAssetRecord {
         match &self.note {
             BarAnonConvNote::BarNote(n) => {
-                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+                BlindAssetRecord::from_noah(&n.body.input)
             }
             BarAnonConvNote::ArNote(n) => {
-                BlindAssetRecord::from_noah(&n.body.input).unwrap()
+                BlindAssetRecord::from_noah(&n.body.input)
             }
         }
     }
@@ -1553,10 +1553,10 @@ impl AbarConvNote {
     pub fn get_public_key(&self) -> XfrPublicKey {
         match self {
             AbarConvNote::AbarToBar(note) => {
-                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+                XfrPublicKey::from_noah(&note.body.output.public_key)
             }
             AbarConvNote::AbarToAr(note) => {
-                XfrPublicKey::from_noah(&note.body.output.public_key).unwrap()
+                XfrPublicKey::from_noah(&note.body.output.public_key)
             }
         }
     }
@@ -1565,10 +1565,10 @@ impl AbarConvNote {
     pub fn get_output(&self) -> BlindAssetRecord {
         match self {
             AbarConvNote::AbarToBar(note) => {
-                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+                BlindAssetRecord::from_noah(&note.body.output)
             }
             AbarConvNote::AbarToAr(note) => {
-                BlindAssetRecord::from_noah(&note.body.output).unwrap()
+                BlindAssetRecord::from_noah(&note.body.output)
             }
         }
     }
@@ -2141,7 +2141,7 @@ impl Transaction {
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
-                                && XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap()
+                                && XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)
                                     == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {

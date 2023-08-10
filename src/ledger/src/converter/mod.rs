@@ -156,7 +156,7 @@ pub fn check_convert_account(
             }
             if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                 if o.record.public_key
-                    == XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?
+                    == XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)
                     && ty == expected_asset
                 {
                     if let XfrAmount::NonConfidential(amount) = o.record.amount {

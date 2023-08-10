@@ -836,9 +836,7 @@ impl LedgerState {
                 .iter()
                 .chain(extras.iter())
                 .map(|pk| {
-                    XfrPublicKey::from_noah(&pk)
-                        .c(d!())
-                        .and_then(|pk| self.staking_get_nonconfidential_balance(&pk))
+                    self.staking_get_nonconfidential_balance(&XfrPublicKey::from_noah(&pk))
                         .unwrap_or(0)
                 })
                 .sum::<Amount>()

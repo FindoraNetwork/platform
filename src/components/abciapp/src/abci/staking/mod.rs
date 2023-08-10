@@ -366,7 +366,7 @@ pub fn system_prism_mint_pay(
         let atc = AssetTypeCode { val: mint.asset };
         let at = if let Some(mut at) = la.get_asset_type(&atc) {
             at.properties.issuer = IssuerPublicKey {
-                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
             };
             if mint.max_supply != 0 {
                 at.properties.asset_rules.max_units = Some(mint.max_supply);
@@ -376,7 +376,7 @@ pub fn system_prism_mint_pay(
         } else {
             let mut at = AssetType::default();
             at.properties.issuer = IssuerPublicKey {
-                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
+                key: XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
             };
 
             if mint.max_supply != 0 {

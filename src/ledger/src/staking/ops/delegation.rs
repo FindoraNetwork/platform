@@ -241,7 +241,7 @@ fn check_delegation_context_principal(
     tx: &Transaction,
     owner: (XfrPublicKey, Amount),
 ) -> Result<Amount> {
-    let target_pk = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).c(d!())?;
+    let target_pk = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING);
 
     let am = tx
         .body

@@ -77,14 +77,14 @@ impl MintEntry {
             amount,
             asset_type,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            receiver_pk.unwrap_or(target_pk).into_noah().unwrap(),
+            receiver_pk.unwrap_or(target_pk).into_noah(),
         );
         let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {
             id: None,
-            record: BlindAssetRecord::from_noah(&ba).unwrap(),
+            record: BlindAssetRecord::from_noah(&ba),
             lien: None,
         };
 

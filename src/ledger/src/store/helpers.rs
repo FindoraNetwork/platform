@@ -139,7 +139,7 @@ pub fn create_issue_and_transfer_txn(
         amount,
         code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        issuer_keys.get_pk().into_noah().unwrap(),
+        issuer_keys.get_pk().into_noah(),
     );
 
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -152,7 +152,7 @@ pub fn create_issue_and_transfer_txn(
         &[(
             TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                record: BlindAssetRecord::from_noah(&ba),
                 lien: None,
             },
             None,
@@ -174,7 +174,7 @@ pub fn create_issue_and_transfer_txn(
         amount,
         code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        recipient_pk.into_noah().unwrap(),
+        recipient_pk.into_noah(),
     );
     let ar = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -185,7 +185,7 @@ pub fn create_issue_and_transfer_txn(
         &mut ledger.get_prng(),
         vec![TxoRef::Relative(0)],
         &[AssetRecord::from_open_asset_record_no_asset_tracing(
-            open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah().unwrap())
+            open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah())
                 .unwrap()
         )],
         &[ar.clone()],
@@ -224,7 +224,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         amount,
         code.val,
         AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
-        issuer_keys.get_pk().into_noah().unwrap(),
+        issuer_keys.get_pk().into_noah(),
         tracing_policies.clone(),
     );
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -241,7 +241,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         &[(
             TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                record: BlindAssetRecord::from_noah(&ba),
                 lien: None,
             },
             None,
@@ -263,7 +263,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         amount,
         code.val,
         AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
-        recipient_pk.into_noah().unwrap(),
+        recipient_pk.into_noah(),
         tracing_policies.clone(),
     );
     let ar = AssetRecord::from_template_no_identity_tracing(
@@ -273,7 +273,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
     .unwrap();
     let tar = AssetRecord::from_open_asset_record_with_asset_tracing_but_no_identity(
         &mut ledger.get_prng(),
-        open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah().unwrap())
+        open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah())
             .unwrap(),
         tracing_policies,
     )
@@ -314,7 +314,7 @@ pub fn create_issuance_txn(
         amount,
         code.val,
         record_type,
-        issuer_keys.get_pk().into_noah().unwrap(),
+        issuer_keys.get_pk().into_noah(),
     );
     let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _tracer_memo, _owner_memo) =
@@ -326,7 +326,7 @@ pub fn create_issuance_txn(
         &[(
             TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                record: BlindAssetRecord::from_noah(&ba),
                 lien: None,
             },
             None,

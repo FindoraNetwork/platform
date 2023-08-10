@@ -604,7 +604,7 @@ fn run() -> Result<()> {
         let oabar = OpenAnonAssetRecordBuilder::from_abar(
             &abar,
             memo,
-            &from.into_noah().unwrap(),
+            &from.into_noah(),
         )
         .unwrap()
         .build()
