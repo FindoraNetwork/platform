@@ -6,9 +6,8 @@ use {
     super::helpers,
     crate::{
         data_model::{
-            AssetRules, AssetTypeCode, IssueAsset,
-            IssueAssetBody, IssuerKeyPair, Memo, Operation,
-            Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
+            AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
+            Operation, Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
         },
         staking::FRA_PRE_ISSUE_AMOUNT,
     },
@@ -21,7 +20,7 @@ use {
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        BlindAssetRecord, XfrKeyPair
+        BlindAssetRecord, XfrKeyPair,
     },
 };
 

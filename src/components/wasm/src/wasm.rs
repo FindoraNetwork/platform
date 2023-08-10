@@ -502,12 +502,9 @@ impl TransactionBuilder {
         use hex::FromHex;
 
         let oar = open_bar(
-            &input_record
-                .get_bar_ref()
-                .into_noah()
-                .map_err(error_to_jsvalue)?,
+            &input_record.get_bar_ref().into_noah(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &auth_key_pair.into_noah().map_err(error_to_jsvalue)?,
+            &auth_key_pair.into_noah(),
         )
         .c(d!())
         .map_err(|e| {
@@ -561,7 +558,7 @@ impl TransactionBuilder {
         let oabar = OpenAnonAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
-            &from_keypair.into_noah().map_err(error_to_jsvalue)?,
+            &from_keypair.into_noah(),
         )
         .c(d!())
         .map_err(|e| {
@@ -640,7 +637,7 @@ impl TransactionBuilder {
         let input_oabar = OpenAnonAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
-            &from_keypair.into_noah().map_err(error_to_jsvalue)?,
+            &from_keypair.into_noah(),
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -659,7 +656,7 @@ impl TransactionBuilder {
         let output_oabar = OpenAnonAssetRecordBuilder::new()
             .amount(to_amount)
             .asset_type(input_oabar.get_asset_type())
-            .pub_key(&to_pub_key.into_noah().map_err(error_to_jsvalue)?)
+            .pub_key(&to_pub_key.into_noah())
             .finalize(&mut prng)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -963,17 +960,14 @@ pub fn get_anon_balance(
     keypair: XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<u64, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(
-        &abar,
-        memo.memo,
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?
-    .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-    .build()
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.into_noah())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     Ok(oabar.get_amount())
 }
@@ -991,17 +985,14 @@ pub fn get_open_abar(
     keypair: XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<JsValue, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(
-        &abar,
-        memo.memo,
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?
-    .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-    .build()
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.into_noah())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     let json = JsValue::from_serde(&oabar)
         .c(d!())
@@ -1022,20 +1013,17 @@ pub fn gen_nullifier_hash(
     keypair: XfrKeyPair,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(
-        &abar,
-        memo.memo,
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?
-    .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
-    .build()
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.into_noah())
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
     let n = nullify(
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
+        &keypair.into_noah(),
         oabar.get_amount(),
         oabar.get_asset_type().as_scalar(),
         mt_leaf_info.get_noah_mt_leaf_info().uid,
@@ -1077,12 +1065,9 @@ impl TransferOperationBuilder {
         amount: u64,
     ) -> Result<TransferOperationBuilder, JsValue> {
         let oar = open_bar(
-            &asset_record
-                .get_bar_ref()
-                .into_noah()
-                .map_err(error_to_jsvalue)?,
+            &asset_record.get_bar_ref().into_noah(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &key.into_noah().map_err(error_to_jsvalue)?,
+            &key.into_noah(),
         )
         .c(d!())
         .map_err(|e| {
@@ -1122,7 +1107,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                recipient.into_noah().map_err(error_to_jsvalue)?,
+                recipient.into_noah(),
                 policies.get_policies_ref().clone(),
             )
         } else {
@@ -1130,7 +1115,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                recipient.into_noah().map_err(error_to_jsvalue)?,
+                recipient.into_noah(),
             )
         };
         self.get_builder_mut()
@@ -1359,7 +1344,7 @@ impl AnonTransferOperationBuilder {
         let oabar = OpenAnonAssetRecordBuilder::from_abar(
             &abar.clone(),
             memo.memo.clone(),
-            &keypair.into_noah().map_err(error_to_jsvalue)?,
+            &keypair.into_noah(),
         )
         .c(d!())
         .map_err(error_to_jsvalue)?
@@ -1394,7 +1379,7 @@ impl AnonTransferOperationBuilder {
         let oabar_out = OpenAnonAssetRecordBuilder::new()
             .amount(amount)
             .asset_type(at.val)
-            .pub_key(&to.into_noah().map_err(error_to_jsvalue)?)
+            .pub_key(&to.into_noah())
             .finalize(&mut prng)
             .unwrap()
             .build()
@@ -1493,9 +1478,9 @@ pub fn open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<JsValue, JsValue> {
     open_bar(
-        &record.get_bar_ref().into_noah().map_err(error_to_jsvalue)?,
+        &record.get_bar_ref().into_noah(),
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
+        &keypair.into_noah(),
     )
     .c(d!())
     .map_err(|e| JsValue::from_str(&format!("Could not open asset record: {}", e)))
@@ -1812,12 +1797,10 @@ pub fn trace_assets(
     //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
 
-    let record_data = noah_trace_assets(
-        &xfr_body.into_noah().map_err(error_to_jsvalue)?,
-        tracer_keypair.get_keys(),
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let record_data =
+        noah_trace_assets(&xfr_body.into_noah(), tracer_keypair.get_keys())
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
         .map(|(amt, asset_type, _, _)| {
@@ -2115,7 +2098,7 @@ pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
 /// The destination for fee to be transfered to.
 #[wasm_bindgen]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
-    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap()
+    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)
 }
 
 #[wasm_bindgen]
@@ -2127,17 +2110,13 @@ pub fn get_delegation_target_address() -> String {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    wallet::public_key_to_base64(
-        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
-    )
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    wallet::public_key_to_base64(
-        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
-    )
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[wasm_bindgen]
@@ -2186,14 +2165,11 @@ pub fn open_abar(
     memo: AxfrOwnerMemo,
     keypair: &XfrKeyPair,
 ) -> Result<AmountAssetType, JsValue> {
-    let oabar = OpenAnonAssetRecordBuilder::from_abar(
-        &abar,
-        memo.memo,
-        &keypair.into_noah().map_err(error_to_jsvalue)?,
-    )
-    .map_err(error_to_jsvalue)?
-    .build()
-    .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.into_noah())
+            .map_err(error_to_jsvalue)?
+            .build()
+            .map_err(error_to_jsvalue)?;
 
     let at = AssetTypeCode {
         val: oabar.get_asset_type(),
@@ -2217,13 +2193,10 @@ pub fn decrypt_axfr_memo(
     key_pair: &XfrKeyPair,
     abar: &AnonAssetRecord,
 ) -> Result<AxfrOwnerMemoInfo, JsValue> {
-    let (amount, asset_type, blind) = decrypt_memo(
-        &memo.memo,
-        &key_pair.into_noah().map_err(error_to_jsvalue)?,
-        abar,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let (amount, asset_type, blind) =
+        decrypt_memo(&memo.memo, &key_pair.into_noah(), abar)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
     Ok(AxfrOwnerMemoInfo {
         amount,
         blind,
@@ -2240,10 +2213,7 @@ pub fn try_decrypt_axfr_memo(
     memo: &AxfrOwnerMemo,
     key_pair: &XfrKeyPair,
 ) -> Result<Vec<u8>, JsValue> {
-    let secret_key = key_pair
-        .get_sk_ref()
-        .into_noah()
-        .map_err(error_to_jsvalue)?;
+    let secret_key = key_pair.get_sk_ref().into_noah();
     let res = memo
         .get_memo_ref()
         .decrypt(&secret_key)
@@ -2264,13 +2234,9 @@ pub fn parse_axfr_memo(
     key_pair: &XfrKeyPair,
     abar: &AnonAssetRecord,
 ) -> Result<AxfrOwnerMemoInfo, JsValue> {
-    let (amount, asset_type, blind) = parse_memo(
-        bytes,
-        &key_pair.into_noah().map_err(error_to_jsvalue)?,
-        abar,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)?;
+    let (amount, asset_type, blind) = parse_memo(bytes, &key_pair.into_noah(), abar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
     Ok(AxfrOwnerMemoInfo {
         amount,
         blind,
@@ -2349,7 +2315,7 @@ mod test {
         let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(u64::from(amount))
             .asset_type(asset_type)
-            .pub_key(&keypair.get_pk().into_noah().unwrap())
+            .pub_key(&keypair.get_pk().into_noah())
             .finalize(prng)
             .unwrap()
             .build()

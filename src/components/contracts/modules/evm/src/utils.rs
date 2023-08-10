@@ -8,10 +8,8 @@ use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
 use zei::{
     noah_algebra::serialization::NoahFromToBytes,
-    noah_api::xfr::structs::{
-        AssetType, ASSET_TYPE_LENGTH
-    },
-    XfrPublicKey
+    noah_api::xfr::structs::{AssetType, ASSET_TYPE_LENGTH},
+    XfrPublicKey,
 };
 
 pub fn deposit_asset_event() -> Event {

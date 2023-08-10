@@ -396,9 +396,9 @@ impl TransferOperationBuilder {
         amount: u64,
     ) -> ruc::Result<TransferOperationBuilder> {
         let oar = open_bar(
-            &asset_record.get_bar_ref().into_noah().c(d!())?,
+            &asset_record.get_bar_ref().into_noah(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &key.into_noah().c(d!())?,
+            &key.into_noah(),
         )
         .c(d!())?;
         self.get_builder_mut().add_input(
@@ -429,7 +429,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                recipient.into_noah().c(d!())?,
+                recipient.into_noah(),
                 policies.get_policies_ref().clone(),
             )
         } else {
@@ -437,7 +437,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                recipient.into_noah().c(d!())?,
+                recipient.into_noah(),
             )
         };
         self.get_builder_mut().add_output(

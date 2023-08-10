@@ -13,8 +13,9 @@ use {
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            ABARData, ATxoSID, AssetType, AssetTypeCode, AssetTypePrefix, AuthenticatedUtxo,
-            StateCommitmentData, TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
+            ABARData, ATxoSID, AssetType, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedUtxo, StateCommitmentData, TxnSID, TxoSID, UnAuthenticatedUtxo,
+            Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,

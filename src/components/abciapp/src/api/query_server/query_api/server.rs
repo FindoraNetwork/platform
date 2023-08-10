@@ -18,7 +18,7 @@ use {
     std::{collections::HashSet, sync::Arc},
     zei::{
         noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        OwnerMemo
+        OwnerMemo,
     },
 };
 

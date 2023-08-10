@@ -601,14 +601,11 @@ fn run() -> Result<()> {
         // get results from query server and print
         let (uid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
         let memo = utils::get_abar_memo(&uid).unwrap().unwrap();
-        let oabar = OpenAnonAssetRecordBuilder::from_abar(
-            &abar,
-            memo,
-            &from.into_noah(),
-        )
-        .unwrap()
-        .build()
-        .unwrap();
+        let oabar =
+            OpenAnonAssetRecordBuilder::from_abar(&abar, memo, &from.into_noah())
+                .unwrap()
+                .build()
+                .unwrap();
 
         println!(
             "(AtxoSID, ABAR, OABAR)   :  {}",

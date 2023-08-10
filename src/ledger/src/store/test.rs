@@ -9,10 +9,7 @@ use {
             TransferAssetBody, TransferType, TxOutput, TxnEffect, TxoRef, TxoSID,
             ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        store::{
-            utils::{ fra_gen_initial_tx},
-            helpers::create_definition_transaction
-        }
+        store::{helpers::create_definition_transaction, utils::fra_gen_initial_tx},
     },
     rand_core::SeedableRng,
     zei::noah_algebra::prelude::{One, Zero},
@@ -190,7 +187,7 @@ fn test_asset_transfer() {
         100,
         new_code.val,
         art,
-        key_pair.get_pk().into_noah().unwrap(),
+        key_pair.get_pk().into_noah(),
     );
     let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
@@ -204,7 +201,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                    record: BlindAssetRecord::from_noah(&ba),
                     lien: None,
                 },
                 None,
@@ -212,7 +209,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&second_ba).unwrap(),
+                    record: BlindAssetRecord::from_noah(&second_ba),
                     lien: None,
                 },
                 None,
@@ -257,19 +254,16 @@ fn test_asset_transfer() {
     // Construct transfer operation
     let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
     let input_bar = (input_bar_proof.clone().utxo.0).record;
-    let input_oar = open_blind_asset_record(
-        &input_bar.into_noah().unwrap(),
-        &None,
-        &key_pair.into_noah().unwrap(),
-    )
-    .unwrap();
+    let input_oar =
+        open_blind_asset_record(&input_bar.into_noah(), &None, &key_pair.into_noah())
+            .unwrap();
     assert!(input_bar_proof.is_valid(state_commitment));
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         100,
         new_code.val,
         art,
-        key_pair_adversary.get_pk().into_noah().unwrap(),
+        key_pair_adversary.get_pk().into_noah(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -394,7 +388,7 @@ fn asset_issued() {
         100,
         new_token_code.val,
         art,
-        keypair.get_pk_ref().into_noah().unwrap(),
+        keypair.get_pk_ref().into_noah(),
     );
 
     let pc_gens = PedersenCommitmentRistretto::default();
@@ -406,7 +400,7 @@ fn asset_issued() {
         &[(
             TxOutput {
                 id: None,
-                record: BlindAssetRecord::from_noah(&ba).unwrap(),
+                record: BlindAssetRecord::from_noah(&ba),
                 lien: None,
             },
             None,
@@ -542,7 +536,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk().into_noah().unwrap(),
+        bob.get_pk().into_noah(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -556,12 +550,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(
-                    &bar.into_noah().unwrap(),
-                    &None,
-                    &alice.into_noah().unwrap(),
-                )
-                .unwrap(),
+                open_blind_asset_record(&bar.into_noah(), &None, &alice.into_noah())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -584,7 +574,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
-        bob.get_pk().into_noah().unwrap(),
+        bob.get_pk().into_noah(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -598,12 +588,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(
-                    &bar.into_noah().unwrap(),
-                    &None,
-                    &alice.into_noah().unwrap(),
-                )
-                .unwrap(),
+                open_blind_asset_record(&bar.into_noah(), &None, &alice.into_noah())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -627,7 +613,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk().into_noah().unwrap(),
+        bob.get_pk().into_noah(),
     );
     let second_record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -755,9 +741,9 @@ fn gen_fee_operation(
     let input_bar_proof = l.get_utxo_light(txo_sid).unwrap();
     let input_bar = (input_bar_proof.utxo.0).record;
     let input_oar = open_blind_asset_record(
-        &input_bar.into_noah().unwrap(),
+        &input_bar.into_noah(),
         &None,
-        &fra_owner_kp.into_noah().unwrap(),
+        &fra_owner_kp.into_noah(),
     )
     .unwrap();
 
@@ -765,7 +751,7 @@ fn gen_fee_operation(
         input_oar.amount - TX_FEE_MIN,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk().into_noah().unwrap(),
+        fra_owner_kp.get_pk().into_noah(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut l.get_prng(),
@@ -852,10 +838,7 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let pub_key = XfrKeyPair::generate(&mut prng)
-        .get_pk()
-        .into_noah()
-        .unwrap();
+    let pub_key = XfrKeyPair::generate(&mut prng).get_pk().into_noah();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::noah_api::xfr::structs::AssetType([39u8; 32]))

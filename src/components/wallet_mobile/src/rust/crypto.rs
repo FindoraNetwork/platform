@@ -84,9 +84,9 @@ pub fn rs_open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<OpenAssetRecord> {
     open_bar(
-        &record.get_bar_ref().into_noah().c(d!())?,
+        &record.get_bar_ref().into_noah(),
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        &keypair.into_noah().c(d!())?,
+        &keypair.into_noah(),
     )
     .c(d!())
 }
@@ -476,7 +476,7 @@ pub fn fra_get_minimal_fee() -> u64 {
 /// The destination for fee to be transfered to.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
-    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap()
+    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 /// The system address used to reveive delegation principals.
@@ -488,17 +488,13 @@ pub fn get_delegation_target_address() -> String {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    wallet::public_key_to_base64(
-        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
-    )
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    wallet::public_key_to_base64(
-        &XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING).unwrap(),
-    )
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

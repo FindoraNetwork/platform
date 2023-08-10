@@ -18,22 +18,15 @@ use fp_types::{
     transaction::UncheckedTransaction,
     U256,
 };
-use fp_utils::{
-    ecdsa::SecpPair, tx::EvmRawTxWrapper
-};
-use ledger::data_model::{
-    AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING
-};
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
+use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
-use zei::{
-    noah_api::xfr::asset_record::AssetRecordType,
-    XfrKeyPair, XfrPublicKey
-};
+use zei::{noah_api::xfr::asset_record::AssetRecordType, XfrKeyPair, XfrPublicKey};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -56,15 +49,13 @@ pub fn transfer_to_account(
 
     let transfer_op = utils::gen_transfer_op(
         &kp,
-        vec![(
-            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-            amount,
-        )],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
         asset,
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    ).c(d!())?;
+    )
+    .c(d!())?;
 
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,

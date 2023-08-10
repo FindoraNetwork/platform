@@ -1013,11 +1013,9 @@ impl TransferAssetBody {
             return Err(eg!());
         }
 
-        let transfer = Box::new(
-            gen_xfr_body(prng, input_records, output_records)
-                .and_then(|xb| XfrBody::from_noah(&xb))
-                .c(d!())?,
-        );
+        let transfer = Box::new(XfrBody::from_noah(
+            &gen_xfr_body(prng, input_records, output_records).c(d!())?,
+        ));
         let outputs = transfer
             .outputs
             .iter()
@@ -1441,12 +1439,8 @@ impl BarToAbarOps {
     /// provides a copy of the input record in the note
     pub fn input_record(&self) -> BlindAssetRecord {
         match &self.note {
-            BarAnonConvNote::BarNote(n) => {
-                BlindAssetRecord::from_noah(&n.body.input)
-            }
-            BarAnonConvNote::ArNote(n) => {
-                BlindAssetRecord::from_noah(&n.body.input)
-            }
+            BarAnonConvNote::BarNote(n) => BlindAssetRecord::from_noah(&n.body.input),
+            BarAnonConvNote::ArNote(n) => BlindAssetRecord::from_noah(&n.body.input),
         }
     }
 

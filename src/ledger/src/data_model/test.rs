@@ -323,22 +323,22 @@ fn test_check_fee() {
     let invalid_confidential_type = gen_fee_operation(
         Some(TX_FEE_MIN),
         None,
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
     let invalid_confidential_amount = gen_fee_operation(
         None,
         Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
     let invalid_nonconfidential_not_fra_code = gen_fee_operation(
         Some(TX_FEE_MIN),
         Some(NoahAssetType([9; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
     let invalid_nonconfidential_fee_too_little = gen_fee_operation(
         Some(TX_FEE_MIN - 1),
         Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
     let invalid_destination_not_black_hole = gen_fee_operation(
         Some(TX_FEE_MIN),
@@ -349,12 +349,12 @@ fn test_check_fee() {
     let valid = gen_fee_operation(
         Some(TX_FEE_MIN),
         Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
     let valid2 = gen_fee_operation(
         Some(TX_FEE_MIN + 999),
         Some(NoahAssetType([0; ASSET_TYPE_LENGTH])),
-        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY).unwrap(),
+        XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY),
     );
 
     // tx.add_operation(invalid_confidential_type.clone());

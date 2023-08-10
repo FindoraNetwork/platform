@@ -499,7 +499,7 @@ impl TxnEffect {
                 verify_xfr_body(
                     prng,
                     params,
-                    &trn.body.transfer.into_noah().c(d!())?,
+                    &trn.body.transfer.into_noah(),
                     &trn.body.policies.to_ref(),
                 )
                 .c(d!())?;

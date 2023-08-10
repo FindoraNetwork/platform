@@ -836,8 +836,10 @@ impl LedgerState {
                 .iter()
                 .chain(extras.iter())
                 .map(|pk| {
-                    self.staking_get_nonconfidential_balance(&XfrPublicKey::from_noah(&pk))
-                        .unwrap_or(0)
+                    self.staking_get_nonconfidential_balance(&XfrPublicKey::from_noah(
+                        &pk,
+                    ))
+                    .unwrap_or(0)
                 })
                 .sum::<Amount>()
             - s.coinbase_balance()

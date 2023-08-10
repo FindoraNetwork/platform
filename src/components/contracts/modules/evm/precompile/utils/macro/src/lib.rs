@@ -64,9 +64,7 @@ pub fn generate_function_selector(_: TokenStream, input: TokenStream) -> TokenSt
             Some((_, Expr::Lit(ExprLit { lit, .. }))) => {
                 if let Lit::Str(lit_str) = lit {
                     let selector = u32::from_be_bytes(
-                        Keccak256::digest(lit_str.value())[..4]
-                            .try_into()
-                            .unwrap(),
+                        Keccak256::digest(lit_str.value())[..4].try_into().unwrap(),
                     );
                     ident_expressions.push(variant.ident);
                     variant_expressions.push(Expr::Lit(ExprLit {

@@ -18,8 +18,7 @@ use ledger::{
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::{
-    noah_api::xfr::asset_record::AssetRecordType,
-    XfrKeyPair, XfrPublicKey, XfrSecretKey
+    noah_api::xfr::asset_record::AssetRecordType, XfrKeyPair, XfrPublicKey, XfrSecretKey,
 };
 
 #[derive(Deserialize)]
@@ -118,10 +117,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         gen_transfer_op_xx(
             Some(&gen_8668_endpoint(env)),
             &v.xfr_keypair,
-            vec![(
-                XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-                am,
-            )],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
             None,
             true,
             false,

@@ -185,8 +185,7 @@ pub fn create_issue_and_transfer_txn(
         &mut ledger.get_prng(),
         vec![TxoRef::Relative(0)],
         &[AssetRecord::from_open_asset_record_no_asset_tracing(
-            open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah())
-                .unwrap()
+            open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah()).unwrap()
         )],
         &[ar.clone()],
         None,
@@ -273,8 +272,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
     .unwrap();
     let tar = AssetRecord::from_open_asset_record_with_asset_tracing_but_no_identity(
         &mut ledger.get_prng(),
-        open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah())
-            .unwrap(),
+        open_blind_asset_record(&ba, &owner_memo, &issuer_keys.into_noah()).unwrap(),
         tracing_policies,
     )
     .unwrap();

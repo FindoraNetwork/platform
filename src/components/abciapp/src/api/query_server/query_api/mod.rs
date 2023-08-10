@@ -36,7 +36,7 @@ use {
     zei::{
         noah_algebra::serialization::NoahFromToBytes,
         noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        OwnerMemo, XfrPublicKey
+        OwnerMemo, XfrPublicKey,
     },
 };
 

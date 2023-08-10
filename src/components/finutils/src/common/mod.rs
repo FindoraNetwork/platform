@@ -58,7 +58,8 @@ use {
                 },
                 structs::{XfrAmount, XfrAssetType},
             },
-        },XfrKeyPair, XfrPublicKey, XfrSecretKey
+        },
+        XfrKeyPair, XfrPublicKey, XfrSecretKey,
     },
 };
 
@@ -173,10 +174,7 @@ pub fn stake(
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
-        vec![(
-            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-            am,
-        )],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
         None,
         false,
         false,
@@ -216,10 +214,7 @@ pub fn stake_append(
     builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
-        vec![(
-            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-            am,
-        )],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
         None,
         false,
         false,
@@ -769,10 +764,7 @@ fn gen_delegate_tx(
 
     utils::gen_transfer_op(
         owner_kp,
-        vec![(
-            XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-            amount,
-        )],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
         None,
         false,
         false,

@@ -291,10 +291,7 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(
-                XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING),
-                amount,
-            )],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
             None,
             false,
             false,

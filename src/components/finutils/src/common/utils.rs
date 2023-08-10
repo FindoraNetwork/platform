@@ -38,14 +38,15 @@ use {
     zei::{
         noah_api::{
             anon_xfr::structs::{
-                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo,
+                OpenAnonAssetRecord,
             },
             xfr::{
                 asset_record::{open_blind_asset_record, AssetRecordType},
                 structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
             },
         },
-        BlindAssetRecord, XfrKeyPair, XfrPublicKey
+        BlindAssetRecord, XfrKeyPair, XfrPublicKey,
     },
 };
 
@@ -95,7 +96,8 @@ pub fn set_initial_validators() -> Result<()> {
 pub fn load_tendermint_priv_validator_key(
     key_path: impl AsRef<std::path::Path>,
 ) -> Result<ValidatorKey> {
-    let k = std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
+    let k =
+        std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
     let v_keys = parse_td_validator_keys(&k).c(d!())?;
     Ok(v_keys)
 }
@@ -598,12 +600,9 @@ pub fn get_asset_all(kp: &XfrKeyPair) -> Result<BTreeMap<AssetTypeCode, u64>> {
     let mut set = BTreeMap::new();
 
     for (_k, v) in info {
-        let res = open_blind_asset_record(
-            &v.0 .0.record.into_noah(),
-            &v.1,
-            &kp.into_noah(),
-        )
-        .c(d!())?;
+        let res =
+            open_blind_asset_record(&v.0 .0.record.into_noah(), &v.1, &kp.into_noah())
+                .c(d!())?;
 
         let code = AssetTypeCode {
             val: res.asset_type,
