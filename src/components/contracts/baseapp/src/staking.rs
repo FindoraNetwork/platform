@@ -326,33 +326,6 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
 
-    fn replace_delegator(
-        &self,
-        validator: &[u8],
-        delegator: &XfrPublicKey,
-        new_delegator_address: H160,
-        new_delegator_pk: Option<Vec<u8>>,
-    ) -> Result<()> {
-        let validator = H160::from_slice(validator);
-        let delegator_address = mapping_address(delegator);
-
-        if let Err(e) = self.modules.evm_module.replace_delegator(
-            &self.deliver_state,
-            validator,
-            delegator_address,
-            new_delegator_address,
-            new_delegator_pk,
-        ) {
-            self.deliver_state.state.write().discard_session();
-            self.deliver_state.db.write().discard_session();
-            tracing::error!(target: "evm staking", "replace_delegator error:{:?}", e);
-            return Err(e);
-        }
-
-        self.deliver_state.state.write().commit_session();
-        self.deliver_state.db.write().commit_session();
-        Ok(())
-    }
     fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()> {
         if td_addr.len() != 20 {
             return Err(eg!("td_addr length error"));

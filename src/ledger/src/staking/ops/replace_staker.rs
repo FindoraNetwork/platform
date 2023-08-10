@@ -6,7 +6,7 @@
 use {
     crate::{
         data_model::{NoReplayToken, Transaction},
-        staking::{evm::EVM_STAKING, Staking},
+        staking::Staking,
     },
     config::abci::global_cfg::CFG,
     fp_types::H160,
@@ -75,23 +75,7 @@ impl ReplaceStakerOps {
         self.verify()?;
         let cur_height = staking_simulator.cur_height() as i64;
         if cur_height > CFG.checkpoint.evm_staking_inital_height {
-            let validator = self
-                .body
-                .td_addr
-                .clone()
-                .ok_or(eg!("replace staker validator not found"))?;
-
-            let new_delegator_address = self
-                .body
-                .new_delegator
-                .ok_or(eg!("replace staker new_staker_address not found"))?;
-
-            EVM_STAKING.get().c(d!())?.write().replace_delegator(
-                &validator,
-                &self.pubkey,
-                new_delegator_address,
-                self.body.new_delegator_pk.clone(),
-            )
+            Err(eg!("replace_delegator not support"))
         } else {
             dbg!(staking_simulator.check_and_replace_staker(
                 &self.pubkey,
