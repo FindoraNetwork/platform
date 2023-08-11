@@ -22,7 +22,7 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
 sha3 = { version = "0.10", default-features = false }
-hex = "0.4.2"
+hex = "0.4.3"
 ethabi = "17.1.0"
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 protobuf = "2.16"
@@ -44,7 +44,7 @@ module-ethereum = { path = "../ethereum" }
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
-hex = "0.4.2"
+hex = "0.4.3"
 module-account = { path = "../account" }
 serde_json = "1.0.64"
 

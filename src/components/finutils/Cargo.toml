@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 
-hex = "0.4.2"
+hex = "0.4.3"
 base64 = "0.13"
 clap = { version = "2.33.3", features = ["yaml"] }
 lazy_static = "1.4.0"

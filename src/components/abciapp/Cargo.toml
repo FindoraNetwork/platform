@@ -26,7 +26,7 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.40"
 lazy_static = "1.4.0"
 futures = { version = "0.3.16", features = ["thread-pool"] }
-hex = "0.4.2"
+hex = "0.4.3"
 ctrlc = { version = "=3.2.5", features = ["termination"] }
 protobuf = "2.16"
 toml = "0.5.8"
@@ -41,11 +41,11 @@ percent-encoding = "2.1.0"
 
 nix = "0.22.1"
 
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
 abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.6" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
@@ -61,7 +61,6 @@ fp-types = {path = "../contracts/primitives/types"}
 
 enterprise-web3 = { path = "../contracts/primitives/enterprise-web3" }
 module-evm = { path = "../contracts/modules/evm"}
-ethereum-types = { version = "0.13.1", default-features = false }
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"

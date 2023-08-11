@@ -15,7 +15,7 @@ wasm-opt = false
 
 [dependencies]
 base64 = "0.13"
-hex = "0.4.2"
+hex = "0.4.3"
 js-sys = "0.3.27"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }

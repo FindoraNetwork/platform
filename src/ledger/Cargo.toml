@@ -13,7 +13,7 @@ byteorder = "1.0.0"
 curve25519-dalek = { package = "noah-curve25519-dalek", version = "4.0.0", default-features = false, features = ['serde'] }
 ed25519-dalek = { package = "noah-ed25519-dalek", git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v4.0.0" }
 digest = '0.10'
-hex = "0.4.2"
+hex = "0.4.3"
 lazy_static = { version = "1.2.0" }
 tracing = "0.1"
 rand = "0.8"
