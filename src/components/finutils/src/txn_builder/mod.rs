@@ -1347,7 +1347,7 @@ mod tests {
         let _valid_transfer_op = TransferOperationBuilder::new()
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_2, &memo1, &alice.into_noah()).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
