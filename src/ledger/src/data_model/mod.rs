@@ -49,34 +49,36 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::noah_algebra::{
-        bls12_381::BLSScalar, bn254::BN254Scalar, serialization::NoahFromToBytes,
-        traits::Scalar,
-    },
-    zei::noah_api::{
-        anon_xfr::{
-            abar_to_abar::AXfrNote,
-            abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
-            abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
-            ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
-            bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
-            commit,
-            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
-            AXfrAddressFoldingInstance,
+    zei::{
+        noah_algebra::{
+            bls12_381::BLSScalar, bn254::BN254Scalar, serialization::NoahFromToBytes,
+            traits::Scalar,
         },
-        keys::PublicKey as NoahXfrPublicKey,
-        parameters::{AddressFormat, VerifierParams},
-        xfr::{
-            gen_xfr_body,
-            structs::{
-                AssetRecord, AssetType as NoahAssetType, TracingPolicies, TracingPolicy,
-                XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
+        noah_api::{
+            anon_xfr::{
+                abar_to_abar::AXfrNote,
+                abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
+                abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
+                ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
+                bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
+                commit,
+                structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
+                AXfrAddressFoldingInstance,
             },
-            XfrNotePolicies,
+            keys::PublicKey as NoahXfrPublicKey,
+            parameters::{AddressFormat, VerifierParams},
+            xfr::{
+                gen_xfr_body,
+                structs::{
+                    AssetRecord, AssetType as NoahAssetType, TracingPolicies, TracingPolicy,
+                    XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
+                },
+                XfrNotePolicies,
+            },
         },
+        noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
+        BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey
     },
-    zei::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
-    zei::{BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;

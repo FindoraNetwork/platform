@@ -3,9 +3,13 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, jvalue, JNI_TRUE};
 use jni::JNIEnv;
 use ledger::data_model::AssetType as PlatformAssetType;
-use zei::noah_api::keys::{KeyPair, PublicKey};
-use zei::noah_api::xfr::structs::OwnerMemo as NoahOwnerMemo;
-use zei::{XfrKeyPair, XfrPublicKey};
+use zei::{
+    noah_api::{
+        keys::{KeyPair, PublicKey},
+        xfr::structs::OwnerMemo as NoahOwnerMemo
+    },
+    XfrKeyPair, XfrPublicKey
+};
 
 use super::{jStringToString, parseU64};
 

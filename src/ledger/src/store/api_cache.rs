@@ -20,8 +20,9 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::noah_api::anon_xfr::structs::AxfrOwnerMemo,
-    zei::{OwnerMemo, XfrPublicKey},
+    zei::{
+        noah_api::anon_xfr::structs::AxfrOwnerMemo, OwnerMemo, XfrPublicKey
+    },
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;

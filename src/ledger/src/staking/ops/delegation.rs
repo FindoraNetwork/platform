@@ -21,8 +21,9 @@ use {
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::noah_api::xfr::structs::{XfrAmount, XfrAssetType},
-    zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    zei::{
+        noah_api::xfr::structs::{XfrAmount, XfrAssetType}, XfrKeyPair, XfrPublicKey, XfrSignature
+    },
 };
 
 /// Used as the inner object of a `Delegation Operation`.

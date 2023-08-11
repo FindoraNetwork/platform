@@ -14,11 +14,13 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::noah_api::xfr::{
-        asset_record::{open_blind_asset_record, AssetRecordType},
-        structs::{AssetRecordTemplate, XfrAmount},
+    zei::{
+        noah_api::xfr::{
+            asset_record::{open_blind_asset_record, AssetRecordType},
+            structs::{AssetRecordTemplate, XfrAmount},
+        },
+        XfrKeyPair, XfrPublicKey
     },
-    zei::{XfrKeyPair, XfrPublicKey},
 };
 
 #[test]

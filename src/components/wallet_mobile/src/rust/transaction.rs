@@ -17,11 +17,15 @@ use ledger::{
 };
 use ruc::{RucResult, *};
 use serde_json::Result;
-use zei::noah_api::xfr::asset_record::{
-    open_blind_asset_record as open_bar, AssetRecordType,
+use zei::{
+    noah_api::xfr::{
+        asset_record::{
+            open_blind_asset_record as open_bar, AssetRecordType,
+        },
+        structs::AssetRecordTemplate
+    },
+    OwnerMemo as ZeiOwnerMemo, XfrKeyPair, XfrPublicKey
 };
-use zei::noah_api::xfr::structs::AssetRecordTemplate;
-use zei::{OwnerMemo as ZeiOwnerMemo, XfrKeyPair, XfrPublicKey};
 
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.

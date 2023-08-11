@@ -40,8 +40,10 @@ use {
     },
     ruc::*,
     std::{fmt, fs},
-    zei::noah_api::anon_xfr::structs::OpenAnonAssetRecordBuilder,
-    zei::XfrSecretKey,
+    zei::{
+        noah_api::anon_xfr::structs::OpenAnonAssetRecordBuilder,
+        XfrSecretKey
+    },
 };
 
 fn main() {

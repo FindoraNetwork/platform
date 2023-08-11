@@ -51,8 +51,10 @@ use {
             Arc,
         },
     },
-    zei::noah_api::keys::PublicKey as NoahXfrPublicKey,
-    zei::{XfrKeyPair, XfrPublicKey},
+    zei::{
+        noah_api::keys::PublicKey as NoahXfrPublicKey,
+        XfrKeyPair, XfrPublicKey
+    },
 };
 
 // height, reward rate

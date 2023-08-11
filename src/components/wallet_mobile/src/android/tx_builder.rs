@@ -4,8 +4,10 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, JNI_TRUE};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
-use zei::noah_api::keys::KeyPair;
-use zei::XfrKeyPair;
+use zei::{
+    noah_api::keys::KeyPair,
+    XfrKeyPair
+};
 #[no_mangle]
 /// # Safety
 /// @param kp: owner's KeyPair

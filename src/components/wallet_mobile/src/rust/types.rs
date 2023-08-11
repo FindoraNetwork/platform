@@ -5,8 +5,12 @@ use credentials::{
     CredUserSecretKey as PlatformCredUserSecretKey,
 };
 use std::ops::{Deref, DerefMut};
-use zei::noah_api::keys::{KeyPair as NoahXfrKeyPair, PublicKey as NoahXfrPublicKey};
-use zei::noah_api::xfr::structs::OpenAssetRecord as NoahOpenAssetRecord;
+use zei::{
+    noah_api::{
+        keys::{KeyPair as NoahXfrKeyPair, PublicKey as NoahXfrPublicKey},
+        xfr::structs::OpenAssetRecord as NoahOpenAssetRecord
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 

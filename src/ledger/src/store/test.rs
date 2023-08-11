@@ -12,18 +12,22 @@ use {
         store::{helpers::create_definition_transaction, utils::fra_gen_initial_tx},
     },
     rand_core::SeedableRng,
-    zei::noah_algebra::prelude::{One, Zero},
-    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-    zei::noah_api::{
-        anon_xfr::structs::OpenAnonAssetRecordBuilder,
-        xfr::{
-            asset_record::{
-                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
-            },
-            structs::{AssetRecord, AssetRecordTemplate},
+    zei::{
+        noah_algebra::{
+            prelude::{One, Zero},
+            ristretto::PedersenCommitmentRistretto
         },
+        noah_api::{
+            anon_xfr::structs::OpenAnonAssetRecordBuilder,
+            xfr::{
+                asset_record::{
+                    build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+                },
+                structs::{AssetRecord, AssetRecordTemplate},
+            },
+        },
+        BlindAssetRecord, XfrKeyPair
     },
-    zei::{BlindAssetRecord, XfrKeyPair},
 };
 
 #[cfg(test)]

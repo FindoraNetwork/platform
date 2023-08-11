@@ -2,8 +2,10 @@ use crate::rust::account::{get_serialized_address, EVMTransactionBuilder};
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
-use zei::noah_api::keys::PublicKey;
-use zei::XfrPublicKey;
+use zei::{
+    noah_api::keys::PublicKey,
+    XfrPublicKey
+};
 
 use super::{jStringToString, parseU64};
 

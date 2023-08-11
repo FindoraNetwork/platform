@@ -47,36 +47,40 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::noah_algebra::prelude::*,
-    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-    zei::noah_api::{
-        anon_creds::{ACCommitment, ACCommitmentKey, Credential},
-        anon_xfr::{
-            abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
-            abar_to_ar::{
-                finish_abar_to_ar_note, init_abar_to_ar_note, AbarToArPreNote,
-            },
-            abar_to_bar::{
-                finish_abar_to_bar_note, init_abar_to_bar_note, AbarToBarPreNote,
-            },
-            ar_to_abar::gen_ar_to_abar_note,
-            bar_to_abar::gen_bar_to_abar_note,
-            structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
+    zei::{
+        noah_algebra::{
+            prelude::*,
+            ristretto::PedersenCommitmentRistretto
         },
-        keys::SecretKey,
-        parameters::{AddressFormat, ProverParams},
-        xfr::{
-            asset_record::{
-                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+        noah_api::{
+            anon_creds::{ACCommitment, ACCommitmentKey, Credential},
+            anon_xfr::{
+                abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
+                abar_to_ar::{
+                    finish_abar_to_ar_note, init_abar_to_ar_note, AbarToArPreNote,
+                },
+                abar_to_bar::{
+                    finish_abar_to_bar_note, init_abar_to_bar_note, AbarToBarPreNote,
+                },
+                ar_to_abar::gen_ar_to_abar_note,
+                bar_to_abar::gen_bar_to_abar_note,
+                structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
             },
-            structs::{
-                AssetRecord, AssetRecordTemplate, AssetType, OpenAssetRecord,
-                TracingPolicies, TracingPolicy,
+            keys::SecretKey,
+            parameters::{AddressFormat, ProverParams},
+            xfr::{
+                asset_record::{
+                    build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+                },
+                structs::{
+                    AssetRecord, AssetRecordTemplate, AssetType, OpenAssetRecord,
+                    TracingPolicies, TracingPolicy,
+                },
+                XfrNotePolicies,
             },
-            XfrNotePolicies,
         },
+        BlindAssetRecord, OwnerMemo, XfrKeyPair, XfrPublicKey
     },
-    zei::{BlindAssetRecord, OwnerMemo, XfrKeyPair, XfrPublicKey},
 };
 
 macro_rules! no_transfer_err {
@@ -1872,16 +1876,18 @@ mod tests {
         },
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-        zei::noah_api::{
-            anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
-            xfr::{
-                asset_record::{
-                    build_blind_asset_record, open_blind_asset_record,
-                    AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        zei::{
+            noah_algebra::ristretto::PedersenCommitmentRistretto,
+            noah_api::{
+                anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
+                xfr::{
+                    asset_record::{
+                        build_blind_asset_record, open_blind_asset_record,
+                        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                    },
+                    structs::AssetType as AT,
                 },
-                structs::AssetType as AT,
-            },
+            }
         },
     };
 

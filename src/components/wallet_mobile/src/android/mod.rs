@@ -13,8 +13,10 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
-use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
-use zei::{XfrKeyPair, XfrPublicKey};
+use zei::{
+    noah_api::xfr::structs::ASSET_TYPE_LENGTH,
+    XfrKeyPair, XfrPublicKey
+};
 
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.

@@ -66,31 +66,33 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
-    zei::noah_algebra::{
-        bn254::BN254Scalar,
-        prelude::{NoahFromToBytes, Scalar},
-    },
-    zei::noah_api::{
-        anon_xfr::{
-            decrypt_memo, nullify, parse_memo,
-            structs::{
-                AnonAssetRecord, Commitment, OpenAnonAssetRecord,
-                OpenAnonAssetRecordBuilder,
+    zei::{
+        noah_algebra::{
+            bn254::BN254Scalar,
+            prelude::{NoahFromToBytes, Scalar},
+        },
+        noah_api::{
+            anon_xfr::{
+                decrypt_memo, nullify, parse_memo,
+                structs::{
+                    AnonAssetRecord, Commitment, OpenAnonAssetRecord,
+                    OpenAnonAssetRecordBuilder,
+                },
+            },
+            xfr::{
+                asset_record::{
+                    open_blind_asset_record as open_bar, AssetRecordType,
+                    AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                },
+                structs::{
+                    AssetRecordTemplate, AssetType as NoahAssetType, ASSET_TYPE_LENGTH,
+                },
+                trace_assets as noah_trace_assets,
             },
         },
-        xfr::{
-            asset_record::{
-                open_blind_asset_record as open_bar, AssetRecordType,
-                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            },
-            structs::{
-                AssetRecordTemplate, AssetType as NoahAssetType, ASSET_TYPE_LENGTH,
-            },
-            trace_assets as noah_trace_assets,
-        },
+        noah_crypto::hybrid_encryption::{XPublicKey, XSecretKey},
+        OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey
     },
-    zei::noah_crypto::hybrid_encryption::{XPublicKey, XSecretKey},
-    zei::{OwnerMemo as ZeiOwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built

@@ -56,27 +56,29 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
-    zei::noah_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
-    },
-    zei::noah_algebra::{bn254::BN254Scalar, prelude::*},
-    zei::noah_api::{
-        anon_xfr::{
-            abar_to_abar::verify_anon_xfr_note,
-            structs::{
-                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
-                Nullifier,
+    zei::{
+        noah_accumulators::merkle_tree::{
+            ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
+        },
+        noah_algebra::{bn254::BN254Scalar, prelude::*},
+        noah_api::{
+            anon_xfr::{
+                abar_to_abar::verify_anon_xfr_note,
+                structs::{
+                    AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
+                    Nullifier,
+                },
+                AXfrAddressFoldingInstance, TREE_DEPTH as MERKLE_TREE_DEPTH,
             },
-            AXfrAddressFoldingInstance, TREE_DEPTH as MERKLE_TREE_DEPTH,
+            parameters::{AddressFormat, VerifierParams},
+            xfr::{
+                structs::{TracingPolicies, TracingPolicy},
+                XfrNotePolicies,
+            },
         },
-        parameters::{AddressFormat, VerifierParams},
-        xfr::{
-            structs::{TracingPolicies, TracingPolicy},
-            XfrNotePolicies,
-        },
+        noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
+        OwnerMemo, XfrPublicKey
     },
-    zei::noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
-    zei::{OwnerMemo, XfrPublicKey},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;

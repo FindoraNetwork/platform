@@ -49,8 +49,10 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
 use utils::parse_evm_staking_coinbase_mint_event;
-use zei::noah_algebra::serialization::NoahFromToBytes;
-use zei::XfrPublicKey;
+use zei::{
+    noah_algebra::serialization::NoahFromToBytes,
+    XfrPublicKey
+};
 
 use crate::utils::parse_evm_staking_mint_event;
 

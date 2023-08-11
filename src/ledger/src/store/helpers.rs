@@ -16,13 +16,15 @@ use {
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::fmt::Debug,
-    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-    zei::noah_api::xfr::{
-        asset_record::AssetRecordType,
-        asset_record::{build_blind_asset_record, open_blind_asset_record},
-        structs::{AssetRecord, AssetRecordTemplate},
+    zei::{
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        noah_api::xfr::{
+            asset_record::AssetRecordType,
+            asset_record::{build_blind_asset_record, open_blind_asset_record},
+            structs::{AssetRecord, AssetRecordTemplate},
+        },
+        BlindAssetRecord, XfrKeyPair, XfrPublicKey
     },
-    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 /// Create a transaction to define a custom asset

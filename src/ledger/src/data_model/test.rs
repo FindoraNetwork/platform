@@ -5,11 +5,13 @@ use {
     curve25519_dalek::ristretto::CompressedRistretto,
     rand_core::SeedableRng,
     std::cmp::min,
-    zei::noah_api::{
-        ristretto,
-        xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
+    zei::{
+        noah_api::{
+            ristretto,
+            xfr::structs::{AssetTypeAndAmountProof, XfrProofs},
+        },
+        XfrBody
     },
-    zei::XfrBody,
 };
 
 #[macro_export]

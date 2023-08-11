@@ -11,8 +11,10 @@ use {
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    zei::noah_algebra::serialization::NoahFromToBytes,
-    zei::{XfrPublicKey, XfrSignature},
+    zei::{
+        noah_algebra::serialization::NoahFromToBytes,
+        XfrPublicKey, XfrSignature
+    },
 };
 
 /// An opaque 34-byte cryptographic identifier.

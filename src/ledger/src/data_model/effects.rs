@@ -28,19 +28,21 @@ use {
         collections::{HashMap, HashSet},
         sync::Arc,
     },
-    zei::noah_algebra::serialization::NoahFromToBytes,
-    zei::noah_api::{
-        anon_xfr::{
-            abar_to_abar::AXfrNote,
-            structs::{AnonAssetRecord, Nullifier},
+    zei::{
+        noah_algebra::serialization::NoahFromToBytes,
+        noah_api::{
+            anon_xfr::{
+                abar_to_abar::AXfrNote,
+                structs::{AnonAssetRecord, Nullifier},
+            },
+            parameters::bulletproofs::BulletproofParams,
+            xfr::{
+                structs::{XfrAmount, XfrAssetType},
+                verify_xfr_body,
+            },
         },
-        parameters::bulletproofs::BulletproofParams,
-        xfr::{
-            structs::{XfrAmount, XfrAssetType},
-            verify_xfr_body,
-        },
+        XfrPublicKey
     },
-    zei::XfrPublicKey,
 };
 
 lazy_static! {

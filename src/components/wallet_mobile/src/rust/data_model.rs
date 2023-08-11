@@ -20,13 +20,15 @@ use rand_core::SeedableRng;
 use ruc::Result as RUCResult;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use zei::noah_api::xfr::structs::{
-    AssetTracerDecKeys, AssetTracerEncKeys,
-    AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
-    OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
-    TracingPolicy as NoahTracingPolicy,
+use zei::{
+    noah_api::xfr::structs::{
+        AssetTracerDecKeys, AssetTracerEncKeys,
+        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
+        TracingPolicy as NoahTracingPolicy,
+    },
+    BlindAssetRecord, XfrPublicKey
 };
-use zei::{BlindAssetRecord, XfrPublicKey};
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Indicates whether the TXO ref is an absolute or relative value.

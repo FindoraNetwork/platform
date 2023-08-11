@@ -210,10 +210,12 @@ mod issue {
         },
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
-        zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
-        zei::noah_api::xfr::{
-            asset_record::{build_blind_asset_record, AssetRecordType},
-            structs::AssetRecordTemplate,
+        zei::{
+            noah_algebra::ristretto::PedersenCommitmentRistretto,
+            noah_api::xfr::{
+                asset_record::{build_blind_asset_record, AssetRecordType},
+                structs::AssetRecordTemplate,
+            }
         },
     };
 

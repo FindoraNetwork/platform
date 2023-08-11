@@ -17,18 +17,22 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::noah_algebra::bn254::BN254Scalar,
-    zei::noah_api::anon_xfr::structs::{
-        AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
-        MTLeafInfo as NoahMTLeafInfo,
+    zei::{
+        noah_algebra::bn254::BN254Scalar,
+        noah_api::{
+            anon_xfr::structs::{
+                AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
+                MTLeafInfo as NoahMTLeafInfo,
+            },
+            xfr::structs::{
+                AssetTracerDecKeys, AssetTracerEncKeys,
+                AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+                OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
+                TracingPolicy as NoahTracingPolicy,
+            }
+        },
+        BlindAssetRecord, XfrPublicKey
     },
-    zei::noah_api::xfr::structs::{
-        AssetTracerDecKeys, AssetTracerEncKeys,
-        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
-        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
-        TracingPolicy as NoahTracingPolicy,
-    },
-    zei::{BlindAssetRecord, XfrPublicKey},
 };
 
 #[wasm_bindgen]

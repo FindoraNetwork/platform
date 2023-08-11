@@ -4,8 +4,10 @@ use jni::sys::{jbyteArray, jlong};
 use jni::JNIEnv;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use zei::noah_api::keys::KeyPair as RawXfrKeyPair;
-use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::{
+    keys::KeyPair as RawXfrKeyPair,
+    xfr::structs::ASSET_TYPE_LENGTH
+};
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_findora_JniApi_xfrKeyPairNew(
