@@ -188,7 +188,6 @@ fn test_asset_transfer() {
         &template,
         vec![],
     );
-    let second_ba = ba.clone();
 
     let asset_issuance_body = IssueAssetBody::new(
         &new_code,
@@ -205,7 +204,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: BlindAssetRecord::from_noah(&second_ba),
+                    record: BlindAssetRecord::from_noah(&ba.clone()),
                     lien: None,
                 },
                 None,

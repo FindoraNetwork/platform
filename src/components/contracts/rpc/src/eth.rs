@@ -1617,7 +1617,7 @@ fn dummy_block(height: u64, full: bool) -> Rich<Block> {
     };
 
     let parent_hash =
-        H256::from_slice(&sha3::Keccak256::digest(&(height - 1).to_le_bytes()));
+        H256::from_slice(&sha3::Keccak256::digest((height - 1).to_le_bytes()));
 
     let transactions = if full {
         BlockTransactions::Full(vec![])
