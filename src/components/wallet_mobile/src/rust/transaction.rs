@@ -15,7 +15,7 @@ use ledger::{
     },
     staking::{td_addr_to_bytes, PartialUnDelegation, TendermintAddr},
 };
-use ruc::{RucResult, *};
+use ruc::{d, eg, Result as RucResult, err::RucResult as NewRucResult};
 use serde_json::Result;
 use zei::{
     noah_api::xfr::{
@@ -133,7 +133,7 @@ impl TransactionBuilder {
     pub fn add_fee_relative_auto(
         mut self,
         kp: XfrKeyPair,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         self.transaction_builder.add_fee_relative_auto(&kp)?;
         Ok(self)
     }
@@ -160,7 +160,7 @@ impl TransactionBuilder {
 
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee(mut self, inputs: FeeInputs) -> ruc::Result<TransactionBuilder> {
+    pub fn add_fee(mut self, inputs: FeeInputs) -> RucResult<TransactionBuilder> {
         self.transaction_builder.add_fee(inputs.into())?;
         Ok(self)
     }
@@ -186,7 +186,7 @@ impl TransactionBuilder {
         memo: String,
         token_code: String,
         asset_rules: AssetRules,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         self.add_operation_create_asset_with_policy(
             key_pair,
             memo,
@@ -205,7 +205,7 @@ impl TransactionBuilder {
         token_code: String,
         _policy_choice: String,
         asset_rules: AssetRules,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         let asset_token = if token_code.is_empty() {
             AssetTypeCode::gen_random()
         } else {
@@ -231,7 +231,7 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         let asset_token = AssetTypeCode::new_from_base64(&code)?;
 
         // TODO: (keyao/noah) enable client support for identity
@@ -255,7 +255,7 @@ impl TransactionBuilder {
         auth_key_pair: &XfrKeyPair,
         code: String,
         new_memo: String,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         // First, decode the asset code
         let code = AssetTypeCode::new_from_base64(&code)?;
 
@@ -270,7 +270,7 @@ impl TransactionBuilder {
         keypair: &XfrKeyPair,
         amount: u64,
         validator: TendermintAddr,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         self.get_builder_mut()
             .add_operation_delegation(keypair, amount, validator);
         Ok(self)
@@ -280,7 +280,7 @@ impl TransactionBuilder {
     pub fn add_operation_undelegate(
         mut self,
         keypair: &XfrKeyPair,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         self.get_builder_mut()
             .add_operation_undelegation(keypair, None);
         Ok(self)
@@ -292,7 +292,7 @@ impl TransactionBuilder {
         keypair: &XfrKeyPair,
         am: u64,
         target_validator: TendermintAddr,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         let middle_pk = gen_random_keypair().get_pk();
         self.get_builder_mut().add_operation_undelegation(
             keypair,
@@ -310,7 +310,7 @@ impl TransactionBuilder {
         mut self,
         td_addr: Vec<u8>,
         keypair: &XfrKeyPair,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         self.get_builder_mut()
             .add_operation_claim(Some(td_addr), keypair, None);
         Ok(self)
@@ -322,7 +322,7 @@ impl TransactionBuilder {
         td_addr: Vec<u8>,
         keypair: &XfrKeyPair,
         am: u64,
-    ) -> ruc::Result<TransactionBuilder> {
+    ) -> RucResult<TransactionBuilder> {
         if 0 == am {
             return Err(eg!("Amount can not be zero"));
         }
@@ -398,7 +398,7 @@ impl TransferOperationBuilder {
         tracing_policies: Option<&TracingPolicies>,
         key: &XfrKeyPair,
         amount: u64,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         let oar = open_bar(
             &asset_record.get_bar_ref().into_noah(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
@@ -423,7 +423,7 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         let code = AssetTypeCode::new_from_base64(&code)?;
 
         let asset_record_type = AssetRecordType::from_flags(conf_amount, conf_type);
@@ -475,7 +475,7 @@ impl TransferOperationBuilder {
         tracing_policies: &TracingPolicies,
         key: &XfrKeyPair,
         amount: u64,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         self.add_input(
             txo_ref,
             &asset_record,
@@ -493,7 +493,7 @@ impl TransferOperationBuilder {
         owner_memo: Option<OwnerMemo>,
         key: &XfrKeyPair,
         amount: u64,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         self.add_input(txo_ref, asset_record, owner_memo, None, key, amount)
     }
 
@@ -506,7 +506,7 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         self.add_output(
             amount,
             recipient,
@@ -525,7 +525,7 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         self.add_output(amount, recipient, None, code, conf_amount, conf_type)
     }
 
@@ -535,13 +535,13 @@ impl TransferOperationBuilder {
     pub fn balance(
         mut self,
         asset: Option<AssetRecordType>,
-    ) -> ruc::Result<TransferOperationBuilder> {
+    ) -> RucResult<TransferOperationBuilder> {
         self.get_builder_mut().balance(asset)?;
         Ok(self)
     }
 
     /// Wraps around TransferOperationBuilder to finalize the transaction.
-    pub fn create(mut self) -> ruc::Result<TransferOperationBuilder> {
+    pub fn create(mut self) -> RucResult<TransferOperationBuilder> {
         self.get_builder_mut().create(TransferType::Standard)?;
         Ok(self)
     }
@@ -549,7 +549,7 @@ impl TransferOperationBuilder {
     /// Wraps around TransferOperationBuilder to add a signature to the operation.
     ///
     /// All input owners must sign.
-    pub fn sign(mut self, kp: &XfrKeyPair) -> ruc::Result<TransferOperationBuilder> {
+    pub fn sign(mut self, kp: &XfrKeyPair) -> RucResult<TransferOperationBuilder> {
         self.get_builder_mut().sign(kp)?;
         Ok(self)
     }
@@ -559,7 +559,7 @@ impl TransferOperationBuilder {
     }
 
     /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
-    pub fn transaction(&self) -> ruc::Result<String> {
+    pub fn transaction(&self) -> RucResult<String> {
         let op = self.get_builder().transaction()?;
         Ok(serde_json::to_string(&op).unwrap())
     }
