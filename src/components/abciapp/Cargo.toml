@@ -49,7 +49,6 @@ ledger = { path = "../../ledger" }
 
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
-
 finutils = { path = "../finutils" }
 
 tempfile = "3.1.0"
