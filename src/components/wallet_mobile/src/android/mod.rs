@@ -13,7 +13,7 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
-use zei::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.
 pub extern "system" fn Java_com_findora_JniApi_buildId(

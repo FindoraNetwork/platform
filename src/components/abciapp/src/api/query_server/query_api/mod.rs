@@ -33,10 +33,7 @@ use {
         sync::Arc,
     },
     tracing::info,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
-    },
+    zei::{noah_algebra::serialization::NoahFromToBytes, OwnerMemo, XfrPublicKey},
 };
 
 /// Returns the git commit hash and commit date of this build
@@ -160,7 +157,7 @@ pub async fn get_created_assets(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
@@ -178,7 +175,7 @@ pub async fn get_issued_records(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
@@ -388,7 +385,7 @@ pub async fn get_related_txns(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
@@ -452,8 +449,8 @@ pub async fn get_total_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
     let l = data.read();
-    let burn_pubkey = *BLACK_HOLE_PUBKEY;
-    let extra_pubkey = *FF_PK_EXTRA_120_0000;
+    let burn_pubkey = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY);
+    let extra_pubkey = XfrPublicKey::from_noah(&FF_PK_EXTRA_120_0000);
 
     let burn_balance = l
         .ledger_cloned

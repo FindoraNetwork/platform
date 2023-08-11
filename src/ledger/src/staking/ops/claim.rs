@@ -12,7 +12,7 @@ use {
     config::abci::global_cfg::CFG,
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    zei::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Claim Operation`.
@@ -81,7 +81,7 @@ impl ClaimOps {
         nonce: NoReplayToken,
     ) -> Self {
         let body = Data::new(amount, nonce);
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         ClaimOps {
             body,
             pubkey: keypair.get_pk(),

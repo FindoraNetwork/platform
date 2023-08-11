@@ -7,7 +7,6 @@
 
 use {
     credentials::CredUserSecretKey,
-    curve25519_dalek::scalar::Scalar,
     fp_types::{crypto::MultiSigner, H160},
     globutils::SignatureOf,
     ledger::{
@@ -36,6 +35,7 @@ use {
             TendermintAddr, Validator,
         },
     },
+    noah_curve25519_dalek::scalar::Scalar,
     rand_chacha::ChaChaRng,
     rand_core::{CryptoRng, RngCore, SeedableRng},
     ruc::*,
@@ -45,26 +45,26 @@ use {
         collections::{BTreeMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::{
-        api::anon_creds::{
+    zei::noah_algebra::prelude::*,
+    zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+    zei::noah_api::{
+        anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
         },
-        serialization::ZeiFromToBytes,
-        setup::PublicParams,
         xfr::{
             asset_record::{
                 build_blind_asset_record, build_open_asset_record,
                 open_blind_asset_record, AssetRecordType,
             },
-            lib::XfrNotePolicies,
-            sig::{XfrKeyPair, XfrPublicKey},
             structs::{
-                AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
-                OwnerMemo, TracingPolicies, TracingPolicy,
+                AssetRecord, AssetRecordTemplate, OpenAssetRecord, TracingPolicies,
+                TracingPolicy,
             },
+            XfrNotePolicies,
         },
     },
+    zei::{BlindAssetRecord, OwnerMemo, XfrKeyPair, XfrPublicKey},
 };
 
 macro_rules! no_transfer_err {
@@ -179,9 +179,13 @@ impl TransactionBuilder {
         let mut am = TX_FEE_MIN;
         for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
-                if let Ok(oar) = open_blind_asset_record(&o, &om, &kp) {
+                if let Ok(oar) = open_blind_asset_record(
+                    &o.into_noah(),
+                    &om.map(|o| o.into_noah()),
+                    &kp.into_noah(),
+                ) {
                     if ASSET_TYPE_FRA == oar.asset_type
-                        && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
+                        && kp.get_pk_ref().to_bytes() == o.public_key.to_bytes()
                     {
                         let n = alt!(oar.amount > am, am, oar.amount);
                         am = am.saturating_sub(oar.amount);
@@ -214,24 +218,40 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, TX_FEE_MIN)
+    }
+
+    /// As the last operation of any transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_custom(&mut self, inputs: FeeInputs, fee: u64) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
+        let mut am = fee;
         for i in inputs.inner.into_iter() {
-            open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
-                .c(d!())
-                .and_then(|oar| {
-                    opb.add_input(i.tr, oar, None, None, i.am)
-                        .map(|_| {
-                            kps.push(i.kp);
-                        })
-                        .c(d!())
-                })?;
+            open_blind_asset_record(
+                &i.ar.record.into_noah(),
+                &i.om.map(|o| o.into_noah()),
+                &i.kp.into_noah(),
+            )
+            .c(d!())
+            .and_then(|oar| {
+                if oar.asset_type != ASSET_TYPE_FRA {
+                    return Err(eg!("Incorrect fee input asset_type, expected Findora AssetType record"));
+                }
+                let n = alt!(oar.amount > am, am, oar.amount);
+                am = am.saturating_sub(oar.amount);
+                opb.add_input(i.tr, oar, None, None, n)
+                    .map(|_| {
+                        kps.push(i.kp);
+                    })
+                    .c(d!())
+            })?;
         }
 
         opb.add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                fee,
                 ASSET_TYPE_FRA,
                 AssetRecordType::from_flags(false, false),
                 *BLACK_HOLE_PUBKEY,
@@ -245,7 +265,7 @@ impl TransactionBuilder {
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| {
             let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
-                a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+                a.get_pk().to_bytes().cmp(&b.get_pk().to_bytes())
             };
             kps.sort_by(cmp);
             kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
@@ -300,18 +320,18 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         confidentiality_flags: AssetRecordType,
-        zei_params: &PublicParams,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             amount,
             token_code.val,
             confidentiality_flags,
-            key_pair.get_pk(),
+            key_pair.get_pk().into_noah(),
         );
 
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, owner_memo) =
-            build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         self.add_operation_issue_asset(
             key_pair,
             token_code,
@@ -319,10 +339,10 @@ impl TransactionBuilder {
             &[(
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba),
                     lien: None,
                 },
-                owner_memo,
+                owner_memo.map(|om| OwnerMemo::from_noah(&om).unwrap()),
             )],
         )
         .c(d!())
@@ -741,10 +761,10 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         }
     };
     // 2. Use record template and ciphertexts to build open asset record
-    let params = PublicParams::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (open_asset_record, asset_tracing_memos, owner_memo) = build_open_asset_record(
         prng,
-        &params.pc_gens,
+        &pc_gens,
         template,
         vec![attr_ctext.unwrap_or_default()],
     );
@@ -1129,11 +1149,11 @@ impl TransferOperationBuilder {
             if !sig.verify(&trn.body) {
                 return Err(eg!(("Invalid signature")));
             }
-            sig_keys.insert(sig.address.key.zei_to_bytes());
+            sig_keys.insert(sig.address.key.noah_to_bytes());
         }
 
         for record in &trn.body.transfer.inputs {
-            if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+            if !sig_keys.contains(&record.public_key.noah_to_bytes()) {
                 return Err(eg!(("Not all signatures present")));
             }
         }
@@ -1150,10 +1170,11 @@ mod tests {
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::setup::PublicParams,
-        zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
-        zei::xfr::sig::XfrKeyPair,
+        zei::noah_api::xfr::asset_record::{
+            build_blind_asset_record, open_blind_asset_record,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        },
+        zei::XfrKeyPair,
     };
 
     // Defines an asset type
@@ -1183,7 +1204,7 @@ mod tests {
 
     fn test_transfer_op_builder_inner() -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
-        let params = PublicParams::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let code_1 = AssetTypeCode::gen_random();
         let code_2 = AssetTypeCode::gen_random();
         let alice = XfrKeyPair::generate(&mut prng);
@@ -1195,18 +1216,18 @@ mod tests {
             1000,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            alice.get_pk(),
+            alice.get_pk().into_noah(),
         );
         let ar_2 = AssetRecordTemplate::with_no_asset_tracing(
             1000,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let (ba_1, _, memo1) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_1, vec![]);
         let (ba_2, _, memo2) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_2, vec![]);
 
         // Attempt to spend too much
         let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();
@@ -1214,12 +1235,12 @@ mod tests {
             25,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let res = invalid_outputs_transfer_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
@@ -1237,12 +1258,12 @@ mod tests {
             20,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let res = invalid_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
@@ -1265,12 +1286,12 @@ mod tests {
             20,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let res = missing_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
+                open_blind_asset_record(&ba_1, &memo1, &alice.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
@@ -1291,42 +1312,42 @@ mod tests {
             5,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let output_charlie13_code1_template = AssetRecordTemplate::with_no_asset_tracing(
             13,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            charlie.get_pk(),
+            charlie.get_pk().into_noah(),
         );
         let output_ben2_code1_template = AssetRecordTemplate::with_no_asset_tracing(
             2,
             code_1.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            ben.get_pk(),
+            ben.get_pk().into_noah(),
         );
         let output_bob5_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             5,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            bob.get_pk(),
+            bob.get_pk().into_noah(),
         );
         let output_charlie13_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             13,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            charlie.get_pk(),
+            charlie.get_pk().into_noah(),
         );
         let output_ben2_code2_template = AssetRecordTemplate::with_no_asset_tracing(
             2,
             code_2.val,
             NonConfidentialAmount_NonConfidentialAssetType,
-            ben.get_pk(),
+            ben.get_pk().into_noah(),
         );
         let _valid_transfer_op = TransferOperationBuilder::new()
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
+                open_blind_asset_record(&ba_2, &memo1, &alice.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
@@ -1334,7 +1355,7 @@ mod tests {
             .c(d!())?
             .add_input(
                 TxoRef::Relative(2),
-                open_blind_asset_record(&ba_2, &memo2, &bob).c(d!())?,
+                open_blind_asset_record(&ba_2, &memo2, &bob.into_noah()).c(d!())?,
                 None,
                 None,
                 20,
@@ -1371,8 +1392,8 @@ mod tests {
         let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
         let bob_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
         assert_eq!(
-            bob_kp.get_sk().into_keypair().zei_to_bytes(),
-            bob_kp.zei_to_bytes()
+            bob_kp.get_sk().into_keypair().noah_to_bytes(),
+            bob_kp.noah_to_bytes()
         );
 
         let mut tx = fra_gen_initial_tx(&fra_owner_kp);
@@ -1400,9 +1421,15 @@ mod tests {
                     .add_input(
                         TxoRef::Absolute($txo_sid),
                         open_blind_asset_record(
-                            &ledger.get_utxo_light($txo_sid).unwrap().utxo.0.record,
+                            &ledger
+                                .get_utxo_light($txo_sid)
+                                .unwrap()
+                                .utxo
+                                .0
+                                .record
+                                .into_noah(),
                             &None,
-                            &fra_owner_kp,
+                            &fra_owner_kp.into_noah(),
                         )
                         .unwrap(),
                         None,
@@ -1424,7 +1451,7 @@ mod tests {
         }
 
         let mut tx2 = TransactionBuilder::from_seq_id(1);
-        tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk()))
+        tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk().into_noah()))
             .add_fee_relative_auto(&fra_owner_kp)
             .unwrap();
         assert!(tx2.check_fee());
@@ -1454,7 +1481,7 @@ mod tests {
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
         pnk!(tx3
-            .add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
+            .add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk().into_noah()))
             .add_fee(fi));
         assert!(tx3.check_fee());
 
@@ -1483,7 +1510,7 @@ mod tests {
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);
-        tx4.add_operation(transfer_to_bob!(txo_sid[1], bob_kp.get_pk()))
+        tx4.add_operation(transfer_to_bob!(txo_sid[1], bob_kp.get_pk().into_noah()))
             .add_fee(fi)
             .unwrap();
         assert!(tx4.check_fee());

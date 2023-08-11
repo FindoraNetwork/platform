@@ -10,14 +10,14 @@ use {
     },
     rand_core::SeedableRng,
     zei::{
-        setup::PublicParams,
-        xfr::{
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        noah_api::xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
             },
-            sig::XfrKeyPair,
             structs::{AssetRecord, AssetRecordTemplate},
         },
+        BlindAssetRecord, XfrKeyPair,
     },
 };
 
@@ -85,16 +85,19 @@ fn test_asset_creation_valid() {
 
     let keypair = build_keys(&mut prng);
     let code = AssetTypeCode::gen_random();
-    let (asset_body, mut token_code) = asset_creation_body(
+    let asset_body = asset_creation_body(
         &code,
         keypair.get_pk_ref(),
         AssetRules::default(),
         None,
         None,
     );
-    if CFG.checkpoint.utxo_asset_prefix_height > state.get_tendermint_height() {
-        token_code = code;
-    }
+    let token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &code,
+        &CFG.checkpoint,
+        state.get_tendermint_height(),
+    );
     let asset_create = asset_creation_operation(&asset_body, &keypair);
     let seq_id = state.get_block_commit_count();
     let tx = Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id);
@@ -121,7 +124,7 @@ fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
     let mut prng = ChaChaRng::from_entropy();
     let keypair = build_keys(&mut prng);
-    let (asset_body, _) = asset_creation_body(
+    let asset_body = asset_creation_body(
         &AssetTypeCode::gen_random(),
         keypair.get_pk_ref(),
         AssetRules::default(),
@@ -143,14 +146,13 @@ fn test_asset_creation_invalid_public_key() {
 #[test]
 fn test_asset_transfer() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
 
     let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(&mut ledger.get_prng());
 
-    let (tx, mut new_code) = create_definition_transaction(
+    let tx = create_definition_transaction(
         &code,
         &key_pair,
         AssetRules::default(),
@@ -158,9 +160,12 @@ fn test_asset_transfer() {
         ledger.get_block_commit_count(),
     )
     .unwrap();
-    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
-        new_code = code;
-    }
+    let new_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &code,
+        &CFG.checkpoint,
+        ledger.get_tendermint_height(),
+    );
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
         let mut block = ledger.start_block().unwrap();
@@ -174,11 +179,12 @@ fn test_asset_transfer() {
         100,
         new_code.val,
         art,
-        key_pair.get_pk(),
+        key_pair.get_pk().into_noah(),
     );
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) = build_blind_asset_record(
         &mut ledger.get_prng(),
-        &params.pc_gens,
+        &pc_gens,
         &template,
         vec![],
     );
@@ -191,7 +197,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba),
                     lien: None,
                 },
                 None,
@@ -199,7 +205,7 @@ fn test_asset_transfer() {
             (
                 TxOutput {
                     id: None,
-                    record: second_ba,
+                    record: BlindAssetRecord::from_noah(&second_ba),
                     lien: None,
                 },
                 None,
@@ -242,14 +248,16 @@ fn test_asset_transfer() {
     // Construct transfer operation
     let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
     let input_bar = (input_bar_proof.clone().utxo.0).record;
-    let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair).unwrap();
+    let input_oar =
+        open_blind_asset_record(&input_bar.into_noah(), &None, &key_pair.into_noah())
+            .unwrap();
     assert!(input_bar_proof.is_valid(state_commitment));
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         100,
         new_code.val,
         art,
-        key_pair_adversary.get_pk(),
+        key_pair_adversary.get_pk().into_noah(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -317,7 +325,7 @@ fn test_asset_creation_invalid_signature() {
     let mut prng = ChaChaRng::from_entropy();
     let keypair1 = build_keys(&mut prng);
 
-    let (asset_body, _) = asset_creation_body(
+    let asset_body = asset_creation_body(
         &AssetTypeCode::gen_random(),
         keypair1.get_pk_ref(),
         AssetRules::default(),
@@ -340,13 +348,11 @@ fn test_asset_creation_invalid_signature() {
 fn asset_issued() {
     let mut ledger = LedgerState::tmp_ledger();
 
-    let params = PublicParams::default();
-
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
     let token_code = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut ledger.get_prng());
     let seq_id = ledger.get_block_commit_count();
-    let (tx, mut new_token_code) = create_definition_transaction(
+    let tx = create_definition_transaction(
         &token_code,
         &keypair,
         AssetRules::default(),
@@ -355,9 +361,12 @@ fn asset_issued() {
     )
     .unwrap();
 
-    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
-        new_token_code = token_code;
-    }
+    let new_token_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &token_code,
+        &CFG.checkpoint,
+        ledger.get_tendermint_height(),
+    );
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -371,18 +380,19 @@ fn asset_issued() {
         100,
         new_token_code.val,
         art,
-        *keypair.get_pk_ref(),
+        keypair.get_pk_ref().into_noah(),
     );
 
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
-        build_blind_asset_record(&mut ledger.get_prng(), &params.pc_gens, &ar, vec![]);
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(
         &new_token_code,
         0,
         &[(
             TxOutput {
                 id: None,
-                record: ba,
+                record: BlindAssetRecord::from_noah(&ba),
                 lien: None,
             },
             None,
@@ -476,7 +486,6 @@ fn asset_issued() {
 #[test]
 pub fn test_transferable() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let alice = XfrKeyPair::generate(&mut ledger.get_prng());
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -484,7 +493,7 @@ pub fn test_transferable() {
     // Define fiat token
     let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
-    let (tx, mut new_code) = create_definition_transaction(
+    let tx = create_definition_transaction(
         &code,
         &issuer,
         AssetRules::default().set_transferable(false).clone(),
@@ -492,13 +501,16 @@ pub fn test_transferable() {
         seq_id,
     )
     .unwrap();
-    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
-        new_code = code;
-    }
+    let new_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &code,
+        &CFG.checkpoint,
+        ledger.get_tendermint_height(),
+    );
+
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &new_code,
         100,
         &issuer,
@@ -514,7 +526,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -528,7 +540,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice).unwrap(),
+                open_blind_asset_record(&bar.into_noah(), &None, &alice.into_noah())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -551,7 +564,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -565,7 +578,8 @@ pub fn test_transferable() {
             &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
-                open_blind_asset_record(&bar, &None, &alice).unwrap(),
+                open_blind_asset_record(&bar.into_noah(), &None, &alice.into_noah())
+                    .unwrap(),
             )],
             &[record],
             None,
@@ -589,7 +603,7 @@ pub fn test_transferable() {
         100,
         new_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        bob.get_pk(),
+        bob.get_pk().into_noah(),
     );
     let second_record = AssetRecord::from_template_no_identity_tracing(
         &mut ledger.get_prng(),
@@ -598,7 +612,6 @@ pub fn test_transferable() {
     .unwrap();
     let (mut tx, ar) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &new_code,
         100,
         &issuer,
@@ -630,14 +643,13 @@ pub fn test_transferable() {
 #[test]
 pub fn test_max_units() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
 
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
     let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
-    let (tx, mut new_code) = create_definition_transaction(
+    let tx = create_definition_transaction(
         &code,
         &issuer,
         AssetRules::default().set_max_units(Some(100)).clone(),
@@ -645,13 +657,16 @@ pub fn test_max_units() {
         seq_id,
     )
     .unwrap();
-    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
-        new_code = code;
-    }
+    let new_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+        AssetTypePrefix::UserDefined,
+        &code,
+        &CFG.checkpoint,
+        ledger.get_tendermint_height(),
+    );
+
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(
         &mut ledger,
-        &params,
         &new_code,
         50,
         0,
@@ -663,7 +678,6 @@ pub fn test_max_units() {
         // Ensure that a single overlfowing transaction fails
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &new_code,
             51,
             1,
@@ -679,7 +693,6 @@ pub fn test_max_units() {
         // Ensure that cap can be reached
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &new_code,
             50,
             1,
@@ -693,7 +706,6 @@ pub fn test_max_units() {
         // Cant try to exceed asset cap by issuing confidentially
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &new_code,
             1,
             2,
@@ -718,13 +730,18 @@ fn gen_fee_operation(
 
     let input_bar_proof = l.get_utxo_light(txo_sid).unwrap();
     let input_bar = (input_bar_proof.utxo.0).record;
-    let input_oar = open_blind_asset_record(&input_bar, &None, &fra_owner_kp).unwrap();
+    let input_oar = open_blind_asset_record(
+        &input_bar.into_noah(),
+        &None,
+        &fra_owner_kp.into_noah(),
+    )
+    .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         input_oar.amount - TX_FEE_MIN,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk(),
+        fra_owner_kp.get_pk().into_noah(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
         &mut l.get_prng(),
