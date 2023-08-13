@@ -35,21 +35,34 @@ use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
-use tokio::{runtime::Runtime, task::spawn_blocking};
+use tokio::runtime::{Handle, Runtime};
 use tracing::{debug, warn};
 
 lazy_static! {
     static ref RT: Runtime =
         Runtime::new().expect("Failed to create thread pool executor");
-    static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
-        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
-            .map(|h| {
-                h.parse()
-                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
-            })
-            .unwrap_or(1424654);
-        h
-    };
+}
+
+// After the asynchronous rpc feature is enabled,
+// the web3 server could crash when handling rpc calls coming from websocket.
+//
+// The root cause is that the tokio runtime is not properly initialized when web3 server is starting.
+//
+// This is a temporary correction. When processing rpc requests, it first checks that the tokio runtime
+// has been properly initialized to avoid application crash.
+//
+// FixMe: Please remove me and initialize tokio runtime properly for both http and websocket when web3 server is booting.
+//
+fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+{
+    if Handle::try_current().is_ok() {
+        tokio::task::spawn_blocking(f)
+    } else {
+        RT.spawn_blocking(f)
+    }
 }
 
 pub struct EthApiImpl {
@@ -126,12 +139,31 @@ impl EthApiImpl {
         Ok(range)
     }
 
-    fn balance_sync(
+    /*     fn _balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> { */
+    /* debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number); */
+    /*  */
+    /* let height = self.block_number_to_height(number)?; */
+    /* let account_id = EthereumAddressMapping::convert_to_account_id(address); */
+    /* if let Ok(sa) = self.account_base_app.read().account_of(&account_id, height) { */
+    /*     Ok(sa.balance) */
+    /* } else { */
+    /*     Ok(U256::zero()) */
+    /* } */
+    /*     } */
+
+    fn _accounts(&self) -> Result<Vec<H160>> {
+        let mut accounts = Vec::new();
+        for signer in self.signers.iter() {
+            accounts.push(signer.address());
+        }
+        Ok(accounts)
+    }
+
+    fn _balance(
         account_base_app: Arc<RwLock<BaseApp>>,
         address: H160,
         number: Option<BlockNumber>,
     ) -> Result<U256> {
-        debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
         let height = Self::block_number_to_height(account_base_app.clone(), number)?;
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
         if let Ok(sa) = account_base_app.read().account_of(&account_id, height) {
@@ -139,14 +171,6 @@ impl EthApiImpl {
         } else {
             Ok(U256::zero())
         }
-    }
-
-    fn accounts_sync(&self) -> Result<Vec<H160>> {
-        let mut accounts = Vec::new();
-        for signer in self.signers.iter() {
-            accounts.push(signer.address());
-        }
-        Ok(accounts)
     }
 }
 
@@ -170,7 +194,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn accounts(&self) -> Result<Vec<H160>> {
-        self.accounts_sync()
+        self._accounts()
     }
 
     fn balance(
@@ -181,9 +205,8 @@ impl EthApi for EthApiImpl {
         debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
         let account_base_app = self.account_base_app.clone();
 
-        let task = spawn_blocking(move || {
-            Self::balance_sync(account_base_app, address, number)
-        });
+        let task =
+            spawn_blocking(move || Self::_balance(account_base_app, address, number));
 
         Box::pin(async move {
             match task.await {
@@ -357,9 +380,9 @@ impl EthApi for EthApiImpl {
                     let info = <BaseApp as module_ethereum::Config>::Runner::call(
                         &ctx, call, &config,
                     )
-                    .map_err(|err| {
-                        internal_err(format!("evm runner call error: {err:?}"))
-                    })?;
+                        .map_err(|err| {
+                            internal_err(format!("evm runner call error: {err:?}"))
+                        })?;
                     debug!(target: "eth_rpc", "evm runner call result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &info.value)?;
@@ -379,9 +402,9 @@ impl EthApi for EthApiImpl {
                     let info = <BaseApp as module_ethereum::Config>::Runner::create(
                         &ctx, create, &config,
                     )
-                    .map_err(|err| {
-                        internal_err(format!("evm runner create error: {err:?}"))
-                    })?;
+                        .map_err(|err| {
+                            internal_err(format!("evm runner create error: {err:?}"))
+                        })?;
                     debug!(target: "eth_rpc", "evm runner create result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &[])?;
@@ -713,7 +736,7 @@ impl EthApi for EthApiImpl {
         let txn = serde_json::to_vec(
             &UncheckedTransaction::<SignedExtra>::new_unsigned(function),
         )
-        .map_err(internal_err);
+            .map_err(internal_err);
         if let Err(e) = txn {
             return Box::pin(future::err(e));
         }
@@ -796,9 +819,8 @@ impl EthApi for EthApiImpl {
             if let Some(from) = request.from {
                 let gas_price = request.gas_price.unwrap_or_default();
                 if gas_price > U256::zero() {
-                    let balance =
-                        Self::balance_sync(account_base_app.clone(), from, None)
-                            .unwrap_or_default();
+                    let balance = Self::_balance(account_base_app.clone(), from, None)
+                        .unwrap_or_default();
                     let mut available = balance;
                     if let Some(value) = request.value {
                         if value > available {
@@ -809,14 +831,13 @@ impl EthApi for EthApiImpl {
                     let allowance = available / gas_price;
                     if highest < allowance {
                         warn!(
-                            target: "eth_rpc",
-                            "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
-                            highest,
-                            balance,
-                            request.value.unwrap_or_default(),
-                            gas_price,
-                            allowance
-                        );
+                        "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
+                        highest,
+                        balance,
+                        request.value.unwrap_or_default(),
+                        gas_price,
+                        allowance
+                    );
                         highest = allowance;
                     }
                 }
@@ -830,7 +851,7 @@ impl EthApi for EthApiImpl {
 
             let execute_call_or_create = move |request: CallRequest,
                                                gas_limit|
-                  -> Result<ExecuteResult> {
+                                               -> Result<ExecuteResult> {
                 let ctx = account_base_app
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
@@ -871,9 +892,9 @@ impl EthApi for EthApiImpl {
                         let info = <BaseApp as module_ethereum::Config>::Runner::call(
                             &ctx, call, &config,
                         )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner call error: {err:?}"))
-                        })?;
+                            .map_err(|err| {
+                                internal_err(format!("evm runner call error: {err:?}"))
+                            })?;
                         debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
                         Ok(ExecuteResult {
@@ -895,9 +916,9 @@ impl EthApi for EthApiImpl {
                         let info = <BaseApp as module_ethereum::Config>::Runner::create(
                             &ctx, create, &config,
                         )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner create error: {err:?}"))
-                        })?;
+                            .map_err(|err| {
+                                internal_err(format!("evm runner create error: {err:?}"))
+                            })?;
                         debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 
                         Ok(ExecuteResult {
@@ -977,7 +998,7 @@ impl EthApi for EthApiImpl {
                 (Some(block), Some(statuses)) => {
                     if id.is_none() {
                         if let Some(idx) =
-                            statuses.iter().position(|t| t.transaction_hash == hash)
+                        statuses.iter().position(|t| t.transaction_hash == hash)
                         {
                             index = idx;
                         } else {
@@ -1105,7 +1126,7 @@ impl EthApi for EthApiImpl {
                 (Some(block), Some(statuses), Some(receipts)) => {
                     if id.is_none() {
                         if let Some(idx) =
-                            statuses.iter().position(|t| t.transaction_hash == hash)
+                        statuses.iter().position(|t| t.transaction_hash == hash)
                         {
                             index = idx;
                         } else {
@@ -1379,7 +1400,7 @@ fn rich_block_build(
                                     Keccak256::digest(&rlp::encode(
                                         &transaction.clone(),
                                     ))
-                                    .as_slice(),
+                                        .as_slice(),
                                 )
                             })
                             .collect(),
@@ -1402,14 +1423,8 @@ fn transaction_build(
         Err(_e) => None,
     };
 
-    let hash = if let Some(status) = &status {
-        status.transaction_hash
-    } else {
-        H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice())
-    };
-
     Transaction {
-        hash,
+        hash: H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice()),
         nonce: transaction.nonce,
         block_hash: block.as_ref().map(|block| {
             H256::from_slice(Keccak256::digest(&rlp::encode(&block.header)).as_slice())

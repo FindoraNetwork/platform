@@ -10,7 +10,6 @@ pub mod extensions;
 mod modules;
 mod notify;
 mod staking;
-pub mod tm_events;
 
 use crate::modules::ModuleManager;
 use abci::Header;

@@ -20,9 +20,7 @@ use ledger::{
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ring::pbkdf2;
-use ruc::{
-    d, Result, RucResult
-};
+use ruc::{d, Result, RucResult};
 use std::num::NonZeroU32;
 use std::str;
 use zei::{

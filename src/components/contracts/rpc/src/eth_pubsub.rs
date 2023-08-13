@@ -1,9 +1,7 @@
-use baseapp::tm_events::{get_pendingtx, get_sync_status};
 use baseapp::BaseApp;
 use ethereum::{BlockV0 as EthereumBlock, ReceiptV0 as Receipt};
 use ethereum_types::{H256, U256};
 use fp_evm::BlockId;
-use fp_rpc_core::types::pubsub::PubSubSyncStatus;
 use fp_rpc_core::{
     types::{
         pubsub::{Kind, Metadata, Params, Result as PubSubResult},
@@ -162,36 +160,10 @@ impl EthPubSubApiT for EthPubSubApiImpl {
                 });
             }
             Kind::NewPendingTransactions => {
-                self.subscriptions.add(subscriber, |sink| {
-                    let event_notify = get_pendingtx().lock().unwrap().event_notify.clone();
-                    let stream = event_notify.notification_stream().filter_map(move |txhash| {
-                        if H256::default() != txhash  {
-                            futures::future::ready(Some(txhash))
-                        } else  {
-                            futures::future::ready(None)
-                        }
-                    }).map(|tx_hash|{
-                        Ok::<_, ()>(Ok(PubSubResult::TransactionHash(tx_hash)))
-                    });
-                    stream.forward(
-                        sink.sink_map_err(|e| warn!(target: "eth_rpc", "Error sending notifications: {:?}", e)),
-                    )
-                    .map(|_| ())
-                });
+                warn!(target: "eth_rpc", "subscribe NewPendingTransactions unimplemented");
             }
             Kind::Syncing => {
-                self.subscriptions.add(subscriber, |sink| {
-                    let event_notify = get_sync_status().lock().unwrap().event_notify.clone();
-                    let stream = event_notify.notification_stream().filter_map(move |status| {
-                            futures::future::ready(Some(status))
-                    }).map(|status|{
-                        Ok::<_, ()>(Ok(PubSubResult::SyncState(PubSubSyncStatus{syncing:status})))
-                    });
-                    stream.forward(
-                        sink.sink_map_err(|e| warn!(target: "eth_rpc", "Error sending notifications: {:?}", e)),
-                    )
-                    .map(|_| ())
-                });
+                warn!(target: "eth_rpc", "subscribe Syncing unimplemented");
             }
         }
     }
