@@ -92,7 +92,7 @@ pub struct CheckPointConfig {
 
     pub fix_exec_code: i64,
 
-    pub enable_ed25519_triple_masking_height: i64,
+    pub enable_triple_masking_height: i64,
 
     #[serde(default = "def_check_signatures_num")]
     pub check_signatures_num: i64,
@@ -261,7 +261,7 @@ lazy_static! {
         evm_substate_v2_height: 0,
         disable_delegate_frc20: 0,
         fix_exec_code: 0,
-        enable_ed25519_triple_masking_height: 0,
+        enable_triple_masking_height: 0,
         check_signatures_num: 0,
         fix_deliver_tx_revert_nonce_height: 0,
         utxo_asset_prefix_height: 0,

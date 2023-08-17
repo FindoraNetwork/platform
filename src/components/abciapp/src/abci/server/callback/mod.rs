@@ -98,7 +98,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
             && h < CFG.checkpoint.enable_frc20_height
         {
             resp.set_last_block_app_hash(la_hash);
-        } else if h < CFG.checkpoint.enable_ed25519_triple_masking_height {
+        } else if h < CFG.checkpoint.enable_triple_masking_height {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
             resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
         } else {
@@ -189,7 +189,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         resp.code = 1;
                     } else if is_tm_transaction(&tx)
                         && td_height
-                            < CFG.checkpoint.enable_ed25519_triple_masking_height
+                            < CFG.checkpoint.enable_triple_masking_height
                     {
                         resp.code = 1;
                         resp.log = "Triple Masking is disabled".to_owned();
@@ -411,7 +411,7 @@ pub fn deliver_tx(
                             .discard_session();
                     } else if is_tm_transaction(&tx)
                         && td_height
-                            < CFG.checkpoint.enable_ed25519_triple_masking_height
+                            < CFG.checkpoint.enable_triple_masking_height
                     {
                         info!(target: "abciapp",
                             "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
@@ -642,7 +642,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         && td_height < CFG.checkpoint.enable_frc20_height
     {
         r.set_data(la_hash);
-    } else if td_height < CFG.checkpoint.enable_ed25519_triple_masking_height {
+    } else if td_height < CFG.checkpoint.enable_triple_masking_height {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     } else {
         let tm_hash = state.get_anon_state_commitment().0;
