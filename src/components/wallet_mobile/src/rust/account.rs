@@ -1,7 +1,7 @@
 use core::str::FromStr;
 use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA};
 use ruc::{d, Result, RucResult};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::{XfrKeyPair, XfrPublicKey};
 
 use super::transaction::TransactionBuilder;
 
@@ -29,7 +29,7 @@ impl Keypair {
         match self {
             Keypair::Ecdsa(kp) => MultiSignature::from(kp.sign(data)),
             Keypair::Ed25519(kp) => {
-                MultiSignature::from(kp.get_sk_ref().sign(data, kp.get_pk_ref()))
+                MultiSignature::from(kp.get_sk_ref().sign(data).unwrap())
             }
         }
     }

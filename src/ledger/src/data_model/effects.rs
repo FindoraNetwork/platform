@@ -1,3 +1,4 @@
+use zei::noah_api::parameters::bulletproofs::BulletproofParams;
 use {
     crate::{
         data_model::{
@@ -28,21 +29,20 @@ use {
         sync::Arc,
     },
     zei::{
-        serialization::ZeiFromToBytes,
-        setup::PublicParams,
-        xfr::{
-            lib::verify_xfr_body,
-            sig::XfrPublicKey,
+        noah_algebra::serialization::NoahFromToBytes,
+        noah_api::xfr::{
             structs::{XfrAmount, XfrAssetType},
+            verify_xfr_body,
         },
+        XfrPublicKey,
     },
 };
 
 lazy_static! {
     static ref PRNG: Arc<Mutex<ChaCha20Rng>> =
         Arc::new(Mutex::new(ChaChaRng::from_entropy()));
-    static ref PARAMS: Arc<Mutex<PublicParams>> =
-        Arc::new(Mutex::new(PublicParams::default()));
+    static ref PARAMS: Arc<Mutex<BulletproofParams>> =
+        Arc::new(Mutex::new(BulletproofParams::default()));
 }
 
 /// Check operations in the context of a tx, partially.
@@ -405,12 +405,12 @@ impl TxnEffect {
                     if !trn.body.verify_body_signature(sig) {
                         return Err(eg!());
                     }
-                    input_keys.insert(sig.address.key.zei_to_bytes());
+                    input_keys.insert(sig.address.key.noah_to_bytes());
                 }
 
                 // (1b) all input record owners have signed
                 for record in trn.body.transfer.inputs.iter() {
-                    if !input_keys.contains(&record.public_key.zei_to_bytes()) {
+                    if !input_keys.contains(&record.public_key.noah_to_bytes()) {
                         return Err(eg!());
                     }
                 }
@@ -418,7 +418,7 @@ impl TxnEffect {
                 verify_xfr_body(
                     prng,
                     params,
-                    &trn.body.transfer,
+                    &trn.body.transfer.into_noah(),
                     &trn.body.policies.to_ref(),
                 )
                 .c(d!())?;

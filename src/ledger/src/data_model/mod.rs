@@ -10,9 +10,6 @@ mod effects;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
-use noah_algebra::bls12_381::BLSScalar;
-use noah_algebra::prelude::Scalar;
-use noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
 
 use {
     crate::converter::ConvertAccount,
@@ -28,6 +25,7 @@ use {
     },
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
+    config::abci::CheckPointConfig,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
     fbnc::NumKey,
     globutils::wallet::public_key_to_base64,
@@ -49,16 +47,23 @@ use {
     },
     unicode_normalization::UnicodeNormalization,
     zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{
-            lib::{gen_xfr_body, XfrNotePolicies},
-            sig::{XfrKeyPair, XfrPublicKey},
-            structs::{
-                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
-                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
+        noah_algebra::{
+            bls12_381::BLSScalar, bn254::BN254Scalar, serialization::NoahFromToBytes,
+            traits::Scalar,
+        },
+        noah_api::{
+            keys::PublicKey as NoahXfrPublicKey,
+            xfr::{
+                gen_xfr_body,
+                structs::{
+                    AssetRecord, AssetType as NoahAssetType, TracingPolicies,
+                    TracingPolicy, XfrAmount, XfrAssetType, ASSET_TYPE_LENGTH,
+                },
+                XfrNotePolicies,
             },
         },
+        noah_crypto::anemoi_jive::{AnemoiJive, AnemoiJive254},
+        BlindAssetRecord, OwnerMemo, XfrBody, XfrKeyPair, XfrPublicKey,
     },
 };
 
@@ -94,7 +99,7 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 /// Findora asset type code
 pub struct AssetTypeCode {
     /// Internal asset type
-    pub val: ZeiAssetType,
+    pub val: NoahAssetType,
 }
 
 impl NumKey for AssetTypeCode {
@@ -105,7 +110,7 @@ impl NumKey for AssetTypeCode {
         let mut b = b.to_owned();
         b.resize(ASSET_TYPE_LENGTH, 0u8);
         Ok(Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
             ),
         })
@@ -119,7 +124,7 @@ impl Default for AssetTypeCode {
     #[inline(always)]
     fn default() -> Self {
         AssetTypeCode {
-            val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
+            val: NoahAssetType([255; ASSET_TYPE_LENGTH]),
         }
     }
 }
@@ -147,7 +152,7 @@ impl AssetTypeCode {
     pub fn gen_random_with_rng<R: RngCore + CryptoRng>(prng: &mut R) -> Self {
         let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
         Self {
-            val: ZeiAssetType(val),
+            val: NoahAssetType(val),
         }
     }
 
@@ -162,7 +167,7 @@ impl AssetTypeCode {
     pub fn new_from_vec(mut bytes: Vec<u8>) -> Self {
         bytes.resize(ASSET_TYPE_LENGTH, 0u8);
         Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap(),
             ),
         }
@@ -226,7 +231,7 @@ impl AssetTypeCode {
         as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
         let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(as_vec.as_slice()).unwrap();
         Self {
-            val: ZeiAssetType(buf),
+            val: NoahAssetType(buf),
         }
     }
 
@@ -240,7 +245,7 @@ impl AssetTypeCode {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
                 let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
-                    val: ZeiAssetType(buf),
+                    val: NoahAssetType(buf),
                 })
             }
             Err(e) => Err(eg!((format!("Failed to deserialize base64 '{b64}': {e}",)))),
@@ -261,12 +266,37 @@ impl AssetTypeCode {
 
     /// Generates the asset type code from the prefix and the Anemoi hash function
     #[inline(always)]
-    pub fn from_prefix_and_raw_asset_type_code(
+    pub fn from_prefix_and_raw_asset_type_code_2nd_update(
         prefix: AssetTypePrefix,
         raw_asset_type_code: &AssetTypeCode,
     ) -> Self {
         let mut f = Vec::with_capacity(3);
         f.push(prefix.to_field_element());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
+
+        let mut bytes = vec![0u8; 32];
+        bytes[0] = raw_asset_type_code.val.0[31];
+        f.push(BN254Scalar::from_bytes(&bytes).unwrap());
+
+        let res = AnemoiJive254::eval_variable_length_hash(&f);
+        Self::new_from_vec(res.to_bytes())
+    }
+
+    /// Former version, now deprecated way to derive the asset code.
+    /// This version uses BLS12-381.
+    #[inline(always)]
+    #[deprecated]
+    pub fn from_prefix_and_raw_asset_type_code_1st_update(
+        prefix: AssetTypePrefix,
+        raw_asset_type_code: &AssetTypeCode,
+    ) -> Self {
+        let mut f = Vec::with_capacity(3);
+
+        #[allow(deprecated)]
+        f.push(prefix.to_field_element_old());
 
         let mut bytes = vec![0u8; 32];
         bytes[..31].copy_from_slice(&raw_asset_type_code.val.0[..31]);
@@ -276,8 +306,42 @@ impl AssetTypeCode {
         bytes[0] = raw_asset_type_code.val.0[31];
         f.push(BLSScalar::from_bytes(&bytes).unwrap());
 
-        let res = AnemoiJive381::eval_variable_length_hash(&f);
-        Self::new_from_vec(res.to_bytes())
+        #[allow(deprecated)]
+        {
+            use zei::noah_crypto::anemoi_jive::bls12_381_deprecated::AnemoiJive381Deprecated;
+            let res = AnemoiJive381Deprecated::eval_variable_length_hash(&f);
+            Self::new_from_vec(res.to_bytes())
+        }
+    }
+
+    /// Select the right asset code based on the global setting.
+    pub fn from_prefix_and_raw_asset_type_code(
+        prefix: AssetTypePrefix,
+        raw_asset_type_code: &AssetTypeCode,
+        checkpoint: &CheckPointConfig,
+        cur_height: u64,
+    ) -> Self {
+        if raw_asset_type_code.val == ASSET_TYPE_FRA
+            || core::cmp::min(
+                checkpoint.utxo_asset_prefix_height,
+                checkpoint.utxo_asset_prefix_height_2nd_update,
+            ) > cur_height
+        {
+            *raw_asset_type_code
+        } else if checkpoint.utxo_asset_prefix_height_2nd_update > cur_height
+            && checkpoint.utxo_asset_prefix_height <= cur_height
+        {
+            #[allow(deprecated)]
+            AssetTypeCode::from_prefix_and_raw_asset_type_code_1st_update(
+                prefix,
+                &raw_asset_type_code,
+            )
+        } else {
+            AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
+                prefix,
+                &raw_asset_type_code,
+            )
+        }
     }
 }
 
@@ -417,7 +481,7 @@ pub struct XfrAddress {
 impl XfrAddress {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.as_bytes())
+        b64enc(&self.key.to_bytes())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -428,7 +492,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -443,7 +507,7 @@ pub struct IssuerPublicKey {
 impl IssuerPublicKey {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(self.key.as_bytes())
+        b64enc(&self.key.noah_to_bytes().as_slice())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -454,7 +518,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -517,7 +581,7 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.as_bytes(), *weight);
+            weight_map.insert(key.to_bytes(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
@@ -920,8 +984,9 @@ impl TransferAssetBody {
             return Err(eg!());
         }
 
-        let transfer =
-            Box::new(gen_xfr_body(prng, input_records, output_records).c(d!())?);
+        let transfer = Box::new(XfrBody::from_noah(
+            &gen_xfr_body(prng, input_records, output_records).c(d!())?,
+        ));
         let outputs = transfer
             .outputs
             .iter()
@@ -1083,7 +1148,13 @@ impl AssetTypePrefix {
     }
 
     #[allow(missing_docs)]
-    pub fn to_field_element(&self) -> BLSScalar {
+    pub fn to_field_element(&self) -> BN254Scalar {
+        BN254Scalar::from_bytes(&self.bytes()).unwrap()
+    }
+
+    #[allow(missing_docs)]
+    #[deprecated]
+    pub fn to_field_element_old(&self) -> BLSScalar {
         BLSScalar::from_bytes(&self.bytes()).unwrap()
     }
 }
@@ -1658,7 +1729,7 @@ impl FinalizedTransaction {
 }
 
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
-pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType([0; ASSET_TYPE_LENGTH]);
+pub const ASSET_TYPE_FRA: NoahAssetType = NoahAssetType([0; ASSET_TYPE_LENGTH]);
 
 /// FRA decimals
 pub const FRA_DECIMALS: u8 = 6;
@@ -1666,9 +1737,9 @@ pub const FRA_DECIMALS: u8 = 6;
 lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
-    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
     /// BlackHole of Staking
-    pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY_STAKING: NoahXfrPublicKey = pnk!(NoahXfrPublicKey::noah_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
@@ -1710,7 +1781,8 @@ impl Transaction {
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
-                                && *BLACK_HOLE_PUBKEY == o.record.public_key
+                                && XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)
+                                    == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
                                     if am > (TX_FEE_MIN - 1) {

@@ -27,7 +27,7 @@ use {
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{BlindAssetRecord, XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -210,8 +210,8 @@ mod issue {
         },
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
-        zei::setup::PublicParams,
-        zei::xfr::{
+        zei::noah_algebra::ristretto::PedersenCommitmentRistretto,
+        zei::noah_api::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
@@ -233,21 +233,21 @@ mod issue {
             FRA_PRE_ISSUE_AMOUNT / 2,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            root_kp.get_pk(),
+            root_kp.get_pk().into_noah(),
         );
-        let params = PublicParams::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(
                     &mut ChaChaRng::from_entropy(),
-                    &params.pc_gens,
+                    &pc_gens,
                     &template,
                     vec![],
                 );
                 (
                     TxOutput {
                         id: None,
-                        record: ba,
+                        record: BlindAssetRecord::from_noah(&ba),
                         lien: None,
                     },
                     None,
@@ -271,7 +271,7 @@ mod issue {
 }
 
 mod delegate {
-    use {super::*, zei::xfr::asset_record::AssetRecordType};
+    use {super::*, zei::noah_api::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,
@@ -291,7 +291,7 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
             None,
             false,
             false,

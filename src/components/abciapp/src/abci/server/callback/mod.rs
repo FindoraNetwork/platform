@@ -53,7 +53,7 @@ use {
         },
     },
     tracing::info,
-    zei::xfr::asset_record::AssetRecordType,
+ zei::noah_api::xfr::asset_record::AssetRecordType
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
