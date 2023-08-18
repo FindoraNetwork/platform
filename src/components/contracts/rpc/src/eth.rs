@@ -1507,7 +1507,7 @@ fn transaction_build(
             {
                 match pubkey {
                     Some(pk) => {
-                        H160::from(H256::from_slice(Keccak256::digest(&pk).as_slice()))
+                        H160::from(H256::from_slice(Keccak256::digest(pk).as_slice()))
                     }
                     _ => H160::default(),
                 }
@@ -1683,11 +1683,11 @@ fn dummy_block(height: u64, full: bool) -> Rich<Block> {
     let hash = if height == (CFG.checkpoint.evm_first_block_height as u64) - 1 {
         H256([0; 32])
     } else {
-        H256::from_slice(&sha3::Keccak256::digest(&height.to_le_bytes()))
+        H256::from_slice(&sha3::Keccak256::digest(height.to_le_bytes()))
     };
 
     let parent_hash =
-        H256::from_slice(&sha3::Keccak256::digest(&(height - 1).to_le_bytes()));
+        H256::from_slice(&sha3::Keccak256::digest((height - 1).to_le_bytes()));
 
     let transactions = if full {
         BlockTransactions::Full(vec![])

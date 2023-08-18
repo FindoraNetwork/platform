@@ -29,7 +29,8 @@ use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
-use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
+use zei::noah_api::xfr::asset_record::AssetRecordType;
+use zei::{XfrKeyPair, XfrPublicKey};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -51,7 +52,7 @@ pub fn transfer_to_account(
 
     let transfer_op = utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
         asset,
         false,
         false,
@@ -94,7 +95,7 @@ impl Keypair {
         match self {
             Keypair::Ecdsa(kp) => MultiSignature::from(kp.sign(data)),
             Keypair::Ed25519(kp) => {
-                MultiSignature::from(kp.get_sk_ref().sign(data, kp.get_pk_ref()))
+                MultiSignature::from(kp.get_sk_ref().sign(data).unwrap())
             }
         }
     }

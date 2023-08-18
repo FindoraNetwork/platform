@@ -15,12 +15,12 @@ use {
     rand_core::SeedableRng,
     ruc::*,
     zei::{
-        setup::PublicParams,
-        xfr::{
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        noah_api::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrKeyPair,
             structs::AssetRecordTemplate,
         },
+        BlindAssetRecord, XfrKeyPair,
     },
 };
 
@@ -35,7 +35,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let (mut tx, _) = pnk!(helpers::create_definition_transaction(
+    let mut tx = pnk!(helpers::create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {
@@ -55,23 +55,23 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         FRA_PRE_ISSUE_AMOUNT / 2,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        fra_owner_kp.get_pk(),
+        fra_owner_kp.get_pk().into_noah(),
     );
 
-    let params = PublicParams::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
 
     let outputs = (0..2)
         .map(|_| {
             let (ba, _, _) = build_blind_asset_record(
                 &mut ChaChaRng::from_entropy(),
-                &params.pc_gens,
+                &pc_gens,
                 &template,
                 vec![],
             );
             (
                 TxOutput {
                     id: None,
-                    record: ba,
+                    record: BlindAssetRecord::from_noah(&ba),
                     lien: None,
                 },
                 None,

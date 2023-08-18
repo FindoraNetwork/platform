@@ -13,8 +13,8 @@ use {
     globutils::HashOf,
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-            TxoSID, UnAuthenticatedUtxo, Utxo,
+            AssetType, AssetTypeCode, AssetTypePrefix, AuthenticatedUtxo, StateCommitmentData,
+            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
@@ -25,7 +25,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei::{OwnerMemo, XfrPublicKey},
 };
 
 /// Ping route to check for liveness of API
@@ -142,6 +142,27 @@ pub async fn query_asset(
                 "Specified asset definition does not currently exist.",
             ))
         }
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid asset definition encoding.",
+        ))
+    }
+}
+
+/// get_derived asset code according to `AssetTypeCode`
+pub async fn get_derived_asset_code(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<String>> {
+    let qs = data.read();
+    if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
+        let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+            AssetTypePrefix::UserDefined,
+            &token_code,
+            &CFG.checkpoint,
+            qs.ledger_cloned.get_tendermint_height(),
+        );
+        Ok(web::Json(derived_asset_code.to_base64()))
     } else {
         Err(actix_web::error::ErrorBadRequest(
             "Invalid asset definition encoding.",
@@ -698,6 +719,7 @@ pub enum ApiRoutes {
     UtxoSidList,
     AssetIssuanceNum,
     AssetToken,
+    GetDerivedAssetCode,
     GlobalState,
     TxnSid,
     TxnSidLight,
@@ -717,6 +739,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::UtxoSidList => "utxo_sid_list",
             ApiRoutes::AssetIssuanceNum => "asset_issuance_num",
             ApiRoutes::AssetToken => "asset_token",
+            ApiRoutes::GetDerivedAssetCode => "get_derived_asset_code",
             ApiRoutes::GlobalState => "global_state",
             ApiRoutes::TxnSid => "txn_sid",
             ApiRoutes::TxnSidLight => "txn_sid_light",

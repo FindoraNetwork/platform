@@ -1,5 +1,5 @@
 use std::os::raw::c_char;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::{XfrKeyPair, XfrPublicKey};
 
 use super::parse_u64;
 use crate::rust::TransferOperationBuilder;

@@ -40,11 +40,8 @@ use {
     utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
     web3::types::H160,
     zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::AssetRecordType,
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-        },
+        noah_api::xfr::asset_record::AssetRecordType, XfrKeyPair, XfrPublicKey,
+        XfrSecretKey,
     },
 };
 
@@ -154,7 +151,7 @@ pub fn stake(
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
         None,
         false,
         false,
@@ -193,7 +190,7 @@ pub fn stake_append(
     builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
         None,
         false,
         false,
@@ -465,7 +462,7 @@ pub fn transfer_asset_batch_x(
 ) -> Result<()> {
     utils::transfer_batch(
         kp,
-        target_addr.iter().map(|addr| (addr, am)).collect(),
+        target_addr.iter().map(|addr| (*addr, am)).collect(),
         token_code,
         confidential_am,
         confidential_ty,
@@ -683,7 +680,7 @@ fn gen_delegate_tx(
 
     utils::gen_transfer_op(
         owner_kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), amount)],
         None,
         false,
         false,
@@ -737,7 +734,7 @@ pub fn create_asset_x(
     code: Option<AssetTypeCode>,
 ) -> Result<AssetTypeCode> {
     let code = code.unwrap_or_else(AssetTypeCode::gen_random);
-    let asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+    let asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code_2nd_update(
         AssetTypePrefix::UserDefined,
         &code,
     );
@@ -790,7 +787,6 @@ pub fn issue_asset_x(
             builder.get_seq_id(),
             amount,
             confidentiality_flags,
-            &PublicParams::default(),
         )
         .c(d!())?;
     utils::gen_fee_op(kp)
