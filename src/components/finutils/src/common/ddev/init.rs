@@ -17,10 +17,8 @@ use ledger::{
 };
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use zei::xfr::{
-    asset_record::AssetRecordType,
-    sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-};
+use zei::noah_api::xfr::asset_record::AssetRecordType;
+use zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 #[derive(Deserialize)]
 struct TmValidators {
@@ -102,7 +100,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         .custom_data
         .initial_validators
         .iter()
-        .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA))
+        .map(|v| (v.xfr_keypair.get_pk(), 500_0000 * FRA))
         .collect::<Vec<_>>();
 
     println!("[ {} ] >>> Transfer FRAs to validators ...", &env.name);
@@ -118,7 +116,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         gen_transfer_op_xx(
             Some(&gen_8668_endpoint(env)),
             &v.xfr_keypair,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+            vec![(XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING), am)],
             None,
             true,
             false,
@@ -174,7 +172,7 @@ fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
 fn transfer_batch(
     env: &Env,
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,

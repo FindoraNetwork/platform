@@ -3,7 +3,7 @@ use evm::{executor::stack::PrecompileSet, Context};
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
-use evm_precompile_anemoi::Anemoi;
+use evm_precompile_anemoi::{Anemoi254, Anemoi381};
 use evm_precompile_basic::{ECRecover, Identity, Ripemd160, Sha256};
 use evm_precompile_blake2::Blake2F;
 use evm_precompile_bn128::{Bn128Add, Bn128Mul, Bn128Pairing};
@@ -76,8 +76,11 @@ where
             a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
                 Some(FRC20::<C>::execute(input, target_gas, context, ctx))
             }
-            a if a == H160::from_low_u64_be(Anemoi::contract_id()) => {
-                Some(Anemoi::execute(input, target_gas, context, ctx))
+            a if a == H160::from_low_u64_be(Anemoi381::contract_id()) => {
+                Some(Anemoi381::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(Anemoi254::contract_id()) => {
+                Some(Anemoi254::execute(input, target_gas, context, ctx))
             }
             //a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
             //    Some(EthPairing::execute(input, target_gas, context, ctx))
