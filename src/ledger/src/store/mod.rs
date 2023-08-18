@@ -17,7 +17,7 @@ use {
             BlockEffect, BlockSID, FinalizedBlock, FinalizedTransaction, IssuerKeyPair,
             IssuerPublicKey, OutputPosition, StateCommitmentData, Transaction,
             TransferType, TxnEffect, TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo,
-            Utxo, UtxoStatus, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            Utxo, UtxoStatus, BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
@@ -47,10 +47,12 @@ use {
         ops::{Deref, DerefMut},
         sync::Arc,
     },
-    zei::xfr::{
-        lib::XfrNotePolicies,
-        sig::XfrPublicKey,
-        structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    zei::{
+        noah_api::xfr::{
+            structs::{TracingPolicies, TracingPolicy},
+            XfrNotePolicies,
+        },
+        OwnerMemo, XfrPublicKey,
     },
 };
 
@@ -617,7 +619,12 @@ impl LedgerState {
             - FF_PK_LIST
                 .iter()
                 .chain(extras.iter())
-                .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
+                .map(|pk| {
+                    self.staking_get_nonconfidential_balance(&XfrPublicKey::from_noah(
+                        &pk,
+                    ))
+                    .unwrap_or(0)
+                })
                 .sum::<Amount>()
             - s.coinbase_balance()
     }
@@ -1330,17 +1337,13 @@ impl LedgerStatus {
     // This drains every field of `block` except `txns` and `temp_sids`.
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
-        let handle_asset_type_code = |code: AssetTypeCode| -> AssetTypeCode {
-            if CFG.checkpoint.utxo_asset_prefix_height > self.td_commit_height
-                || code.val == ASSET_TYPE_FRA
-            {
-                code
-            } else {
-                AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                    AssetTypePrefix::UserDefined,
-                    &code,
-                )
-            }
+        let handle_asset_type_code = |code: AssetTypeCode| {
+            AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                AssetTypePrefix::UserDefined,
+                &code,
+                &CFG.checkpoint,
+                self.td_commit_height,
+            )
         };
         for no_replay_token in block.no_replay_tokens.iter() {
             let (rand, seq_id) = (

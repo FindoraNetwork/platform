@@ -15,7 +15,7 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::xfr::structs::OwnerMemo,
+    zei::OwnerMemo,
 };
 
 lazy_static! {
