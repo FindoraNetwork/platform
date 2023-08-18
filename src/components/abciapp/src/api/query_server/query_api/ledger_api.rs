@@ -153,7 +153,7 @@ pub async fn query_asset(
 pub async fn get_derived_asset_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<AssetTypeCode>> {
+) -> actix_web::Result<web::Json<String>> {
     let qs = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
         let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
@@ -162,7 +162,7 @@ pub async fn get_derived_asset_code(
             &CFG.checkpoint,
             qs.ledger_cloned.get_tendermint_height(),
         );
-        Ok(web::Json(derived_asset_code))
+        Ok(web::Json(derived_asset_code.to_base64()))
     } else {
         Err(actix_web::error::ErrorBadRequest(
             "Invalid asset definition encoding.",
