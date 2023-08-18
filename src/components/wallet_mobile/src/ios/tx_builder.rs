@@ -5,7 +5,7 @@ use crate::rust::{
 };
 use ledger::data_model::AssetTypeCode;
 use std::os::raw::c_char;
-use zei::xfr::sig::XfrKeyPair;
+use zei::XfrKeyPair;
 
 #[no_mangle]
 /// @param kp: owner's XfrKeyPair
@@ -219,7 +219,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
     let td_addr = c_char_to_string(td_addr);
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
     let td_address = hex::decode(addr).expect("addr format error!");
-    if let Ok(info) = builder.clone().add_operation_claim(td_address,keypair) {
+    if let Ok(info) = builder.clone().add_operation_claim(td_address, keypair) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -237,7 +237,10 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim_custom(
     let td_addr = c_char_to_string(td_addr);
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
     let td_address = hex::decode(addr).expect("addr format error!");
-    if let Ok(info) = builder.clone().add_operation_claim_custom(td_address,keypair, am) {
+    if let Ok(info) = builder
+        .clone()
+        .add_operation_claim_custom(td_address, keypair, am)
+    {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()

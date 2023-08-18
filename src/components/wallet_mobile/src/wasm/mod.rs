@@ -6,8 +6,8 @@ use credentials::{
 };
 use ruc::{d, err::RucResult};
 use wasm_bindgen::prelude::*;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::noah_api::xfr::structs::ASSET_TYPE_LENGTH;
+use zei::{XfrKeyPair, XfrPublicKey};
 
 #[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.

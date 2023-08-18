@@ -50,7 +50,8 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use system_contracts::{SystemContracts, SYSTEM_ADDR};
 use utils::parse_evm_staking_coinbase_mint_event;
-use zei::xfr::sig::XfrPublicKey;
+use zei::noah_algebra::serialization::NoahFromToBytes;
+use zei::XfrPublicKey;
 
 use crate::utils::parse_evm_staking_mint_event;
 
@@ -149,7 +150,7 @@ impl<C: Config> App<C> {
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
-        let from = Token::Bytes(from.as_bytes().to_vec());
+        let from = Token::Bytes(from.noah_to_bytes());
 
         let to = Token::Address(*to);
 

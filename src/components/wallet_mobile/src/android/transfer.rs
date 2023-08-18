@@ -3,8 +3,8 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, jvalue, JNI_TRUE};
 use jni::JNIEnv;
 use ledger::data_model::AssetType as PlatformAssetType;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::OwnerMemo as ZeiOwnerMemo;
+use zei::OwnerMemo as NoahOwnerMemo;
+use zei::{XfrKeyPair, XfrPublicKey};
 
 use super::{jStringToString, parseU64};
 
@@ -189,8 +189,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_ownerMemoFromJson(
         .expect("Couldn't get java string!")
         .into();
 
-    let zei_owner_memo: ZeiOwnerMemo = serde_json::from_str(val.as_str()).unwrap();
-    Box::into_raw(Box::new(OwnerMemo::from_json(zei_owner_memo).unwrap())) as jlong
+    let noah_owner_memo: NoahOwnerMemo = serde_json::from_str(val.as_str()).unwrap();
+    Box::into_raw(Box::new(OwnerMemo::from_json(noah_owner_memo).unwrap())) as jlong
 }
 
 #[no_mangle]

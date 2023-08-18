@@ -14,12 +14,12 @@ use {
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
     zei::{
-        setup::PublicParams,
-        xfr::{
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
+        noah_api::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrPublicKey,
-            structs::{AssetRecordTemplate, AssetType, OwnerMemo},
+            structs::{AssetRecordTemplate, AssetType},
         },
+        BlindAssetRecord, OwnerMemo, XfrPublicKey,
     },
 };
 
@@ -78,14 +78,14 @@ impl MintEntry {
             amount,
             asset_type,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            receiver_pk.unwrap_or(target_pk),
+            receiver_pk.unwrap_or(target_pk).into_noah(),
         );
-        let pc_gens = PublicParams::default().pc_gens;
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {
             id: None,
-            record: ba,
+            record: BlindAssetRecord::from_noah(&ba),
             lien: None,
         };
 

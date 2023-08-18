@@ -20,7 +20,7 @@ use {
         AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
         CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
         CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-        OwnerMemo, PublicParams, TracingPolicies, TxoRef,
+        OwnerMemo, TracingPolicies, TxoRef,
     },
     credentials::{
         credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -63,16 +63,19 @@ use {
     std::str::FromStr,
     wasm_bindgen::prelude::*,
     zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{
+        noah_algebra::{
+            prelude::{NoahFromToBytes, Scalar},
+            ristretto::PedersenCommitmentRistretto,
+        },
+        noah_api::xfr::{
             asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-            lib::trace_assets as zei_trace_assets,
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
-                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
+                AssetRecordTemplate, AssetType as NoahAssetType,
                 ASSET_TYPE_LENGTH,
             },
+            trace_assets as noah_trace_assets,
         },
+        OwnerMemo as NoahOwnerMemo, XfrKeyPair, XfrPublicKey, XfrSecretKey, XfrBody
     },
 };
 
@@ -100,27 +103,12 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
-pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
-    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
-        AssetTypePrefix::UserDefined,
-        &original_asset_code,
-    );
-
-    Ok(derived_asset_code.to_base64())
-}
-
-#[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
     let code: [u8; ASSET_TYPE_LENGTH] =
         val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     Ok(AssetTypeCode {
-        val: ZeiAssetType(code),
+        val: NoahAssetType(code),
     }
     .to_base64())
 }
@@ -155,7 +143,7 @@ pub fn verify_authenticated_txn(
 #[wasm_bindgen]
 /// ...
 pub fn get_null_pk() -> XfrPublicKey {
-    XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
+    XfrPublicKey::noah_from_bytes(&[0; 32]).unwrap()
 }
 
 #[wasm_bindgen]
@@ -195,7 +183,7 @@ impl From<FeeInput> for PlatformFeeInput {
             am: fi.am,
             tr: fi.tr.txo_ref,
             ar: fi.ar.txo,
-            om: fi.om.map(|om| om.memo),
+            om: fi.om.map(|om| NoahOwnerMemo::from_noah(&om.memo).unwrap()),
             kp: fi.kp,
         }
     }
@@ -409,7 +397,6 @@ impl TransactionBuilder {
                 seq_num,
                 amount,
                 confidentiality_flags,
-                PublicParams::new().get_ref(),
             )
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -607,7 +594,7 @@ impl TransactionBuilder {
     pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
         self.get_builder()
             .get_owner_memo_ref(idx)
-            .map(|memo| OwnerMemo { memo: memo.clone() })
+            .map(|memo| OwnerMemo { memo: memo.into_noah() })
     }
 }
 
@@ -721,11 +708,11 @@ impl TransferOperationBuilder {
         amount: u64,
     ) -> Result<TransferOperationBuilder, JsValue> {
         let oar = open_bar(
-            asset_record.get_bar_ref(),
+            &asset_record.get_bar_ref().into_noah(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &key,
+            &key.into_noah(),
         )
-        .c(d!())
+            .c(d!())
         .map_err(|e| {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
@@ -763,7 +750,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah(),
                 policies.get_policies_ref().clone(),
             )
         } else {
@@ -771,7 +758,7 @@ impl TransferOperationBuilder {
                 amount,
                 code.val,
                 asset_record_type,
-                *recipient,
+                recipient.into_noah(),
             )
         };
         self.get_builder_mut()
@@ -967,9 +954,9 @@ pub fn open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<JsValue, JsValue> {
     open_bar(
-        record.get_bar_ref(),
+        &record.get_bar_ref().into_noah(),
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        &keypair,
+        &keypair.into_noah(),
     )
     .c(d!())
     .map_err(|e| JsValue::from_str(&format!("Could not open asset record: {}", e)))
@@ -1021,14 +1008,14 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-    hex::encode(key_pair.zei_to_bytes())
+    hex::encode(key_pair.noah_to_bytes())
 }
 
 #[wasm_bindgen]
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
+    XfrKeyPair::noah_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 #[wasm_bindgen]
@@ -1070,7 +1057,7 @@ pub fn wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        xfr_pk.as_bytes(),
+        &xfr_pk.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)
@@ -1182,7 +1169,7 @@ pub fn wasm_credential_commit(
         &mut prng,
         &user_secret_key,
         credential.get_cred_ref(),
-        &user_public_key.as_bytes(),
+        &user_public_key.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)?;
@@ -1262,15 +1249,16 @@ pub fn trace_assets(
     // let candidate_assets: Vec<String> =
     //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
-    // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
+    // let candidate_assets: Vec<NoahAssetType> = candidate_assets
     //     .iter()
     //     .map(|asset_type_str| {
     //         AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
     //     })
     //     .collect();
-    let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
+    let record_data =
+        noah_trace_assets(&xfr_body.into_noah(), tracer_keypair.get_keys())
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
         .map(|(amt, asset_type, _, _)| {
@@ -1288,9 +1276,17 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
-use aes_gcm::Aes256Gcm;
-use rand::{thread_rng, Rng};
+use aes_gcm::{
+    aead::{generic_array::GenericArray, Aead, KeyInit},
+    Aes256Gcm,
+};
+use base64::URL_SAFE;
+use fp_types::H160;
+use getrandom::getrandom;
+use js_sys::JsString;
+use ledger::staking::Amount;
+
+use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
@@ -1329,10 +1325,9 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
     let n_iter = NonZeroU32::new(32).unwrap();
-    let mut rng = thread_rng();
 
     let mut salt = [0u8; CREDENTIAL_LEN];
-    rng.fill(&mut salt);
+    getrandom(&mut salt).unwrap();
     let mut derived_key = [0u8; CREDENTIAL_LEN];
     pbkdf2::derive(
         pbkdf2::PBKDF2_HMAC_SHA512,
@@ -1343,7 +1338,7 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     );
 
     let mut iv = [0u8; IV_LEN];
-    rng.fill(&mut iv);
+    getrandom(&mut iv).unwrap();
 
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher
@@ -1505,7 +1500,7 @@ pub fn fra_get_minimal_fee() -> u64 {
 #[wasm_bindgen]
 /// The destination for fee to be transfered to.
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
-    *BLACK_HOLE_PUBKEY
+    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY)
 }
 
 #[wasm_bindgen]
@@ -1517,13 +1512,13 @@ pub fn get_delegation_target_address() -> String {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[wasm_bindgen]

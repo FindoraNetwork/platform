@@ -51,7 +51,8 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::noah_api::keys::PublicKey as NoahXfrPublicKey,
+    zei::{XfrKeyPair, XfrPublicKey},
 };
 
 // height, reward rate
@@ -80,14 +81,14 @@ lazy_static! {
     pub static ref KEEP_HIST: bool = env::var("FINDORAD_KEEP_HIST").is_ok();
 
     /// Reserved accounts of EcoSystem.
-    pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
+    pub static ref FF_PK_LIST: Vec<NoahXfrPublicKey> = FF_ADDR_LIST
         .iter()
-        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
+        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)).into_noah())
         .collect();
 
     /// Reserved accounts of Findora Foundation.
-    pub static ref FF_PK_EXTRA_120_0000: XfrPublicKey =
-        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000));
+    pub static ref FF_PK_EXTRA_120_0000: NoahXfrPublicKey =
+        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000)).into_noah();
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();
