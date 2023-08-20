@@ -150,7 +150,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                             inputs.sort();
                             inputs.dedup();
                             if inputs.len() != op.note.body.inputs.len() {
-                                resp.log = "anon Transfer input error".to_owned();
+                                resp.log = "anon transfer input error".to_owned();
                                 resp.code = 1;
                                 return resp;
                             }
