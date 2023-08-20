@@ -45,7 +45,7 @@ where
         let ctx = &self.1;
 
         match address {
-            // Ethereum precompiles :
+            // Ethereum precompiles:
             a if a == H160::from_low_u64_be(ECRecover::contract_id()) => {
                 Some(ECRecover::execute(input, target_gas, context, ctx))
             }

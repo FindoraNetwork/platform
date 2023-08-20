@@ -48,8 +48,6 @@ evm-precompile = {path = "../modules/evm/precompile"}
 evm-precompile-basic = {path = "../modules/evm/precompile/basic"}
 evm-precompile-frc20 = {path = "../modules/evm/precompile/frc20"}
 evm-precompile-modexp = {path = "../modules/evm/precompile/modexp"}
-evm-precompile-sha3fips = {path = "../modules/evm/precompile/sha3fips"}
-evm-precompile-eth-pairings = {path = "../modules/evm/precompile/eth-pairings"}
 
 [features]
 abci_mock = []
