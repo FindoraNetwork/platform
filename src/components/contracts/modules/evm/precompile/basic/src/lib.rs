@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use core::cmp::min;
-use evm::{executor::stack::PrecompileFailure, ExitError, ExitSucceed};
+use evm::{executor::stack::PrecompileFailure, ExitSucceed};
 use module_evm::precompile::{LinearCostPrecompile, PrecompileId};
 
 /// The identity precompile.
