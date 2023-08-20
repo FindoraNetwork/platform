@@ -434,7 +434,7 @@ fn run() -> Result<()> {
             None
         };
         if sec_key.is_some() {
-            //Asset defaults to fra
+            // Asset defaults to fra
             common::show_account(sec_key, asset, is_address_eth).c(d!())?;
         }
         if address.is_some() {

@@ -23,7 +23,7 @@ subcommands:
             short: b
             long: basic
         - eth-address:
-            help: generate eth address
+            help: use eth address
             long: eth-address
   - setup:
       about: Setup environment variables for staking transactions
@@ -88,7 +88,7 @@ subcommands:
             help: ignore warning and stake FRAs to your target node
             long: force
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
       groups:
         - staking-flags:
@@ -130,7 +130,7 @@ subcommands:
             takes_value: true
             value_name: Logo
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
@@ -154,7 +154,7 @@ subcommands:
             takes_value: true
             value_name: Amount
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - claim:
       about: Claim accumulated FRA rewards
@@ -177,7 +177,7 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - delegate:
       about: Delegating operations
@@ -205,7 +205,7 @@ subcommands:
               - amount
               - validator
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - undelegate:
       about: Undelegating operations
@@ -227,7 +227,7 @@ subcommands:
             takes_value: true
             value_name: VALIDATOR ADDRESS
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - transfer:
       about: Transfer tokens from one address to another
@@ -273,7 +273,7 @@ subcommands:
             help: mask the asset type sent on the transaction log
             long: confidential-type
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - transfer-batch:
       about: Transfer tokens from one address to many others
@@ -310,7 +310,7 @@ subcommands:
             help: mask the asset type sent on the transaction log
             long: confidential-type
         - eth-address:
-            help: generate eth address
+            help: use a private key of the eth address
             long: eth-address
   - wallet:
       about: manipulates a findora wallet
@@ -339,7 +339,7 @@ subcommands:
             conflicts_with:
               - create
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - asset:
       about: manipulate custom asset
@@ -440,10 +440,10 @@ subcommands:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - account:
-      about: Return user contract account information or fra balance if secret key is provided
+      about: Return user contract account information or the balance if secret key is provided
       args:
         - addr:
             help: findora account(eg:fra1rkv...) or Ethereum address(g:0xd3Bf...)
@@ -464,10 +464,10 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - contract-deposit:
-      about: Transfer FRA from a Findora account to the specified Ethereum address
+      about: Transfer an asset from the UTXO chain to the EVM chain
       args:
         - addr:
             help: ethereum address to receive asset, eg:0xd3Bf...
@@ -498,7 +498,7 @@ subcommands:
             value_name: LOWLEVEL
             required: false
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
@@ -524,12 +524,12 @@ subcommands:
             value_name: MNEMONIC
             required: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - gen-eth-key:
       about: Generate an Ethereum address
   - owned-abars:
-      about: Get Anon UTXOs for a keypair use commitment
+      about: Get Anon UTXOs for a keypair using the commitment
       args:
         - commitments:
             help: Commitment of the ABAR
@@ -552,7 +552,7 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
@@ -579,10 +579,10 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - owned-open-abars:
-      about: Get Open Anon UTXOs for a keypair use commitment
+      about: Get Open Anon UTXOs for a keypair using commitment
       args:
         - commitment:
             help: The commitment of ABAR
@@ -600,7 +600,7 @@ subcommands:
             value_name: SECRET KEY PATH
             required: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - owned-utxos:
       about: List owned UTXOs for a public key
@@ -612,7 +612,7 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
@@ -638,10 +638,10 @@ subcommands:
             value_name: TXO SID
             required: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - convert-abar-to-bar:
-      about: Convert a ABAR to BAR
+      about: Convert an ABAR to BAR
       args:
         - from-seckey:
             help: Xfr secret key file path of converter
@@ -679,10 +679,10 @@ subcommands:
             help: mask the asset type sent on the transaction log
             long: confidential-type
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - anon-transfer:
-      about: Perform Anonymous Transfer
+      about: Perform an anonymous transfer
       args:
         - from-seckey:
             help: Xfr secret key file path of sender
@@ -719,7 +719,7 @@ subcommands:
             value_name: Amount
             required: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
@@ -759,13 +759,13 @@ subcommands:
             value_name: Asset
             required: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - anon-fetch-merkle-proof:
-      about: Query to fetch mtleaf info
+      about: Query Merkle tree leaf info
       args:
         - atxo-sid:
-            help: ATXO SID of the Anonymous Blind Asset Record
+            help: ATXO SID of the ABAR
             short: a
             long: atxo-sid
             takes_value: true
@@ -823,7 +823,7 @@ subcommands:
             required: false
             allow_hyphen_values: true
         - eth-address:
-            help: generate eth address
+            help: use the eth address
             long: eth-address
   - dev:
       about: Manage development clusters on your localhost
