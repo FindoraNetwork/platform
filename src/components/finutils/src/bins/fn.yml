@@ -12,9 +12,9 @@ subcommands:
   - genkey:
       about: Generate a random Findora public key/private key Pair
       args:
-        - eth-address:
+        - gen-eth-address:
             help: generate eth address
-            long: eth-address
+            long: gen-eth-address
   - show:
       about: View Validator status and accumulated rewards
       args:

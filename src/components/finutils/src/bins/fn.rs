@@ -61,8 +61,8 @@ fn run() -> Result<()> {
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
     } else if let Some(m) = matches.subcommand_matches("genkey") {
-        let is_address_eth = m.is_present("eth-address");
-        common::gen_key_and_print(is_address_eth);
+        let gen_eth_address = m.is_present("gen-eth-address");
+        common::gen_key_and_print(gen_eth_address);
     } else if let Some(m) = matches.subcommand_matches("wallet") {
         if m.is_present("create") {
             let is_address_eth = m.is_present("eth-address");
