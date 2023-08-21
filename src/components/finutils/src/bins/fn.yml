@@ -181,7 +181,7 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY
         - use-default-eth-address:
-            help: use a private key of the eth address if `staker-priv-key` is not provided
+            help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
             conflicts-with:
               - seckey
@@ -210,9 +210,11 @@ subcommands:
             conflicts_with:
               - amount
               - validator
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - seckey
   - undelegate:
       about: Undelegating operations
       args:
@@ -232,20 +234,22 @@ subcommands:
             long: validator
             takes_value: true
             value_name: VALIDATOR ADDRESS
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - seckey
   - transfer:
       about: Transfer tokens from one address to another
       args:
         - asset:
-            help: asset code which you want to tansfer
+            help: asset code which you want to transfer
             long: asset
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
         - from-seckey:
-            help: the file which contains base64-formatted `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the sender
             short: f
             long: from-seckey
             takes_value: true

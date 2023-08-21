@@ -99,7 +99,7 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount");
         let validator = m.value_of("validator");
         let show_info = m.is_present("info");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
 
         if amount.is_some() && validator.is_some() {
             common::delegate(
@@ -123,7 +123,7 @@ fn run() -> Result<()> {
         };
         let amount = m.value_of("amount");
         let validator = m.value_of("validator");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         if (amount.is_none() && validator.is_some())
             || (amount.is_some() && validator.is_none())
         {
