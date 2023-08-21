@@ -131,14 +131,14 @@ subcommands:
             long: validator-memo-logo
             takes_value: true
             value_name: Logo
-        - eth-address:
+        - use-eth-address:
             help: use a private key of the eth address
-            long: eth-address
+            long: use-eth-address
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
         - staker-priv-key:
-            help: the file which contains private key (in base64 format) of proposer
+            help: the file which contains the mnemonic of proposer
             short: S
             long: staker-priv-key
             takes_value: true
@@ -158,6 +158,8 @@ subcommands:
         - eth-address:
             help: use a private key of the eth address
             long: eth-address
+            conflicts-with:
+              - staker-priv-key
   - claim:
       about: Claim accumulated FRA rewards
       args:

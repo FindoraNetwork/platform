@@ -241,7 +241,7 @@ fn run() -> Result<()> {
                 }
             }
         };
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-eth-address");
 
         let cr = m.value_of("commission-rate");
         if vm.is_none() && cr.is_none() {
