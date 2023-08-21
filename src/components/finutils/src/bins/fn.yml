@@ -172,7 +172,7 @@ subcommands:
             takes_value: true
             value_name: Amount
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -189,7 +189,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -217,7 +217,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -239,13 +239,13 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - from-seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the receiver
             short: f
             long: from-seckey
             takes_value: true
             value_name: SecKey
         - to-pubkey:
-            help: base64-formated `XfrPublicKey` of the receiver
+            help: base64-formatted `XfrPublicKey` of the receiver
             short: t
             long: to-pubkey
             takes_value: true
@@ -279,7 +279,7 @@ subcommands:
       about: Transfer tokens from one address to many others
       args:
         - from-seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the receiver
             short: f
             long: from-seckey
             takes_value: true
@@ -332,7 +332,7 @@ subcommands:
             conflicts_with:
               - create
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -409,7 +409,7 @@ subcommands:
             takes_value: true
             value_name: WALLET ADDRESS
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of findora account
+            help: the file which contains base64-formatted `XfrPrivateKey` of findora account
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -658,7 +658,7 @@ subcommands:
             required: true
             allow_hyphen_values: true
         - to-pubkey:
-            help: base64-formated `XfrPublicKey` of the receiver
+            help: base64-formatted `XfrPublicKey` of the receiver
             short: t
             long: to-pubkey
             takes_value: true
