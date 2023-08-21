@@ -262,7 +262,7 @@ fn run() -> Result<()> {
                 None => None,
             };
             let td_addr = m.value_of("validator-td-addr");
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("use-default-eth-address");
             if am.is_none() {
                 println!("{}", m.usage());
             } else {

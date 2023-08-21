@@ -10,26 +10,26 @@ args:
 
 subcommands:
   - genkey:
-      about: Generate a random Findora public key/private key Pair
+      about: Generate a new Findora key pair
       args:
         - gen-eth-address:
             help: generate eth address
             long: gen-eth-address
   - show:
-      about: View Validator status and accumulated rewards
+      about: View the validator status and accumulated rewards
       args:
         - basic:
             help: show basic account info
             short: b
             long: basic
         - eth-address:
-            help: use eth address
+            help: use the eth address
             long: eth-address
   - setup:
-      about: Setup environment variables for staking transactions
+      about: Set up environment variables for staking transactions
       args:
         - serv-addr:
-            help: a node address of Findora Network
+            help: a node address of the Findora network
             short: S
             long: serv-addr
             takes_value: true
@@ -47,7 +47,7 @@ subcommands:
             takes_value: true
             value_name: Path
   - stake:
-      about: Stake tokens (i.e. bond tokens) from a Findora account to a Validator
+      about: Stake tokens (i.e. bond tokens) from a Findora account to a validator
       args:
         - amount:
             help: how much `FRA unit`s you want to stake
@@ -73,7 +73,7 @@ subcommands:
             short: a
             long: append
         - staker-priv-key:
-            help: the file which contains private key (in base64 format) of proposer
+            help: the file which contains the mnemonic of proposer
             short: S
             long: staker-priv-key
             takes_value: true
@@ -87,9 +87,11 @@ subcommands:
         - force:
             help: ignore warning and stake FRAs to your target node
             long: force
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
       groups:
         - staking-flags:
             args:
