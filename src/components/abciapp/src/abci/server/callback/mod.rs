@@ -188,8 +188,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
                     } else if is_tm_transaction(&tx)
-                        && td_height
-                            < CFG.checkpoint.enable_triple_masking_height
+                        && td_height < CFG.checkpoint.enable_triple_masking_height
                     {
                         resp.code = 1;
                         resp.log = "Triple Masking is disabled".to_owned();
@@ -410,8 +409,7 @@ pub fn deliver_tx(
                             .write()
                             .discard_session();
                     } else if is_tm_transaction(&tx)
-                        && td_height
-                            < CFG.checkpoint.enable_triple_masking_height
+                        && td_height < CFG.checkpoint.enable_triple_masking_height
                     {
                         info!(target: "abciapp",
                             "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",

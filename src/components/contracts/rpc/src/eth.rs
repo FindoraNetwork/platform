@@ -54,9 +54,9 @@ lazy_static! {
 // FixMe: Please remove me and initialize tokio runtime properly for both http and websocket when web3 server is booting.
 //
 fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
 {
     if Handle::try_current().is_ok() {
         tokio::task::spawn_blocking(f)
@@ -380,9 +380,9 @@ impl EthApi for EthApiImpl {
                     let info = <BaseApp as module_ethereum::Config>::Runner::call(
                         &ctx, call, &config,
                     )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner call error: {err:?}"))
-                        })?;
+                    .map_err(|err| {
+                        internal_err(format!("evm runner call error: {err:?}"))
+                    })?;
                     debug!(target: "eth_rpc", "evm runner call result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &info.value)?;
@@ -402,9 +402,9 @@ impl EthApi for EthApiImpl {
                     let info = <BaseApp as module_ethereum::Config>::Runner::create(
                         &ctx, create, &config,
                     )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner create error: {err:?}"))
-                        })?;
+                    .map_err(|err| {
+                        internal_err(format!("evm runner create error: {err:?}"))
+                    })?;
                     debug!(target: "eth_rpc", "evm runner create result: {info:?}");
 
                     error_on_execution_failure(&info.exit_reason, &[])?;
@@ -736,7 +736,7 @@ impl EthApi for EthApiImpl {
         let txn = serde_json::to_vec(
             &UncheckedTransaction::<SignedExtra>::new_unsigned(function),
         )
-            .map_err(internal_err);
+        .map_err(internal_err);
         if let Err(e) = txn {
             return Box::pin(future::err(e));
         }
@@ -851,7 +851,7 @@ impl EthApi for EthApiImpl {
 
             let execute_call_or_create = move |request: CallRequest,
                                                gas_limit|
-                                               -> Result<ExecuteResult> {
+                  -> Result<ExecuteResult> {
                 let ctx = account_base_app
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
@@ -892,9 +892,9 @@ impl EthApi for EthApiImpl {
                         let info = <BaseApp as module_ethereum::Config>::Runner::call(
                             &ctx, call, &config,
                         )
-                            .map_err(|err| {
-                                internal_err(format!("evm runner call error: {err:?}"))
-                            })?;
+                        .map_err(|err| {
+                            internal_err(format!("evm runner call error: {err:?}"))
+                        })?;
                         debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
                         Ok(ExecuteResult {
@@ -916,9 +916,9 @@ impl EthApi for EthApiImpl {
                         let info = <BaseApp as module_ethereum::Config>::Runner::create(
                             &ctx, create, &config,
                         )
-                            .map_err(|err| {
-                                internal_err(format!("evm runner create error: {err:?}"))
-                            })?;
+                        .map_err(|err| {
+                            internal_err(format!("evm runner create error: {err:?}"))
+                        })?;
                         debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 
                         Ok(ExecuteResult {
@@ -998,7 +998,7 @@ impl EthApi for EthApiImpl {
                 (Some(block), Some(statuses)) => {
                     if id.is_none() {
                         if let Some(idx) =
-                        statuses.iter().position(|t| t.transaction_hash == hash)
+                            statuses.iter().position(|t| t.transaction_hash == hash)
                         {
                             index = idx;
                         } else {
@@ -1126,7 +1126,7 @@ impl EthApi for EthApiImpl {
                 (Some(block), Some(statuses), Some(receipts)) => {
                     if id.is_none() {
                         if let Some(idx) =
-                        statuses.iter().position(|t| t.transaction_hash == hash)
+                            statuses.iter().position(|t| t.transaction_hash == hash)
                         {
                             index = idx;
                         } else {
@@ -1400,7 +1400,7 @@ fn rich_block_build(
                                     Keccak256::digest(&rlp::encode(
                                         &transaction.clone(),
                                     ))
-                                        .as_slice(),
+                                    .as_slice(),
                                 )
                             })
                             .collect(),
