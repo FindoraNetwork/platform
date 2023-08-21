@@ -23,7 +23,7 @@ subcommands:
             short: b
             long: basic
         - eth-address:
-            help: use eth address
+            help: use the eth address
             long: eth-address
   - setup:
       about: Setup environment variables for staking transactions
