@@ -338,10 +338,10 @@ subcommands:
       about: manipulates a findora wallet
       args:
         - create:
-            help: create a new findora wallet
+            help: create a new Findora wallet
             long: create
         - show:
-            help: show information of a findora wallet
+            help: show information of a Findora wallet
             long: show
             conflicts_with:
               - create
@@ -365,6 +365,12 @@ subcommands:
             long: gen-eth-address
             conflicts_with:
               - show
+              - seckey
+        - use-default-eth-address:
+            help: use the the default eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - create
               - seckey
   - asset:
       about: manipulate custom asset

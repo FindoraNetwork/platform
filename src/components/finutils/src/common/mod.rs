@@ -689,14 +689,7 @@ pub fn show_account(
     _asset: Option<&str>,
     use_default_eth_address: bool,
 ) -> Result<()> {
-    let kp = if use_default_eth_address {
-        get_keypair(use_default_eth_address)?
-    } else {
-        sk_str
-            .c(d!())
-            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
-            .or_else(|_| get_keypair(false).c(d!()))?;
-    };
+    let kp = restore_keypair_from_str_with_default(sk_str, use_default_eth_address)?;
     let res = utils::get_asset_all(&kp)?;
 
     for (k, v) in res {

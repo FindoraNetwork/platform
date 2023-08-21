@@ -74,6 +74,7 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
+            let use_default_eth_address = m.is_present("use-default-eth-address");
 
             // FRA asset is the default case
             let asset = if let Some(code) = m.value_of("asset") {
@@ -84,7 +85,7 @@ fn run() -> Result<()> {
             } else {
                 None
             };
-            common::show_account(seckey.as_deref(), asset).c(d!())?;
+            common::show_account(seckey.as_deref(), asset, use_default_eth_address).c(d!())?;
         } else {
             println!("{}", m.usage());
         }
@@ -161,7 +162,7 @@ fn run() -> Result<()> {
                 None
             };
             let token_code = m.value_of("code");
-            let use_default_eth_address = m.value_of("use-default-eth-address");
+            let use_default_eth_address = m.is_present("use-default-eth-address");
             common::create_asset(
                 seckey.as_deref(),
                 memo.unwrap(),
