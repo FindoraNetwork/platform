@@ -155,9 +155,9 @@ subcommands:
             long: amount
             takes_value: true
             value_name: Amount
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
             conflicts-with:
               - staker-priv-key
   - claim:
@@ -180,9 +180,11 @@ subcommands:
             long: seckey
             takes_value: true
             value_name: SECRET KEY
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - seckey
   - delegate:
       about: Delegating operations
       args:

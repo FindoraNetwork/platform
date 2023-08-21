@@ -298,11 +298,11 @@ fn run() -> Result<()> {
             None => None,
         };
         let td_addr = m.value_of("validator-td-addr");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         common::unstake(am, staker.as_deref(), td_addr, is_address_eth).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("claim") {
         let am = m.value_of("amount");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         let seckey = match m.value_of("seckey") {
             Some(path) => {
                 Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
