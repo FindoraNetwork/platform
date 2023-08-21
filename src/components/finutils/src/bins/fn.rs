@@ -278,7 +278,7 @@ fn run() -> Result<()> {
             let cr = m.value_of("commission-rate");
             let vm = m.value_of("validator-memo");
             let force = m.is_present("force");
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("use-default-eth-address");
             if am.is_none() || cr.is_none() {
                 println!("{}", m.usage());
                 println!(
@@ -422,7 +422,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
         let sec_key = m.value_of("sec-key");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
 
         // FRA asset is the default case
         let asset = if let Some(code) = m.value_of("asset") {
@@ -474,7 +474,7 @@ fn run() -> Result<()> {
 
         // The TxoSID to be spent for conversion to ABAR(Anon Blind Asset Record)
         let txo_sid = m.value_of("txo-sid");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
 
         if txo_sid.is_none() {
             println!("{}", m.usage());
@@ -507,7 +507,7 @@ fn run() -> Result<()> {
             .expect("commitment write failed");
         }
     } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
 
@@ -540,7 +540,7 @@ fn run() -> Result<()> {
             .c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
@@ -559,7 +559,7 @@ fn run() -> Result<()> {
 
         common::get_owned_abars(from, commitments_list)?;
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         // Generates a list of owned Abars (both spent and unspent)
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -580,7 +580,7 @@ fn run() -> Result<()> {
 
         common::anon_balance(from, commitments_list, asset)?;
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
@@ -640,7 +640,7 @@ fn run() -> Result<()> {
             println!("{0: <8} | {1: <18} | {2: <45} ", a.0, amt, at);
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
-        let is_eth_address = false;
+        let is_eth_address = m.is_present("use-default-eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
 
@@ -667,6 +667,8 @@ fn run() -> Result<()> {
             .c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
+        let is_eth_address = m.is_present("use-default-eth-address");
+
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
 
@@ -721,7 +723,7 @@ fn run() -> Result<()> {
                 commitments,
                 amounts,
                 assets,
-                true,
+                is_eth_address,
             )
             .c(d!())?;
         }
@@ -735,7 +737,7 @@ fn run() -> Result<()> {
             println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
         }
     } else if let Some(m) = matches.subcommand_matches("check-abar-status") {
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
         // sender Xfr secret key
         let owner_sk = read_file_path(m.value_of("from-seckey")).c(d!())?;
         // parse sender XfrSecretKey or generate from Mnemonic setup with wallet

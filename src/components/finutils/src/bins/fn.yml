@@ -489,9 +489,11 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `sec-key` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - sec-key
   - contract-deposit:
       about: Transfer an asset from the UTXO chain to the EVM chain
       args:
@@ -530,7 +532,7 @@ subcommands:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
         - addr:
-            help: findora account to receive FRA, eg:fra1rkv...
+            help: Findora account to receive FRA, eg:fra1rkv...
             short: a
             long: addr
             takes_value: true
@@ -543,7 +545,7 @@ subcommands:
             value_name: AMOUNT
             required: true
         - eth-key:
-            help: ethereum account mnemonic phrase sign withdraw tx
+            help: mnemonic phrase for the EVM account to sign the withdraw tx
             short: e
             long: eth-key
             takes_value: true
@@ -577,9 +579,11 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -604,9 +608,11 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair using commitment
       args:
@@ -625,9 +631,11 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - owned-utxos:
       about: List owned UTXOs for a public key
       args:
@@ -663,9 +671,11 @@ subcommands:
             takes_value: true
             value_name: TXO SID
             required: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - convert-abar-to-bar:
       about: Convert an ABAR to BAR
       args:
@@ -704,9 +714,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - anon-transfer:
       about: Perform an anonymous transfer
       args:
@@ -744,9 +756,11 @@ subcommands:
             takes_value: true
             value_name: Amount
             required: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
@@ -784,9 +798,11 @@ subcommands:
             takes_value: true
             value_name: Asset
             required: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - anon-fetch-merkle-proof:
       about: Query Merkle tree leaf info
       args:
@@ -815,9 +831,11 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY PATH
             required: true
-        - eth-address:
-            help: generate eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:
