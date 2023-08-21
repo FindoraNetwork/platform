@@ -145,7 +145,7 @@ fn run() -> Result<()> {
                 return Ok(());
             }
             let transferable = m.is_present("transferable");
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("use-default-eth-address");
 
             let decimal = if let Some(num) = m.value_of("decimal") {
                 num.parse::<u8>()
@@ -198,7 +198,7 @@ fn run() -> Result<()> {
                 .parse::<u64>()
                 .c(d!("amount should be a 64-bits unsigned integer"))?;
             let hidden = m.is_present("hidden");
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("use-default-eth-address");
 
             common::issue_asset(
                 seckey.as_deref(),

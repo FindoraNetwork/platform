@@ -360,7 +360,7 @@ subcommands:
               - seckey
               - asset
         - use-default-eth-address:
-            help: use a private key of the eth address if `from-seckey` is not provided
+            help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
             conflicts-with:
               - seckey
@@ -463,9 +463,11 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - seckey
   - account:
       about: Return user contract account information or the balance if secret key is provided
       args:
