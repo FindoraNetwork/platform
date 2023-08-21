@@ -65,7 +65,7 @@ fn run() -> Result<()> {
         common::gen_key_and_print(gen_eth_address);
     } else if let Some(m) = matches.subcommand_matches("wallet") {
         if m.is_present("create") {
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("gen-eth-address");
             common::gen_key_and_print(is_address_eth);
         } else if m.is_present("show") {
             let seckey = match m.value_of("seckey") {
@@ -74,7 +74,7 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
-            let is_address_eth = m.is_present("eth-address");
+            let is_address_eth = m.is_present("use-default-eth-address");
 
             // FRA asset is the default case
             let asset = if let Some(code) = m.value_of("asset") {

@@ -352,9 +352,19 @@ subcommands:
             value_name: SECRET KEY
             conflicts_with:
               - create
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - gen-eth-address:
+            help: generate the keypair of an eth address
+            long: gen-eth-address
+            conflicts-with:
+              - show
+              - seckey
+              - asset
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - seckey
+              - create
   - asset:
       about: manipulate custom asset
       groups:
