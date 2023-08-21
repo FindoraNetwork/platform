@@ -282,9 +282,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - transfer-batch:
       about: Transfer tokens from one address to many others
       args:
@@ -319,9 +321,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts-with:
+              - from-seckey
   - wallet:
       about: manipulates a findora wallet
       args:

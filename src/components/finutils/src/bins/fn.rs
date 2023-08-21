@@ -343,7 +343,7 @@ fn run() -> Result<()> {
                 })
             })?;
         let am = m.value_of("amount");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
 
         if am.is_none() {
             println!("{}", m.usage());
@@ -394,7 +394,7 @@ fn run() -> Result<()> {
                 })
             })?;
         let am = m.value_of("amount");
-        let is_address_eth = m.is_present("eth-address");
+        let is_address_eth = m.is_present("use-default-eth-address");
 
         if am.is_none() || t.is_empty() {
             println!("{}", m.usage());
