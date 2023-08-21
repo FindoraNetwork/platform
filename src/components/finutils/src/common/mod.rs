@@ -80,9 +80,10 @@ lazy_static! {
 
 /// Updating the information of a staker includes commission_rate and staker_memo
 pub fn staker_update(
+    staker: Option<&str>,
     cr: Option<&str>,
     memo: Option<StakerMemo>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
     let pub_key = get_td_pubkey()
         .map(|i| td_pubkey_to_td_addr_bytes(&i))
@@ -105,7 +106,14 @@ pub fn staker_update(
 
     let td_pubkey = get_td_pubkey().c(d!())?;
 
-    let kp = get_keypair(is_address_eth).c(d!())?;
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)
+    } else {
+        staker
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
     let vkp = get_td_privkey().c(d!())?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
@@ -194,7 +202,7 @@ pub fn stake_append(
     amount: &str,
     staker: Option<&str>,
     td_addr: Option<TendermintAddrRef>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
     let am = amount.parse::<u64>().c(d!("'amount' must be an integer"))?;
     check_delegation_amount(am, true).c(d!())?;
@@ -205,10 +213,14 @@ pub fn stake_append(
             .map(|td_pk| td_pubkey_to_td_addr(&td_pk))
     })?;
 
-    let kp = staker
-        .c(d!())
-        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
-        .or_else(|_| get_keypair(is_address_eth).c(d!()))?;
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)
+    } else {
+        staker
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder.add_operation_delegation(&kp, am, td_addr);
@@ -234,7 +246,7 @@ pub fn unstake(
     am: Option<&str>,
     staker: Option<&str>,
     td_addr: Option<TendermintAddrRef>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
@@ -242,10 +254,15 @@ pub fn unstake(
         None
     };
 
-    let kp = staker
-        .c(d!())
-        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
-        .or_else(|_| get_keypair(is_address_eth).c(d!()))?;
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)
+    } else {
+        staker
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
+
     let td_addr_bytes = td_addr
         .c(d!())
         .and_then(|ta| td_addr_to_bytes(ta).c(d!()))
@@ -285,7 +302,7 @@ pub fn claim(
     td_addr: &str,
     am: Option<&str>,
     sk_str: Option<&str>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
     let td_addr = hex::decode(td_addr).c(d!())?;
 
@@ -295,7 +312,14 @@ pub fn claim(
         None
     };
 
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)?
+    } else {
+        sk_str
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
 
     let mut builder = utils::new_tx_builder().c(d!())?;
 
@@ -450,7 +474,7 @@ pub fn transfer_asset(
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
     transfer_asset_batch(
         owner_sk,
@@ -459,7 +483,7 @@ pub fn transfer_asset(
         am,
         confidential_am,
         confidential_ty,
-        is_address_eth,
+        use_default_eth_address,
     )
     .c(d!())
 }
@@ -492,9 +516,17 @@ pub fn transfer_asset_batch(
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
-    let from = restore_keypair_from_str_with_default(owner_sk, is_address_eth)?;
+    let from = if use_default_eth_address {
+        get_keypair(use_default_eth_address)?
+    } else {
+        owner_sk
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
+
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
     transfer_asset_batch_x(
@@ -635,31 +667,36 @@ pub fn gen_key_and_print(is_address_eth: bool) {
 
 fn restore_keypair_from_str_with_default(
     sk_str: Option<&str>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<XfrKeyPair> {
-    if let Some(sk) = sk_str {
-        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk.trim()))
-            .map(|sk| sk.into_keypair())
-            .c(d!("Invalid secret key"))
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)
     } else {
-        get_keypair(is_address_eth).c(d!())
-    }
+        if let Some(sk) = sk_str {
+            serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk.trim()))
+                .map(|sk| sk.into_keypair())
+                .c(d!("Invalid secret key"))
+        } else {
+            get_keypair(false).c(d!())
+        }
+    };
+    kp
 }
 
 /// Show the asset balance of a findora account
 pub fn show_account(
     sk_str: Option<&str>,
     _asset: Option<&str>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
-    // let token_code = asset
-    //     .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
-    //     .transpose()?;
-    // let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
-    //
-    // println!("{}: {}", asset.unwrap_or("FRA"), balance);
-
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)?
+    } else {
+        sk_str
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
     let res = utils::get_asset_all(&kp)?;
 
     for (k, v) in res {
@@ -677,11 +714,18 @@ pub fn delegate(
     sk_str: Option<&str>,
     amount: u64,
     validator: &str,
-    is_address_eth: bool,
+    use_default_eth_address: bool
 ) -> Result<()> {
-    restore_keypair_from_str_with_default(sk_str, is_address_eth)
-        .c(d!())
-        .and_then(|kp| delegate_x(&kp, amount, validator).c(d!()))
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)?
+    } else {
+        sk_str
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
+
+    delegate_x(&kp, amount, validator)
 }
 
 #[inline(always)]
@@ -697,11 +741,18 @@ pub fn delegate_x(kp: &XfrKeyPair, amount: u64, validator: &str) -> Result<()> {
 pub fn undelegate(
     sk_str: Option<&str>,
     param: Option<(u64, &str)>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
-    restore_keypair_from_str_with_default(sk_str, is_address_eth)
-        .c(d!())
-        .and_then(|kp| undelegate_x(&kp, param).c(d!()))
+    let kp = if use_default_eth_address {
+        get_keypair(use_default_eth_address)?
+    } else {
+        sk_str
+            .c(d!())
+            .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
+            .or_else(|_| get_keypair(false).c(d!()))?;
+    };
+
+    undelegate_x(&kp, param).c(d!())
 }
 
 #[inline(always)]
@@ -713,8 +764,8 @@ pub fn undelegate_x(kp: &XfrKeyPair, param: Option<(u64, &str)>) -> Result<()> {
 }
 
 /// Display delegation information of a findora account
-pub fn show_delegations(sk_str: Option<&str>, is_address_eth: bool) -> Result<()> {
-    let pk = restore_keypair_from_str_with_default(sk_str, is_address_eth)?.get_pk();
+pub fn show_delegations(sk_str: Option<&str>) -> Result<()> {
+    let pk = restore_keypair_from_str_with_default(sk_str)?.get_pk();
 
     println!(
         "{}",
@@ -791,9 +842,9 @@ pub fn create_asset(
     max_units: Option<u64>,
     transferable: bool,
     token_code: Option<&str>,
-    is_address_eth: bool,
+    use_default_eth_address: bool,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
+    let kp = restore_keypair_from_str_with_default(sk_str, use_default_eth_address)?;
 
     let code = if token_code.is_none() {
         AssetTypeCode::gen_random()
@@ -849,9 +900,8 @@ pub fn issue_asset(
     asset: &str,
     amount: u64,
     hidden: bool,
-    is_address_eth: bool,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
     let code = AssetTypeCode::new_from_base64(asset).c(d!())?;
     issue_asset_x(&kp, &code, amount, hidden).c(d!())
 }

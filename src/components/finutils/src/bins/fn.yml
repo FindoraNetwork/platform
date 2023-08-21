@@ -12,11 +12,11 @@ subcommands:
   - genkey:
       about: Generate a random Findora public key/private key Pair
       args:
-        - eth-address:
-            help: generate eth address
-            long: eth-address
+        - gen-eth-address:
+            help: generate a wallet with the eth address
+            long: gen-eth-address
   - show:
-      about: View Validator status and accumulated rewards
+      about: View validator status and accumulated rewards
       args:
         - basic:
             help: show basic account info
@@ -87,9 +87,11 @@ subcommands:
         - force:
             help: ignore warning and stake FRAs to your target node
             long: force
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
       groups:
         - staking-flags:
             args:
@@ -129,9 +131,17 @@ subcommands:
             long: validator-memo-logo
             takes_value: true
             value_name: Logo
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - staker-priv-key:
+            help: the file which contains private key (in base64 format) of proposer
+            short: S
+            long: staker-priv-key
+            takes_value: true
+            value_name: SecretKey
+        - use-default-eth-address:
+            help: use the the default eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
@@ -153,9 +163,11 @@ subcommands:
             long: amount
             takes_value: true
             value_name: Amount
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
   - claim:
       about: Claim accumulated FRA rewards
       args:
@@ -176,9 +188,11 @@ subcommands:
             long: seckey
             takes_value: true
             value_name: SECRET KEY
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - delegate:
       about: Delegating operations
       args:
@@ -189,7 +203,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -204,9 +218,11 @@ subcommands:
             conflicts_with:
               - amount
               - validator
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - undelegate:
       about: Undelegating operations
       args:
@@ -217,7 +233,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -226,9 +242,11 @@ subcommands:
             long: validator
             takes_value: true
             value_name: VALIDATOR ADDRESS
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - transfer:
       about: Transfer tokens from one address to another
       args:
@@ -239,13 +257,13 @@ subcommands:
             value_name: ASSET
             allow_hyphen_values: true
         - from-seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the sender
             short: f
             long: from-seckey
             takes_value: true
             value_name: SecKey
         - to-pubkey:
-            help: base64-formated `XfrPublicKey` of the receiver
+            help: base64-formatted `XfrPublicKey` of the receiver
             short: t
             long: to-pubkey
             takes_value: true
@@ -272,9 +290,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
   - transfer-batch:
       about: Transfer tokens from one address to many others
       args:
@@ -309,9 +329,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
-        - eth-address:
-            help: use a private key of the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
   - wallet:
       about: manipulates a findora wallet
       args:
@@ -332,15 +354,18 @@ subcommands:
             conflicts_with:
               - create
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
             conflicts_with:
               - create
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - gen-eth-address:
+            help: generate a wallet with the eth address
+            long: gen-eth-address
+            conflicts_with:
+              - show
+              - seckey
   - asset:
       about: manipulate custom asset
       groups:
@@ -409,7 +434,7 @@ subcommands:
             takes_value: true
             value_name: WALLET ADDRESS
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of findora account
+            help: the file which contains base64-formatted `XfrPrivateKey` of an account
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -439,9 +464,11 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - account:
       about: Return user contract account information or the balance if secret key is provided
       args:
@@ -463,9 +490,11 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
-        - eth-address:
-            help: use the eth address
-            long: eth-address
+        - use-default-eth-address:
+            help: use the the default eth address if `addr` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - addr
   - contract-deposit:
       about: Transfer an asset from the UTXO chain to the EVM chain
       args:
