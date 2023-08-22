@@ -10,11 +10,12 @@ use {
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
     },
-    globutils::HashOf,
+    globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, AssetTypePrefix, AuthenticatedUtxo, StateCommitmentData,
-            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
+            ABARData, ATxoSID, AssetType, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedUtxo, StateCommitmentData, TxnSID, TxoSID, UnAuthenticatedUtxo,
+            Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
@@ -153,7 +154,7 @@ pub async fn query_asset(
 pub async fn get_derived_asset_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<String>> {
+) -> actix_web::Result<String> {
     let qs = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
         let derived_asset_code = AssetTypeCode::from_prefix_and_raw_asset_type_code(
@@ -162,7 +163,7 @@ pub async fn get_derived_asset_code(
             &CFG.checkpoint,
             qs.ledger_cloned.get_tendermint_height(),
         );
-        Ok(web::Json(derived_asset_code.to_base64()))
+        Ok(derived_asset_code.to_base64())
     } else {
         Err(actix_web::error::ErrorBadRequest(
             "Invalid asset definition encoding.",
@@ -222,8 +223,7 @@ pub async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    let (hash, seq_id) = ledger.get_state_commitment();
+    let (hash, seq_id) = qs.get_state_commitment_from_api_cache();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
@@ -712,6 +712,24 @@ pub async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
+// query utxos according to `commitment`
+pub(super) async fn query_owned_abar(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<(ATxoSID, ABARData)>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    globutils::wallet::commitment_from_base58(com.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|com| {
+            web::Json(ledger.get_owned_abar(&com).map(|a| {
+                let c = wallet::commitment_to_base58(&com);
+                (a, ABARData { commitment: c })
+            }))
+        })
+}
+
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
@@ -725,6 +743,7 @@ pub enum ApiRoutes {
     TxnSidLight,
     GlobalStateVersion,
     OwnedUtxos,
+    OwnedAbars,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -749,6 +768,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
+            ApiRoutes::OwnedAbars => "owned_abars",
         };
         "/".to_owned() + endpoint
     }

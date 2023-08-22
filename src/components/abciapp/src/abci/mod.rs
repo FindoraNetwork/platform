@@ -99,7 +99,6 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-
         // keep them running in the background,
         // avoid being dropped by the jsonrpc crate.
         mem::forget(fc_rpc::start_web3_service(

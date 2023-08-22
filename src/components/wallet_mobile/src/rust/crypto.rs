@@ -14,29 +14,26 @@ use cryptohash::sha256;
 use getrandom::getrandom;
 use globutils::wallet;
 use ledger::{
-    data_model::{
-        AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
-        TX_FEE_MIN,
-    },
+    data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN},
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ring::pbkdf2;
-use ruc::{
-    d, Result, RucResult
-};
+use ruc::{d, Result, RucResult};
 use std::num::NonZeroU32;
 use std::str;
-use zei::noah_algebra::serialization::NoahFromToBytes;
-use zei::noah_api::{
-    xfr::{
+use zei::{
+    noah_algebra::serialization::NoahFromToBytes,
+    noah_api::xfr::{
         asset_record::open_blind_asset_record as open_bar,
-        structs::{AssetType as NoahAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH},
+        structs::{
+            AssetType as NoahAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
+        },
         trace_assets as noah_trace_assets,
     },
+    XfrKeyPair, XfrPublicKey, XfrSecretKey,
 };
-use zei::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.
@@ -91,7 +88,7 @@ pub fn rs_open_client_asset_record(
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
         &keypair.into_noah(),
     )
-        .c(d!())
+    .c(d!())
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

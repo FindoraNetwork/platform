@@ -1,7 +1,7 @@
 use super::parse_u64;
 use crate::rust::{
     c_char_to_string, string_to_c_char, AssetRules, ClientAssetRecord, FeeInputs,
-    OwnerMemo, PublicParams, TransactionBuilder,
+    OwnerMemo, TransactionBuilder,
 };
 use ledger::data_model::AssetTypeCode;
 use std::os::raw::c_char;
@@ -108,7 +108,6 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_create_asset(
 /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
 /// @param {BigInt} amount - Amount to be issued.
 /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-/// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
     builder: &TransactionBuilder,
@@ -117,7 +116,6 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
     seq_num: u64,
     amount: *const c_char,
     conf_amount: bool,
-    zei_params: &PublicParams,
 ) -> *mut TransactionBuilder {
     let amount = parse_u64(amount);
     if let Ok(info) = builder.clone().add_basic_issue_asset(
@@ -126,7 +124,6 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
         seq_num,
         amount,
         conf_amount,
-        zei_params,
     ) {
         Box::into_raw(Box::new(info))
     } else {
