@@ -781,8 +781,8 @@ fn app_hash_v2(
     when: &str,
     height: i64,
     mut la_hash: Vec<u8>,
-    mut cs_hash: Vec<u8>,
-    mut tm_hash: Vec<u8>,
+    cs_hash: Vec<u8>,
+    tm_hash: Vec<u8>,
 ) -> Vec<u8> {
     info!(target: "abciapp",
         "app_hash_{}: {}_{}_{}, height: {}",
@@ -793,10 +793,17 @@ fn app_hash_v2(
         height
     );
 
-    // append ONLY non-empty EVM chain state hash
-    if !tm_hash.is_empty() || !cs_hash.is_empty() {
-        la_hash.append(&mut cs_hash);
-        la_hash.append(&mut tm_hash);
+    if !cs_hash.is_empty() {
+        la_hash.extend_from_slice(&cs_hash);
+
+        if !tm_hash.is_empty() {
+            la_hash.extend_from_slice(&tm_hash);
+        }
+
+        Sha256::hash(la_hash.as_slice()).to_vec()
+    } else if !tm_hash.is_empty() {
+        la_hash.extend([0u8; 32]);
+        la_hash.extend_from_slice(&tm_hash);
 
         Sha256::hash(la_hash.as_slice()).to_vec()
     } else {
