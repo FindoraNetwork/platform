@@ -120,12 +120,6 @@ fn test_asset_creation_valid() {
     }
 
     assert!(state.get_asset_type(&token_code).is_some());
-
-    //     assert_eq!(
-    // *asset_body.asset,
-    // state.get_asset_type(&token_code).unwrap().properties
-    //     );
-
     assert_eq!(0, state.get_asset_type(&token_code).unwrap().units);
 }
 
