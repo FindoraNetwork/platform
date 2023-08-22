@@ -17,16 +17,18 @@ serde = { version = "1.0.124", features = ["derive"] }
 rand = "0.8"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand_chacha = "0.3"
-noah-curve25519-dalek = { version = "4.0.0", features = ["serde"] }
+curve25519-dalek = { package = "noah-curve25519-dalek", version = "4.0.0", default-features = false, features = ['serde'] }
 wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
 sha2 = "0.10"
+digest = '0.10'
+parking_lot = "0.12"
+getrandom = "0.2"
 
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 ruc = "1.0"
 rucv4 = { package = "ruc", version = "4.0" }
 nix = "0.25"
-ledger = { path = "../../ledger" }
-
+ledger = { path = "../../ledger", default-features = false }
 globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
 credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
 
@@ -35,11 +37,10 @@ fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a-fk" }
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0c" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0c" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# chaindev = { path = "../../../../chaindev" }
 chaindev = { git = "https://github.com/FindoraNetwork/chaindev", branch = "platform", default-features = false, features = ["tendermint_based", "vsdb_sled_engine"] }
 web3 = "0.19.0"
 tokio = "1.10.1"

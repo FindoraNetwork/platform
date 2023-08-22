@@ -11,11 +11,10 @@ use {
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    zei::noah_algebra::serialization::NoahFromToBytes,
-    zei::{XfrPublicKey, XfrSignature},
+    zei::{noah_algebra::serialization::NoahFromToBytes, XfrPublicKey, XfrSignature},
 };
 
-/// An opaque 32-byte cryptographic identifier.
+/// An opaque 34-byte cryptographic identifier.
 #[derive(
     Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
 )]
@@ -261,9 +260,6 @@ impl Verify for MultiSignature {
                 }
             }
             Self::Ecdsa(ref sig) => {
-                // let mut msg_hashed = [0u8; 32];
-                // msg_hashed.copy_from_slice(msg);
-
                 let msg_hashed = keccak_256(msg);
                 match secp256k1_ecdsa_recover(sig.as_ref(), &msg_hashed) {
                     Ok(pubkey) => {

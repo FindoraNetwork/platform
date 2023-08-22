@@ -15,13 +15,15 @@ use ledger::{
     },
     staking::{td_addr_to_bytes, PartialUnDelegation, TendermintAddr},
 };
-use ruc::{d, eg, Result as RucResult, err::RucResult as NewRucResult};
+use ruc::{d, eg, err::RucResult as NewRucResult, Result as RucResult};
 use serde_json::Result;
-use zei::noah_api::xfr::{
-    asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-    structs::AssetRecordTemplate,
+use zei::{
+    noah_api::xfr::{
+        asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+        structs::AssetRecordTemplate,
+    },
+    OwnerMemo as NoahOwnerMemo, XfrKeyPair, XfrPublicKey,
 };
-use zei::{OwnerMemo as NoahOwnerMemo, XfrKeyPair, XfrPublicKey};
 
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.
@@ -340,7 +342,8 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
+        self.get_builder_mut().build().unwrap();
         self.get_builder().serialize_str()
     }
 
@@ -362,7 +365,9 @@ impl TransactionBuilder {
     pub fn get_owner_memo(&self, idx: usize) -> Option<OwnerMemo> {
         self.get_builder()
             .get_owner_memo_ref(idx)
-            .map(|memo| OwnerMemo { memo: memo.into_noah() })
+            .map(|memo| OwnerMemo {
+                memo: memo.into_noah(),
+            })
     }
 }
 
@@ -397,7 +402,7 @@ impl TransferOperationBuilder {
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
             &key.into_noah(),
         )
-            .c(d!())?;
+        .c(d!())?;
         self.get_builder_mut().add_input(
             *txo_ref.get_txo(),
             oar,

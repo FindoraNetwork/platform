@@ -10,7 +10,7 @@
 pub mod data_model;
 pub mod converter;
 pub mod staking;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 pub mod store;
 
 use {ruc::*, std::sync::atomic::AtomicI64};
