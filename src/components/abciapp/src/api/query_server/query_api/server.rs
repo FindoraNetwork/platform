@@ -349,7 +349,7 @@ impl QueryServer {
         self.ledger_cloned.get_abar(&atxo_sid)
     }
 
-    /// Returns the merkle proof from the given ATxoSID
+    /// Returns the Merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
         self.ledger_cloned.get_abar_proof(atxo_sid).ok()
