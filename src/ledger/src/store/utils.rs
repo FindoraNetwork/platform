@@ -26,6 +26,7 @@ use {
 
 /// Define and Issue FRA.
 /// Currently this should only be used for tests.
+#[allow(unused)]
 pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
     /*
      * Define FRA

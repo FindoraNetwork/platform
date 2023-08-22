@@ -19,22 +19,23 @@ hex = "0.4.3"
 js-sys = "0.3.27"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
-rand = { version = "0.7", features = ["wasm-bindgen"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
+wasm-bindgen-futures = "^0.4.34"
 fbnc = { version = "0.2.9", default-features = false}
 
 ring = "0.16.19"
 aes-gcm = "^0.10.1"
 bech32 = "0.7.2"
+ruc = "1.0"
+bs58 = "0.4"
 
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
-ruc = "1.0"
 
 finutils = { path = "../finutils", default-features = false }
 
@@ -68,9 +69,12 @@ features = [
 serde = "1.0.124"
 serde_json = "1.0.41"
 vergen = "=3.1.0"
-wasm-bindgen = { version = "=0.2.84", features = ["serde-serialize"] }
 
 [dev-dependencies]
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen-test = "0.3.0"
+
+[features]
+lightweight = ["zei/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.

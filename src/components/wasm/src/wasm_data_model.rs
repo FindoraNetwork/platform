@@ -6,6 +6,7 @@ use {
         Credential as PlatformCredential,
     },
     globutils::{wallet, HashOf},
+    js_sys::JsString,
     ledger::data_model::{
         AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
         AuthenticatedUtxo, SignatureRules as PlatformSignatureRules, TxOutput,
@@ -17,17 +18,20 @@ use {
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
     zei::{
-        noah_algebra::ristretto::PedersenCommitmentRistretto,
-        noah_api::xfr::{
-            structs::{
+        noah_algebra::{bn254::BN254Scalar, ristretto::PedersenCommitmentRistretto},
+        noah_api::{
+            anon_xfr::structs::{
+                AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
+                MTLeafInfo as NoahMTLeafInfo,
+            },
+            xfr::structs::{
                 AssetTracerDecKeys, AssetTracerEncKeys,
-                AssetTracerKeyPair as NoahAssetTracerKeyPair,
-                IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
-                TracingPolicies as NoahTracingPolicies,
+                AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+                OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
                 TracingPolicy as NoahTracingPolicy,
             },
         },
-        XfrPublicKey, BlindAssetRecord,
+        BlindAssetRecord, XfrPublicKey,
     },
 };
 
@@ -157,7 +161,10 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
+            txo: val
+                .into_serde()
+                .c(d!())
+                .map_err(|_| JsValue::from_str("format json error"))?,
         })
     }
 
@@ -256,6 +263,73 @@ impl OwnerMemo {
     }
 }
 
+#[wasm_bindgen]
+#[derive(Deserialize, Clone)]
+/// Asset owner memo. Contains information needed to decrypt an asset record.
+/// @see {@link module:Findora-Wasm.ClientAssetRecord|ClientAssetRecord} for more details about asset records.
+pub struct AxfrOwnerMemo {
+    pub(crate) memo: NoahAxfrOwnerMemo,
+}
+
+#[wasm_bindgen]
+impl AxfrOwnerMemo {
+    /// Builds an owner memo from a JSON-serialized JavaScript value.
+    /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
+    /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.
+    ///
+    /// @example
+    /// {
+    ///   "blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
+    ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
+    /// }
+    pub fn from_json(val: &JsValue) -> Result<AxfrOwnerMemo, JsValue> {
+        let noah_owner_memo: NoahAxfrOwnerMemo =
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(AxfrOwnerMemo {
+            memo: noah_owner_memo,
+        })
+    }
+
+    /// Creates a clone of the owner memo.
+    pub fn clone(&self) -> Self {
+        AxfrOwnerMemo {
+            memo: self.memo.clone(),
+        }
+    }
+}
+
+impl AxfrOwnerMemo {
+    pub fn get_memo_ref(&self) -> &NoahAxfrOwnerMemo {
+        &self.memo
+    }
+}
+
+#[wasm_bindgen]
+/// Asset owner memo decrypted info. contains amount, asset_type and blind.
+pub struct AxfrOwnerMemoInfo {
+    pub(crate) amount: u64,
+    pub(crate) asset_type: String,
+    pub(crate) blind: BN254Scalar,
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AxfrOwnerMemoInfo {
+    #[wasm_bindgen(getter)]
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn asset_type(&self) -> String {
+        self.asset_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn blind(&self) -> BN254Scalar {
+        self.blind
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct AttributeDefinition {
@@ -694,4 +768,95 @@ impl AssetRules {
 #[inline(always)]
 pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
     JsValue::from_str(&e.to_string())
+}
+
+#[wasm_bindgen]
+#[derive(Default, Clone)]
+pub struct MTLeafInfo {
+    object: NoahMTLeafInfo,
+}
+
+impl MTLeafInfo {
+    pub fn get_noah_mt_leaf_info(&self) -> &NoahMTLeafInfo {
+        &self.object
+    }
+}
+
+#[wasm_bindgen]
+impl MTLeafInfo {
+    pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
+        let mt_leaf_info: NoahMTLeafInfo = json
+            .into_serde()
+            .c(d!())
+            .map_err(|_| JsValue::from_str("format json error"))?;
+        Ok(MTLeafInfo {
+            object: mt_leaf_info,
+        })
+    }
+
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self.object)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
+    }
+}
+
+#[wasm_bindgen]
+pub struct AmountAssetType {
+    pub amount: u64,
+    pub(crate) asset_type: String,
+}
+
+#[wasm_bindgen]
+impl AmountAssetType {
+    #[wasm_bindgen(getter)]
+    pub fn asset_type(&self) -> String {
+        self.asset_type.clone()
+    }
+}
+
+/// AnonKeys is used to store keys for Anon proofs
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct AnonKeys {
+    pub(crate) secret_key: String,
+    pub(crate) pub_key: String,
+}
+
+/// AnonKeys is a struct to store keys required for anon transfer
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AnonKeys {
+    pub fn from_json(json: &JsValue) -> Result<AnonKeys, JsValue> {
+        let anon_keys: AnonKeys = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(anon_keys)
+    }
+
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn secret_key(&self) -> String {
+        self.secret_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_secret_key(&mut self, secret_key: String) {
+        self.secret_key = secret_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pub_key(&self) -> String {
+        self.pub_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_pub_key(&mut self, pub_key: String) {
+        self.pub_key = pub_key;
+    }
 }
