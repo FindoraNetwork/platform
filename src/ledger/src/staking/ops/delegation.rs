@@ -23,7 +23,7 @@ use {
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
     zei::{
         noah_api::xfr::structs::{XfrAmount, XfrAssetType},
-        {XfrKeyPair, XfrPublicKey, XfrSignature},
+        XfrKeyPair, XfrPublicKey, XfrSignature,
     },
 };
 

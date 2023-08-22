@@ -169,7 +169,13 @@ impl module_evm::Config for BaseApp {
         evm_precompile_basic::Ripemd160,
         evm_precompile_basic::Identity,
         evm_precompile_modexp::Modexp,
+        evm_precompile_bn128::Bn128Add,
+        evm_precompile_bn128::Bn128Mul,
+        evm_precompile_bn128::Bn128Pairing,
+        evm_precompile_blake2::Blake2F,
         evm_precompile_frc20::FRC20<Self>,
+        evm_precompile_anemoi::Anemoi254,
+        evm_precompile_anemoi::Anemoi381,
     );
     type PrecompilesType = FindoraPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;

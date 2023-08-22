@@ -16,8 +16,7 @@ use module_evm::{
 use ruc::{d, eg, Result, RucResult};
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, str::FromStr};
-use zei::noah_algebra::prelude::NoahFromToBytes;
-use zei::XfrPublicKey;
+use zei::{noah_algebra::prelude::NoahFromToBytes, XfrPublicKey};
 
 impl EVMStaking for BaseApp {
     fn import_validators(

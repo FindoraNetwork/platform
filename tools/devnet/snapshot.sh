@@ -41,6 +41,7 @@ $BIN/fn setup -S http://0.0.0.0 > /dev/null
 $BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
 echo -e "host: http://0.0.0.0"
 echo -e "key : $WALLET/mnenomic.key"
+sleep 3
 #echo -e "$BIN/stt"
 $BIN/stt init -i $BLOCK_INTERVAL -s
 #./$stopnodes

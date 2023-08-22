@@ -20,14 +20,14 @@ use rand_core::SeedableRng;
 use ruc::Result as RUCResult;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use zei::noah_api::xfr::structs::{
-    AssetTracerDecKeys, AssetTracerEncKeys,
-    AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
-    OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
-    TracingPolicy as NoahTracingPolicy,
-};
 use zei::{
-    BlindAssetRecord, XfrPublicKey
+    noah_api::xfr::structs::{
+        AssetTracerDecKeys, AssetTracerEncKeys,
+        AssetTracerKeyPair as NoahAssetTracerKeyPair, IdentityRevealPolicy,
+        OwnerMemo as NoahOwnerMemo, TracingPolicies as NoahTracingPolicies,
+        TracingPolicy as NoahTracingPolicy,
+    },
+    BlindAssetRecord, XfrPublicKey,
 };
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -272,10 +272,7 @@ impl OwnerMemo {
         let noah_owner_memo: NoahOwnerMemo =
             val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
-            memo: NoahOwnerMemo {
-                blind_share: noah_owner_memo.blind_share,
-                lock: noah_owner_memo.lock,
-            },
+            memo: noah_owner_memo,
         })
     }
 
