@@ -472,7 +472,7 @@ fn run() -> Result<()> {
         // the receiver Xfr address
         let target_addr = m.value_of("to-address").c(d!())?;
 
-        // The TxoSID to be spent for conversion to ABAR(Anon Blind Asset Record)
+        // The TxoSID to be spent for conversion to ABAR (Anon Blind Asset Record)
         let txo_sid = m.value_of("txo-sid");
         let is_address_eth = m.is_present("use-default-eth-address");
 
