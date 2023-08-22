@@ -4,13 +4,13 @@
 
 use {
     super::{
-        IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
-        TransferType, XfrNotePolicies,
+        IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy, XfrNotePolicies,
     },
     crate::data_model::{
         Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
-        DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-        TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
+        DefineAssetBody, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+        TxnEffect, TxnSID, TxoRef, TxoSID,
     },
     globutils::SignatureOf,
     rand_core::{CryptoRng, RngCore},

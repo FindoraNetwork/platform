@@ -19,7 +19,7 @@ use {
             asset_record::{open_blind_asset_record, AssetRecordType},
             structs::{AssetRecordTemplate, XfrAmount},
         },
-        {XfrKeyPair, XfrPublicKey},
+        XfrKeyPair, XfrPublicKey,
     },
 };
 
@@ -126,12 +126,12 @@ fn gen_transfer_tx(
             &owner_memo.map(|o| o.into_noah()),
             &owner_kp.into_noah(),
         )
-            .c(d!())
-            .and_then(|ob| {
-                trans_builder
-                    .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
-                    .c(d!())
-            })?;
+        .c(d!())
+        .and_then(|ob| {
+            trans_builder
+                .add_input(TxoRef::Absolute(sid), ob, None, None, i_am)
+                .c(d!())
+        })?;
 
         alt!(0 == am, break);
     }
@@ -166,5 +166,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction())
+    tx_builder.build_and_take_transaction()
 }

@@ -30,7 +30,7 @@ rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 ring = "0.16.19"
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
-serde_derive = "1.0"
+serde_derive = "^1.0.59"
 serde_json = "1.0"
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 
@@ -67,4 +67,3 @@ safer-ffi = "0.0.10"
 [build-dependencies]
 cbindgen = "0.24"
 vergen = "3.1.0"
-
