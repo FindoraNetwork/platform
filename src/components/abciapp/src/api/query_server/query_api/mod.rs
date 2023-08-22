@@ -167,7 +167,8 @@ async fn get_owned_abar(
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| web::Json(ledger.get_owned_abar(&com)))
 }
-/// Returns the merkle proof for anonymous transactions
+
+/// Returns the Merkle proof for anonymous transactions
 async fn get_abar_proof(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
