@@ -712,7 +712,7 @@ pub async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
-// query utxos according `commitment`
+// query utxos according to `commitment`
 pub(super) async fn query_owned_abar(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     com: web::Path<String>,
