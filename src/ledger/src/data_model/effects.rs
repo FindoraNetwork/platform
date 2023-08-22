@@ -805,7 +805,7 @@ impl BlockEffect {
             }
         }
 
-        // Check that no nullifier are created twice in same block
+        // Check that no nullifier is created twice in the same block
         // for anon_transfer and abar to bar conversion
         for axfr_note in txn_effect.axfr_bodies.iter() {
             for nullifier in axfr_note.body.inputs.iter() {

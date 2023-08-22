@@ -1392,7 +1392,7 @@ pub enum BarAnonConvNote {
     ArNote(Box<ArToAbarNote>),
 }
 
-/// Operation for converting a Blind Asset Record to a Anonymous record
+/// Operation for converting a Blind Asset Record to an Anonymous record
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BarToAbarOps {
     /// the note which contains the inp/op and ZKP
@@ -2083,7 +2083,7 @@ lazy_static! {
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
 pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
-/// Double the
+/// Double the regular fee
 pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
 /// Calculate the FEE with inputs and outputs number.

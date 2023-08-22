@@ -813,10 +813,10 @@ impl TransactionBuilder {
                 .or_insert(-(output.get_amount() as i64));
         }
 
-        // Check if atleast one input is of FRA asset type
+        // Check if at least one input is of FRA asset type
         let fra_rem = remainders.remove(&ASSET_TYPE_FRA);
         if fra_rem.is_none() {
-            return Err(eg!("Must include a FRA ABAR to pay FEE!"));
+            return Err(eg!("Must include an FRA ABAR to pay FEE!"));
         }
 
         // Create remainder OABARs for non-FRA asset types
