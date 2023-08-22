@@ -115,6 +115,11 @@ impl<'a> EvmDataReader<'a> {
 
         Ok(start..end)
     }
+
+    /// Get slice from cursor to the end of buffer
+    pub fn get_slice(&mut self) -> &[u8] {
+        &self.input[self.cursor..]
+    }
 }
 
 /// Help build an EVM input/output data.

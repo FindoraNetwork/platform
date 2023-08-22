@@ -48,7 +48,7 @@ impl MintFraOps {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<OwnerMemo>> {
         vec![None; self.entries.len()]
     }
 }

@@ -7,10 +7,12 @@ build = "build.rs"
 
 [dependencies]
 base64 = "0.13"
+bs58 = "0.4"
 bincode = "1.3.1"
-byteorder = "1.0.0"
+byteorder = "1.0.0" 
 curve25519-dalek = { package = "noah-curve25519-dalek", version = "4.0.0", default-features = false, features = ['serde'] }
 ed25519-dalek = { package = "noah-ed25519-dalek", git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v4.0.0" }
+digest = '0.10'
 hex = "0.4.3"
 lazy_static = { version = "1.2.0" }
 tracing = "0.1"
@@ -24,7 +26,7 @@ serde-strz = "1.1.1"
 sha2 = "0.10"
 unicode-normalization = "0.1.13"
 time = "0.3"
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0c" }
 indexmap = { version = "1.6.2", features = ["serde"] }
 config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
@@ -32,6 +34,7 @@ fp-utils = { path = "../components/contracts/primitives/utils" }
 ruc = "1.0"
 zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", rev = "57633a", features = ["yoloproofs"] }
+itertools = "0.10"
 fbnc = { version = "0.2.9", default-features = false}
 once_cell = "1"
 num-bigint = "0.4.3"
@@ -44,10 +47,11 @@ merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-merkle", b
 sliding_set = { git = "https://github.com/FindoraNetwork/platform-lib-slidingset", branch = "develop" }
 
 [features]
-default = []
+default = ["fin_storage"]
 diskcache = ["fbnc/diskcache"]
 debug_env = ["config/debug_env"]
 abci_mock = []
+fin_storage = ["storage", "fin_db"]
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -58,8 +62,10 @@ features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.12"
-# sodiumoxide = "0.2.1"
 fs2 = "0.4"
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6", optional = true }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.6", optional = true }
+sparse_merkle_tree = { git = "https://github.com/FindoraNetwork/platform-lib-sparse-merkle", branch = "develop" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
