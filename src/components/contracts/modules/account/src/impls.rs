@@ -1,18 +1,18 @@
 use crate::{storage::*, App, Config};
 use config::abci::global_cfg::CFG;
-use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
+use enterprise_web3::{
+    ALLOWANCES, BALANCE_MAP, TOTAL_ISSUANCE, WEB3_SERVICE_START_HEIGHT,
+};
 use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::BorrowMut;
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
 use primitive_types::{H160, U256};
 use ruc::*;
-
 impl<C: Config> AccountAsset<Address> for App<C> {
     fn total_issuance(ctx: &Context) -> U256 {
         TotalIssuance::get(&ctx.state.read()).unwrap_or_default()
     }
-
     fn account_of(
         ctx: &Context,
         who: &Address,
@@ -111,8 +111,8 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             let mut balance_map = BALANCE_MAP.lock().c(d!())?;
             let target_slice: &[u8] = target.as_ref();
             let target_h160 = H160::from_slice(&target_slice[4..24]);
-
             balance_map.insert(target_h160, target_account.balance);
+            set_total_issuance(issuance)?;
         }
 
         Ok(())
@@ -143,8 +143,8 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             let mut balance_map = BALANCE_MAP.lock().c(d!())?;
             let target_slice: &[u8] = target.as_ref();
             let target_h160 = H160::from_slice(&target_slice[4..24]);
-
             balance_map.insert(target_h160, target_account.balance);
+            set_total_issuance(issuance)?;
         }
 
         Ok(())
@@ -205,17 +205,31 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         Ok(())
     }
-
     fn allowance(ctx: &Context, owner: &Address, spender: &Address) -> U256 {
         Allowances::get(&ctx.state.read(), owner, spender).unwrap_or_default()
     }
-
     fn approve(
         ctx: &Context,
         owner: &Address,
+        owner_addr: H160,
         spender: &Address,
+        spender_addr: H160,
         amount: U256,
     ) -> Result<()> {
-        Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)
+        Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)?;
+        if CFG.enable_enterprise_web3
+            && ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT
+        {
+            let mut allowances = ALLOWANCES.lock().c(d!())?;
+
+            allowances.push(((owner_addr, spender_addr), amount));
+        }
+        Ok(())
     }
+}
+
+fn set_total_issuance(issuance: U256) -> Result<()> {
+    let mut total_issuance = TOTAL_ISSUANCE.lock().c(d!())?;
+    *total_issuance = Some(issuance);
+    Ok(())
 }

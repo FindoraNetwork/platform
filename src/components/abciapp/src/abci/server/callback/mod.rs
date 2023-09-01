@@ -2,13 +2,6 @@
 //! # Impl function of tendermint ABCI
 //!
 
-use globutils::wallet;
-use ledger::{
-    data_model::ASSET_TYPE_FRA,
-    staking::{FF_ADDR_EXTRA_120_0000, FF_ADDR_LIST},
-};
-use zei::xfr::asset_record::AssetRecordType;
-
 mod utils;
 
 use {
@@ -28,15 +21,19 @@ use {
     config::abci::global_cfg::CFG,
     cryptohash::sha256,
     enterprise_web3::{
-        Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
-        STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+        Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
+        REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
     fp_storage::hash::{Sha256, StorageHasher},
+    globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        data_model::Operation,
-        staking::{evm::EVM_STAKING, KEEP_HIST, VALIDATOR_UPDATE_BLOCK_ITV},
+        data_model::{Operation, ASSET_TYPE_FRA},
+        staking::{
+            evm::EVM_STAKING, FF_ADDR_EXTRA_120_0000, FF_ADDR_LIST, KEEP_HIST,
+            VALIDATOR_UPDATE_BLOCK_ITV,
+        },
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -55,7 +52,8 @@ use {
             Arc,
         },
     },
-    tracing::{error, info},
+    tracing::info,
+    zei::xfr::asset_record::AssetRecordType,
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
@@ -651,6 +649,27 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             Default::default()
         };
 
+        let total_issuance = if let Ok(mut receipts) = TOTAL_ISSUANCE.lock() {
+            take(&mut *receipts)
+        } else {
+            Default::default()
+        };
+        let allowances = if let Ok(mut receipts) = ALLOWANCES.lock() {
+            take(&mut *receipts)
+        } else {
+            Default::default()
+        };
+        if let Some(v) = total_issuance {
+            pnk!(setter
+                .set_total_issuance(height, v)
+                .map_err(|e| eg!("set redis error: {:?}", e)));
+        }
+        for ((owner, spender), amount) in allowances.iter() {
+            pnk!(setter
+                .set_allowances(height, *owner, *spender, *amount)
+                .map_err(|e| eg!("set redis error: {:?}", e)));
+        }
+
         if !code_map.is_empty()
             || !nonce_map.is_empty()
             || !balance_map.is_empty()
@@ -659,45 +678,39 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             || !receipts.is_empty()
             || block.is_some()
         {
-            setter
-                .set_height(height)
-                .map_err(|e| error!("{:?}", e))
-                .unwrap_or(());
-
             for (addr, code) in code_map.iter() {
-                setter
+                pnk!(setter
                     .set_byte_code(height, *addr, code.clone())
-                    .map_err(|e| error!("{:?}", e))
-                    .unwrap_or(());
+                    .map_err(|e| eg!("set redis error: {:?}", e)));
             }
 
             for (addr, nonce) in nonce_map.iter() {
-                setter
+                pnk!(setter
                     .set_nonce(height, *addr, *nonce)
-                    .map_err(|e| error!("{:?}", e))
-                    .unwrap_or(());
+                    .map_err(|e| eg!("set redis error: {:?}", e)));
             }
 
             for (addr, balance) in balance_map.iter() {
-                setter
+                pnk!(setter
                     .set_balance(height, *addr, *balance)
-                    .map_err(|e| error!("{:?}", e))
-                    .unwrap_or(());
+                    .map_err(|e| eg!("set redis error: {:?}", e)));
             }
 
             for state in state_list.iter() {
-                setter
+                pnk!(setter
                     .set_state(height, state.address, state.index, state.value)
-                    .map_err(|e| error!("{:?}", e))
-                    .unwrap_or(());
+                    .map_err(|e| eg!("set redis error: {:?}", e)));
             }
 
             if let Some(block) = block {
-                setter
+                pnk!(setter
                     .set_block_info(block, receipts, txs)
-                    .map_err(|e| error!("{:?}", e))
-                    .unwrap_or(());
+                    .map_err(|e| eg!("set redis error: {:?}", e)));
             }
+
+            pnk!(setter
+                .set_height(height)
+                .map_err(|e| eg!("set redis error: {:?}", e)));
         }
     }
 

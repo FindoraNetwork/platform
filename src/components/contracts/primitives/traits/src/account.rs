@@ -1,5 +1,5 @@
 use fp_core::{account::SmartAccount, context::Context};
-use primitive_types::U256;
+use primitive_types::{H160, U256};
 use ruc::Result;
 
 pub trait AccountAsset<Address> {
@@ -53,7 +53,9 @@ pub trait AccountAsset<Address> {
     fn approve(
         ctx: &Context,
         owner: &Address,
+        owner_addr: H160,
         spender: &Address,
+        spender_addr: H160,
         amount: U256,
     ) -> Result<()>;
 }
