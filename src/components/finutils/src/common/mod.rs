@@ -847,7 +847,7 @@ pub fn replace_staker(target_addr: fp_types::H160, td_addr: &str) -> Result<()> 
         builder.add_operation(op);
     })?;
 
-    builder.add_operation_replace_staker(&keypair, target_addr, td_addr)?;
+    builder.add_operation_replace_staker(&keypair, target_addr, None, td_addr)?;
     let mut tx = builder.take_transaction();
     tx.sign_to_map(&keypair);
 

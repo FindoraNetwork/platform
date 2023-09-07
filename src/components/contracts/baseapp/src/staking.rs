@@ -10,9 +10,10 @@ use ledger::staking::{
     evm::EVMStaking, Delegation, DelegationState, Validator, BLOCK_HEIGHT_MAX,
 };
 use module_evm::{
-    system_contracts::SYSTEM_ADDR, DelegatorParam, UndelegationInfos, ValidatorParam,
+    get_claim_on_contract_address, system_contracts::SYSTEM_ADDR, DelegatorParam,
+    UndelegationInfos, ValidatorParam,
 };
-use ruc::{d, Result, RucResult};
+use ruc::{d, eg, Result, RucResult};
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, str::FromStr};
 use zei::xfr::sig::XfrPublicKey;
@@ -26,6 +27,7 @@ impl EVMStaking for BaseApp {
     ) -> Result<()> {
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
 
+        let mut amount = U256::zero();
         let mut vs = vec![];
         {
             for v in validators.iter() {
@@ -33,7 +35,10 @@ impl EVMStaking for BaseApp {
                     .get(&v.id)
                     .map(|d| d.start_height)
                     .unwrap_or(self.deliver_state.header.height as u64);
-
+                let power =
+                    EthereumDecimalsMapping::from_native_token(U256::from(v.td_power))
+                        .c(d!())?;
+                amount = amount.checked_add(power).c(d!())?;
                 vs.push(ValidatorParam {
                     td_addr: H160::from_slice(&v.td_addr),
                     td_pubkey: v.td_pubkey.clone(),
@@ -42,18 +47,13 @@ impl EVMStaking for BaseApp {
                     rate: mapping_rate(v.commission_rate),
                     staker: mapping_address(&v.id),
                     staker_pk: v.id.as_bytes().to_vec(),
-                    power: U256::from(v.td_power),
+                    power,
                     begin_block: U256::from(begin_block),
                 });
             }
         }
-        let power = vs.iter().map(|v| v.power.as_u128()).sum::<u128>();
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(power)).c(d!())?;
-
         let evm_staking_address =
             H160::from_str(CFG.checkpoint.evm_staking_address.as_str()).c(d!())?;
-
         module_account::App::<BaseApp>::mint(
             &self.deliver_state,
             &Address::from(evm_staking_address),
@@ -77,7 +77,9 @@ impl EVMStaking for BaseApp {
                 let public_key = delegation.receiver_pk.unwrap_or(delegation.id);
 
                 for (validator, amount) in delegation.delegations.iter() {
-                    let amount = U256::from(*amount);
+                    let amount =
+                        EthereumDecimalsMapping::from_native_token(U256::from(*amount))
+                            .c(d!())?;
                     ds.entry((public_key, mapping_address(validator)))
                         .and_modify(|am| {
                             am.push((delegation.end_height, amount));
@@ -117,6 +119,7 @@ impl EVMStaking for BaseApp {
                 });
             }
         }
+        undelegation_infos.sort_by(|a, b| a.height.cmp(&b.height));
 
         if let Err(e) = self.modules.evm_module.import_delegators(
             &self.deliver_state,
@@ -145,7 +148,8 @@ impl EVMStaking for BaseApp {
             .map(|d| {
                 (
                     mapping_address(&d.receiver_pk.unwrap_or(d.id)),
-                    d.rwd_amount,
+                    EthereumDecimalsMapping::from_native_token(U256::from(d.rwd_amount))
+                        .unwrap(),
                 )
             })
             .collect::<Vec<_>>();
@@ -159,16 +163,19 @@ impl EVMStaking for BaseApp {
             tracing::error!(target: "evm staking", "import_reward error:{:?}", e);
             return Err(e);
         }
-        if let Err(e) = self.modules.evm_module.import_coinbase_balance(
+
+        let claim_on_contract_address = get_claim_on_contract_address::<BaseApp>(
+            &self.modules.evm_module.contracts,
             &self.deliver_state,
             from,
-            coinbase_balance,
-        ) {
-            self.deliver_state.state.write().discard_session();
-            self.deliver_state.db.write().discard_session();
-            tracing::error!(target: "evm staking", "import_coinbase_balance error:{:?}", e);
-            return Err(e);
-        }
+        )?;
+        module_account::App::<BaseApp>::mint(
+            &self.deliver_state,
+            &Address::from(claim_on_contract_address),
+            EthereumDecimalsMapping::from_native_token(U256::from(coinbase_balance))
+                .c(d!())?,
+        )?;
+
         self.deliver_state.state.write().commit_session();
         self.deliver_state.db.write().commit_session();
         Ok(())
@@ -319,32 +326,10 @@ impl EVMStaking for BaseApp {
         Ok(())
     }
 
-    fn replace_delegator(
-        &self,
-        validator: &[u8],
-        staker: &XfrPublicKey,
-        new_staker_address: H160,
-    ) -> Result<()> {
-        let validator = H160::from_slice(validator);
-        let staker_address = mapping_address(staker);
-
-        if let Err(e) = self.modules.evm_module.replace_delegator(
-            &self.deliver_state,
-            validator,
-            staker_address,
-            new_staker_address,
-        ) {
-            self.deliver_state.state.write().discard_session();
-            self.deliver_state.db.write().discard_session();
-            tracing::error!(target: "evm staking", "replace_delegator error:{:?}", e);
-            return Err(e);
-        }
-
-        self.deliver_state.state.write().commit_session();
-        self.deliver_state.db.write().commit_session();
-        Ok(())
-    }
     fn claim(&self, td_addr: &[u8], delegator_pk: &XfrPublicKey) -> Result<()> {
+        if td_addr.len() != 20 {
+            return Err(eg!("td_addr length error"));
+        }
         let validator = H160::from_slice(td_addr);
         let delegator = mapping_address(delegator_pk);
         let from = H160::from_str(SYSTEM_ADDR).c(d!())?;
@@ -353,7 +338,6 @@ impl EVMStaking for BaseApp {
             from,
             validator,
             delegator,
-            delegator_pk,
         ) {
             self.deliver_state.state.write().discard_session();
             self.deliver_state.db.write().discard_session();

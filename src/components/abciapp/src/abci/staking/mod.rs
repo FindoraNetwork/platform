@@ -4,8 +4,6 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::staking::evm::EVM_STAKING_MINTS;
-
 mod whoami;
 
 #[cfg(test)]
@@ -18,6 +16,7 @@ use {
     config::abci::global_cfg::CFG,
     fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
+    ledger::staking::evm::EVM_STAKING_MINTS,
     ledger::{
         data_model::{
             AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,

@@ -501,7 +501,32 @@ pub fn end_block(
             panic!()
         };
     }
+    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        let mut sum = 0;
+        let ledger = la.get_committed_state().read();
+        let mut addrs = FF_ADDR_LIST.to_vec();
+        addrs.push(FF_ADDR_EXTRA_120_0000);
+        for fra_addr in addrs.iter() {
+            for (_, (utxo, _)) in pnk!(wallet::public_key_from_bech32(fra_addr)
+                .and_then(|pub_key| ledger.get_owned_utxos(&pub_key)))
+            {
+                if AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+                    == utxo.0.record.get_record_type()
+                    && Some(ASSET_TYPE_FRA) == utxo.0.record.asset_type.get_asset_type()
+                {
+                    if let Some(v) = utxo.0.record.amount.get_amount() {
+                        sum += v;
+                    };
+                }
+            }
+        }
 
+        s.account_base_app.write().end_block(req, sum)
+    } else {
+        Default::default()
+    };
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -532,33 +557,6 @@ pub fn end_block(
             &begin_block_req.byzantine_validators.as_slice(),
         );
     }
-
-    let evm_resp = if td_height <= CFG.checkpoint.disable_evm_block_height
-        || td_height >= CFG.checkpoint.enable_frc20_height
-    {
-        let mut sum = 0;
-        let ledger = la.get_committed_state().read();
-        let mut addrs = FF_ADDR_LIST.to_vec();
-        addrs.push(FF_ADDR_EXTRA_120_0000);
-        for fra_addr in addrs.iter() {
-            for (_, (utxo, _)) in pnk!(wallet::public_key_from_bech32(fra_addr)
-                .and_then(|pub_key| ledger.get_owned_utxos(&pub_key)))
-            {
-                if AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
-                    == utxo.0.record.get_record_type()
-                    && Some(ASSET_TYPE_FRA) == utxo.0.record.asset_type.get_asset_type()
-                {
-                    if let Some(v) = utxo.0.record.amount.get_amount() {
-                        sum += v;
-                    };
-                }
-            }
-        }
-
-        s.account_base_app.write().end_block(req, sum)
-    } else {
-        Default::default()
-    };
 
     if td_height > CFG.checkpoint.evm_staking_inital_height
         && 0 == TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)

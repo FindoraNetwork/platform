@@ -1,7 +1,6 @@
 use crate::system_contracts::SystemContracts;
-use ethabi::{Contract, Event, EventParam, ParamType, RawLog, Token};
-use ethereum::Log;
-use ethereum_types::{H160, H256, U256};
+use ethabi::{Event, EventParam, ParamType, RawLog, Token};
+use ethereum_types::{H160, U256};
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
@@ -146,7 +145,9 @@ pub fn build_evm_staking_input(
     }
 
     let func = sc.staking.function("trigger").c(d!())?;
-
+    let issue_amount =
+        EthereumDecimalsMapping::from_native_token(U256::from(pre_issue_amount))
+            .c(d!())?;
     let input = func
         .encode_input(&[
             proposer,
@@ -154,7 +155,7 @@ pub fn build_evm_staking_input(
             Token::Array(unsigned),
             Token::Array(byzantines),
             Token::Array(behaviors),
-            Token::Uint(U256::from(pre_issue_amount)),
+            Token::Uint(issue_amount),
         ])
         .c(d!())?;
 
@@ -186,7 +187,8 @@ fn build_update_info(tk: &Token) -> Result<abci::ValidatorUpdate> {
         }
 
         if let Token::Uint(p) = v.get(3).ok_or(eg!("update info 3 must int"))? {
-            update.set_power(p.as_u64() as i64);
+            let power = EthereumDecimalsMapping::convert_to_native_token(*p).as_u64();
+            update.set_power(power as i64);
         } else {
             return Err(eg!("Error type of public key type"));
         }
@@ -220,81 +222,6 @@ pub fn build_validator_updates(
     } else {
         Err(eg!("Parse staking contract abi error"))
     }
-}
-
-pub fn parse_evm_staking_mint_event(
-    staking_contracts: &Contract,
-    log: Log,
-) -> Result<(XfrPublicKey, u64)> {
-    let event = staking_contracts.event("MintOps").map_err(|e| eg!(e))?;
-    let log = RawLog {
-        topics: log.topics,
-        data: log.data,
-    };
-
-    let result = event.parse_log(log).map_err(|e| eg!(e))?;
-    let public_key_bytes = result.params[0].value.clone().into_bytes().c(d!())?;
-
-    let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
-
-    let amount = result.params[1].value.clone().into_uint().c(d!())?.as_u64();
-
-    Ok((public_key, amount))
-}
-
-pub fn coinbase_mint_event() -> Event {
-    Event {
-        name: "CoinbaseMint".to_owned(),
-        inputs: vec![
-            EventParam {
-                name: "validator".to_owned(),
-                kind: ParamType::Address,
-                indexed: true,
-            },
-            EventParam {
-                name: "delegator".to_owned(),
-                kind: ParamType::Address,
-                indexed: true,
-            },
-            EventParam {
-                name: "public_key".to_owned(),
-                kind: ParamType::Bytes,
-                indexed: false,
-            },
-            EventParam {
-                name: "amount".to_owned(),
-                kind: ParamType::Uint(256),
-                indexed: false,
-            },
-        ],
-        anonymous: false,
-    }
-}
-
-pub fn coinbase_mint_event_topic_str() -> String {
-    let topic = coinbase_mint_event().signature();
-    let temp = hex::encode(topic.as_bytes());
-    "[0x".to_owned() + &*temp + &*"]".to_owned()
-}
-
-pub fn parse_evm_staking_coinbase_mint_event(
-    event: &Event,
-    topics: Vec<H256>,
-    data: Vec<u8>,
-) -> Result<(H160, Option<XfrPublicKey>, u64)> {
-    let log = RawLog { topics, data };
-    let result = event.parse_log(log).map_err(|e| eg!(e))?;
-    let delegator = result.params[1].value.clone().into_address().c(d!())?;
-
-    let public_key_bytes = result.params[2].value.clone().into_bytes().c(d!())?;
-    let amount = result.params[3].value.clone().into_uint().c(d!())?.as_u64();
-
-    if public_key_bytes.is_empty() {
-        return Ok((delegator, None, amount));
-    }
-    let public_key = XfrPublicKey::zei_from_bytes(public_key_bytes.as_slice())?;
-
-    Ok((delegator, Some(public_key), amount))
 }
 
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
