@@ -1,14 +1,17 @@
 # Development log
 
-## Change plan
-
-> Features to be added.
-
-#### v0.4
-
-- Triple masking, and so on
-
 ## Change log
+
+### Version 4.0
+
+EVM Staking support
+
+#### v0.4.3-release
+
+- Add evm staking support.
+- Disable origin UTXO staking and merge history data into evm staking.
+- Remove api of UTXO staking and replace it into evm staking contracts
+- Use EVM Staking contract: https://github.com/FindoraNetwork/evm-staking/tree/optimize
 
 #### v0.3.38-release
 - Features:
