@@ -1026,7 +1026,7 @@ impl LedgerState {
 
         let res = sids
             .into_iter()
-            .zip(aus.into_iter())
+            .zip(aus)
             .filter_map(|(sid, au)| au.map(|au| (sid, au)))
             .map(|(sid, au)| {
                 (
