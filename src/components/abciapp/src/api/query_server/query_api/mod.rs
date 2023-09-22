@@ -16,22 +16,17 @@ use {
     globutils::wallet,
     ledger::{
         data_model::{
-            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
+            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, TxOutput, TxnIDHash,
+            TxnSID, TxoSID, XfrAddress,
         },
-        staking::{
-            ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
-        },
+        staking::ops::mint_fra::MintEntry,
     },
     ledger_api::*,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
     server::QueryServer,
-    std::{
-        collections::{BTreeMap, HashSet},
-        sync::Arc,
-    },
+    std::sync::Arc,
     tracing::info,
     zei::{
         serialization::ZeiFromToBytes,
@@ -47,32 +42,6 @@ pub async fn version() -> actix_web::Result<String> {
         option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
         env!("VERGEN_BUILD_DATE")
     ))
-}
-
-/// Queries the status of a transaction by its handle. Returns either a not committed message or a
-/// serialized TxnStatus.
-pub async fn get_address(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<u64>,
-) -> actix_web::Result<String, actix_web::error::Error> {
-    let server = data.read();
-    let address_res = server.get_address_of_sid(TxoSID(*info));
-    let res = if let Some(address) = address_res {
-        serde_json::to_string(&address)?
-    } else {
-        format!("No utxo {} found. Please retry with a new utxo.", &info)
-    };
-    Ok(res)
-}
-
-/// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
-#[allow(clippy::unnecessary_wraps)]
-pub async fn get_owner_memo(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<u64>,
-) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
-    let server = data.read();
-    Ok(web::Json(server.get_owner_memo(TxoSID(*info))))
 }
 
 /// Separate a string of `TxoSID` by ',' and query the corresponding memo
@@ -92,27 +61,6 @@ pub async fn get_owner_memo_batch(
         .map(|i| hdr.get_owner_memo(TxoSID(i)))
         .collect();
     Ok(web::Json(resp))
-}
-
-/// Returns an array of the utxo sids currently spendable by a given address
-pub async fn get_owned_utxos(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    owner: web::Path<String>,
-) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-
-    let pk = wallet::public_key_from_base64(owner.as_str())
-        .map_err(actix_web::error::ErrorServiceUnavailable)?;
-
-    let utxos = ledger
-        .get_owned_utxos(&pk)
-        .map_err(actix_web::error::ErrorServiceUnavailable)?
-        .keys()
-        .copied()
-        .collect();
-
-    Ok(web::Json(utxos))
 }
 
 /// Define interface type
@@ -344,144 +292,6 @@ pub async fn get_coinbase_oper_list(
     }))
 }
 
-/// Returns the list of claim transations of a given ledger address
-pub async fn get_claim_txns(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    web::Query(info): web::Query<WalletQueryParams>,
-) -> actix_web::Result<web::Json<Vec<Option<Transaction>>>> {
-    // Convert from base64 representation
-    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
-        .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
-
-    let server = data.read();
-
-    if info.page == 0 {
-        return Ok(web::Json(vec![]));
-    }
-
-    let start = (info.page - 1)
-        .checked_mul(info.per_page)
-        .c(d!())
-        .map_err(error::ErrorBadRequest)?;
-    let end = start
-        .checked_add(info.per_page)
-        .c(d!())
-        .map_err(error::ErrorBadRequest)?;
-
-    let records = server
-        .get_claim_transactions(
-            &XfrAddress { key },
-            start,
-            end,
-            info.order == OrderOption::Desc,
-        )
-        .c(d!())
-        .map_err(error::ErrorBadRequest)?;
-
-    Ok(web::Json(records))
-}
-
-/// Returns the list of transations associated with a given ledger address
-pub async fn get_related_txns(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
-    // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
-        &b64dec(&*info)
-            .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
-    )
-    .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
-    let server = data.read();
-    let records = server.get_related_transactions(&XfrAddress { key });
-    Ok(web::Json(records.unwrap_or_default()))
-}
-
-/// Returns the list of transfer transations associated with a given asset
-pub async fn get_related_xfrs(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
-    let server = data.read();
-    if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
-        if let Some(records) = server.get_related_transfers(&token_code) {
-            Ok(web::Json(records))
-        } else {
-            Err(actix_web::error::ErrorNotFound(
-                "Specified asset definition does not currently exist.",
-            ))
-        }
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid asset definition encoding.",
-        ))
-    }
-}
-
-#[allow(missing_docs)]
-#[allow(clippy::unnecessary_wraps)]
-
-pub async fn get_circulating_supply(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
-    let l = data.read();
-    let fra = FRA as f64;
-
-    let cs = l.ledger_cloned.staking_get_global_unlocked_amount() as f64 / fra;
-    let gd = l.ledger_cloned.get_staking().get_global_delegation_amount() as f64 / fra;
-    let rr = l.ledger_cloned.staking_get_block_rewards_rate();
-    let rr = rr[0] as f64 / rr[1] as f64;
-
-    let res = map! { B
-        "global_return_rate" => rr,
-        "global_circulating_supply" => cs,
-        "global_delegation_amount" => gd
-    };
-
-    Ok(web::Json(res))
-}
-
-/// return
-/// global_circulating_supply
-/// global_adjusted_circulating_supply
-/// global_total_supply
-pub async fn get_total_supply(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
-    let l = data.read();
-    let burn_pubkey = *BLACK_HOLE_PUBKEY;
-    let extra_pubkey = *FF_PK_EXTRA_120_0000;
-
-    let burn_balance = l
-        .ledger_cloned
-        .get_nonconfidential_balance(&burn_pubkey)
-        .unwrap_or(0);
-    let extra_balance = l
-        .ledger_cloned
-        .get_nonconfidential_balance(&extra_pubkey)
-        .unwrap_or(0);
-
-    let fra = FRA as f64;
-
-    let big_9 = l.ledger_cloned.staking_get_global_unlocked_amount();
-    let big_8 = big_9 + extra_balance;
-
-    let cs = big_8 as f64 / fra;
-    let acs = big_9 as f64 / fra;
-    let ts = (FRA_TOTAL_AMOUNT - burn_balance) as f64 / fra;
-
-    let res = map! { B
-        "global_circulating_supply" => cs,
-        "global_adjusted_circulating_supply" => acs,
-        "global_total_supply" => ts
-    };
-
-    Ok(web::Json(res))
-}
-
 #[inline(always)]
 #[allow(missing_docs)]
 pub async fn get_checkpoint(
@@ -506,45 +316,14 @@ impl QueryApi {
                 .data(Arc::clone(&server))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
-                .service(
-                    web::resource("get_total_supply")
-                        .route(web::get().to(get_total_supply)),
-                )
-                .service(
-                    web::resource("circulating_supply")
-                        .route(web::get().to(get_circulating_supply)),
-                )
-                .route(
-                    &QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
-                    web::get().to(get_address),
-                )
-                .route(
-                    &QueryServerRoutes::GetOwnedUtxos.with_arg_template("address"),
-                    web::get().to(get_owned_utxos),
-                )
-                .route(
-                    &QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
-                    web::get().to(get_owner_memo),
-                )
                 .route(
                     &QueryServerRoutes::GetOwnerMemoBatch
                         .with_arg_template("txo_sid_list"),
                     web::get().to(get_owner_memo_batch),
                 )
-                .route(
-                    &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
-                    web::get().to(get_related_txns),
-                )
-                .service(
-                    web::resource("claim_history").route(web::get().to(get_claim_txns)),
-                )
                 .service(
                     web::resource("coinbase_history")
                         .route(web::get().to(get_coinbase_oper_list)),
-                )
-                .route(
-                    &QueryServerRoutes::GetRelatedXfrs.with_arg_template("asset_token"),
-                    web::get().to(get_related_xfrs),
                 )
                 .route(
                     &QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
@@ -617,28 +396,8 @@ impl QueryApi {
                     web::get().to(query_owned_utxos),
                 )
                 .route(
-                    &ApiRoutes::ValidatorList.route(),
-                    web::get().to(query_validators),
-                )
-                .route(
                     &ApiRoutes::DelegationInfo.with_arg_template("XfrPublicKey"),
                     web::get().to(query_delegation_info),
-                )
-                .route(
-                    &ApiRoutes::DelegatorList.with_arg_template("NodeAddress"),
-                    web::get().to(query_delegator_list),
-                )
-                .service(
-                    web::resource("/delegator_list")
-                        .route(web::get().to(get_delegators_with_params)),
-                )
-                .service(
-                    web::resource("/delegation_rewards")
-                        .route(web::get().to(get_delegation_reward)),
-                )
-                .service(
-                    web::resource("/validator_delegation")
-                        .route(web::get().to(get_validator_delegation_history)),
                 )
                 .route(
                     &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
