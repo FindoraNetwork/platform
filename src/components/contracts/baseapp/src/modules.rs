@@ -120,7 +120,7 @@ impl ModuleManager {
         &mut self,
         ctx: &Context,
         tx: &FindoraTransaction,
-        hash: H256,
+        _hash: H256,
     ) -> Result<()> {
         let (from, owner, amount, asset, lowlevel) =
             check_convert_account(tx, ctx.header.height)?;
@@ -148,7 +148,6 @@ impl ModuleManager {
                     balance,
                     lowlevel,
                     transaction_index,
-                    hash,
                 ) {
                     Ok(r) => r,
                     Err(e) => {
@@ -166,7 +165,6 @@ impl ModuleManager {
                     U256::from(amount),
                     lowlevel,
                     transaction_index,
-                    hash,
                 )?
             };
 

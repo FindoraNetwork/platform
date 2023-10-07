@@ -141,7 +141,6 @@ impl<C: Config> App<C> {
         _value: U256,
         _lowlevel: Vec<u8>,
         transaction_index: u32,
-        transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawAsset").c(d!())?;
 
@@ -176,7 +175,6 @@ impl<C: Config> App<C> {
         let gas_price = U256::one();
 
         Ok(Self::system_transaction(
-            transaction_hash,
             input,
             value,
             action,
@@ -198,7 +196,6 @@ impl<C: Config> App<C> {
         _value: U256,
         _lowlevel: Vec<u8>,
         transaction_index: u32,
-        transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
@@ -225,7 +222,6 @@ impl<C: Config> App<C> {
         let action = TransactionAction::Call(self.contracts.bridge_address);
 
         Ok(Self::system_transaction(
-            transaction_hash,
             input,
             value,
             action,
@@ -249,7 +245,6 @@ impl<C: Config> App<C> {
     }
     #[allow(clippy::too_many_arguments)]
     fn system_transaction(
-        transaction_hash: H256,
         input: Vec<u8>,
         value: U256,
         action: TransactionAction,
@@ -281,7 +276,7 @@ impl<C: Config> App<C> {
         Self::logs_bloom(&logs, &mut logs_bloom);
 
         let tx_status = TransactionStatus {
-            transaction_hash,
+            transaction_hash: tx.hash(),
             transaction_index,
             from,
             to: Some(to),
