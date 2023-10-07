@@ -414,6 +414,17 @@ pub struct XfrAddress {
     pub key: XfrPublicKey,
 }
 
+impl XfrAddress {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn to_base64(self) -> String {
+        b64enc(&self.key.as_bytes())
+    }
+
+    // pub(crate) fn to_bytes(self) -> Vec<u8> {
+    //     self.key.as_bytes().to_vec()
+    // }
+}
+
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
