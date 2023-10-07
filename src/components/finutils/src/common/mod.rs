@@ -18,7 +18,6 @@ pub mod utils;
 use {
     self::utils::{get_evm_staking_address, get_validator_memo_and_rate},
     crate::api::DelegationInfo,
-    crate::common::utils::mapping_address,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -292,11 +291,11 @@ pub fn claim(td_addr: &str, am: Option<&str>, sk_str: Option<&str>) -> Result<()
 pub fn show(basic: bool) -> Result<()> {
     let kp = get_keypair().c(d!())?;
 
-    ruc::info!(get_serv_addr()).map(|i| {
+    let serv_addr = ruc::info!(get_serv_addr()).map(|i| {
         println!("\x1b[31;01mServer URL:\x1b[00m\n{i}\n");
-    })?;
+    });
 
-    ruc::info!(get_keypair()).map(|i| {
+    let xfr_account = ruc::info!(get_keypair()).map(|i| {
         println!(
             "\x1b[31;01mFindora Address:\x1b[00m\n{}\n",
             wallet::public_key_to_bech32(&i.get_pk())
@@ -305,34 +304,66 @@ pub fn show(basic: bool) -> Result<()> {
             "\x1b[31;01mFindora Public Key:\x1b[00m\n{}\n",
             wallet::public_key_to_base64(&i.get_pk())
         );
-    })?;
+    });
 
-    ruc::info!(utils::get_balance(&kp)).map(|i| {
+    let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
         println!("\x1b[31;01mNode Balance:\x1b[00m\n{i} FRA units\n");
-    })?;
+    });
 
     if basic {
         return Ok(());
     }
 
-    ruc::info!(get_td_pubkey()).map(|i| {
+    let td_info = ruc::info!(get_td_pubkey()).map(|i| {
         let addr = td_pubkey_to_td_addr(&i);
         println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{addr}\n");
         (i, addr)
-    })?;
+    });
 
-    let evm_staking_address = get_evm_staking_address()?;
-    let url = format!("{}:8545", get_serv_addr()?);
-    let address = utils::get_trigger_on_contract_address(&url, evm_staking_address)?;
-    let (bound_amount, unbound_amount) =
-        utils::get_evm_delegation_info(&url, address, mapping_address(kp.get_pk_ref()))?;
+    let di = utils::get_delegation_info(kp.get_pk_ref());
+    let bond_entries = match di.as_ref() {
+        Ok(di) => Some(di.bond_entries.clone()),
+        Err(_) => None,
+    };
 
-    println!(
-        "\x1b[31;01mYour Delegation:\x1b[00m\nbound_amount:{}\nunbound_amount:{}\n",
-        bound_amount, unbound_amount
-    );
+    let delegation_info = di.and_then(|di| {
+        serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
+    });
+    let delegation_info = ruc::info!(delegation_info).map(|i| {
+        println!("\x1b[31;01mYour Delegation:\x1b[00m\n{i}\n");
+    });
 
-    Ok(())
+    if let Ok((tpk, addr)) = td_info.as_ref() {
+        let self_delegation =
+            bond_entries.map_or(false, |bes| bes.iter().any(|i| &i.0 == addr));
+        if self_delegation {
+            let res = utils::get_validator_detail(&td_pubkey_to_td_addr(tpk))
+                .c(d!("Validator not found"))
+                .and_then(|di| {
+                    serde_json::to_string_pretty(&di)
+                        .c(d!("server returned invalid data"))
+                })
+                .map(|i| {
+                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{i}\n");
+                });
+            ruc::info_omit!(res);
+        }
+    }
+
+    if [
+        serv_addr,
+        xfr_account,
+        td_info.map(|_| ()),
+        self_balance,
+        delegation_info,
+    ]
+    .iter()
+    .any(|i| i.is_err())
+    {
+        Err(eg!("unable to obtain complete information"))
+    } else {
+        Ok(())
+    }
 }
 
 /// Setup for a cli tool
