@@ -37,6 +37,7 @@ pub mod tx_sender;
 pub struct ABCISubmissionServer {
     pub la: Arc<RwLock<SubmissionServer<ChaChaRng, TendermintForward>>>,
     pub account_base_app: Arc<RwLock<AccountBaseAPP>>,
+    pub eth_api_base_app: Option<Arc<RwLock<AccountBaseAPP>>>,
 }
 
 impl ABCISubmissionServer {
@@ -44,6 +45,7 @@ impl ABCISubmissionServer {
     pub fn new(
         basedir: Option<&str>,
         tendermint_reply: String,
+        enable_eth_api_service: bool,
     ) -> Result<ABCISubmissionServer> {
         let ledger_state = match basedir {
             None => LedgerState::tmp_ledger(),
@@ -71,6 +73,30 @@ impl ABCISubmissionServer {
             }
         };
         let account_base_app = Arc::new(RwLock::new(account_base_app));
+        let eth_api_base_app = if enable_eth_api_service {
+            let eth_api_base_app = Arc::new(RwLock::new(match basedir {
+                None => {
+                    pnk!(AccountBaseAPP::new_with_secondary(
+                        tempfile::tempdir().unwrap().path(),
+                        CFG.disable_eth_empty_blocks,
+                        CFG.arc_history,
+                        CFG.arc_fresh
+                    ))
+                }
+                Some(basedir) => {
+                    pnk!(AccountBaseAPP::new_with_secondary(
+                        Path::new(basedir),
+                        CFG.disable_eth_empty_blocks,
+                        CFG.arc_history,
+                        CFG.arc_fresh
+                    ))
+                }
+            }));
+            Some(eth_api_base_app)
+        } else {
+            None
+        };
+
         if EVM_STAKING.set(account_base_app.clone()).is_err() {
             return Err(eg!("Invalid usage."));
         }
@@ -85,6 +111,7 @@ impl ABCISubmissionServer {
                 .c(d!())?,
             )),
             account_base_app,
+            eth_api_base_app,
         })
     }
 }

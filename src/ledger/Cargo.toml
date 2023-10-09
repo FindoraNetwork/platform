@@ -56,7 +56,7 @@ abci_mock = []
 lazy_static = "1.4.0"
 
 [dependencies.fixed]
-version = "1.19.0"
+version = "=1.19.0"
 features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
