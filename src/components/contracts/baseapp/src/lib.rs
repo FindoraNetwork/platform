@@ -297,13 +297,15 @@ impl BaseApp {
             event_notify: Arc::new(Notifications::new()),
         })
     }
-    pub fn secondary_catch_up_primary(&self) -> Result<()> {
+    pub fn secondary_catch_up_primary(&mut self) -> Result<()> {
         self.chain_state
-            .read()
+            .write()
+            .borrow_mut()
             .secondary_catch_up_primary()
             .map_err(|e| eg!("chain_state secondary_catch_up_primary fail:{}", e))?;
         self.chain_db
-            .read()
+            .write()
+            .borrow_mut()
             .secondary_catch_up_primary()
             .map_err(|e| eg!("chain_db secondary_catch_up_primary fail:{}", e))
     }

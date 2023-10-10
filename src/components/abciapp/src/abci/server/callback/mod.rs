@@ -2,6 +2,8 @@
 //! # Impl function of tendermint ABCI
 //!
 
+use fp_storage::BorrowMut;
+
 mod utils;
 
 use {
@@ -614,7 +616,10 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     IN_SAFE_ITV.store(false, Ordering::Release);
     if let Some(eth_api_base_app) = &s.eth_api_base_app {
-        pnk!(eth_api_base_app.write().secondary_catch_up_primary());
+        pnk!(eth_api_base_app
+            .write()
+            .borrow_mut()
+            .secondary_catch_up_primary());
     }
 
     if CFG.enable_enterprise_web3 && td_height as u64 > *WEB3_SERVICE_START_HEIGHT {
