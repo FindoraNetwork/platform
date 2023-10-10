@@ -79,6 +79,7 @@ fn node_command() -> Result<()> {
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
         (CFG.enable_eth_api_service, "--enable-eth-api-service"),
+        (CFG.enable_eth_api_secondary, "--enable-eth-api-secondary"),
         (CFG.disable_eth_empty_blocks, "--disable-eth-empty-blocks"),
         (CFG.enable_snapshot, "--enable-snapshot"),
         (CFG.snapshot_list, "--snapshot-list"),
