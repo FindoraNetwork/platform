@@ -23,6 +23,7 @@ fn setup() -> Context {
         fdb,
         "temp_db".to_string(),
         100,
+        false,
     )));
 
     let mut rocks_path = temp_dir();
@@ -33,6 +34,7 @@ fn setup() -> Context {
         rdb,
         "temp_rocks_db".to_string(),
         0,
+        false,
     )));
 
     Context::new(chain_state, chain_db)

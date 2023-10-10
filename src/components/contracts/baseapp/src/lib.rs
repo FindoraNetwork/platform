@@ -53,6 +53,8 @@ lazy_static! {
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
+const CHAIN_STATE_SECONDARY_PATH: &str = "state_secondary.db";
+const CHAIN_HISTORY_SECONDARY_DATA_PATH: &str = "history_secondary.db";
 const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
 const SNAPSHOT_INTERVAL: u64 = 10 * 24;
 
@@ -205,12 +207,17 @@ impl BaseApp {
                     BLOCKS_IN_DAY * v as u64
                 }),
         };
-        let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts)));
+        let chain_state =
+            Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, false)));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;
-        let chain_db =
-            Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
+        let chain_db = Arc::new(RwLock::new(ChainState::new(
+            rdb,
+            "rocks_db".to_owned(),
+            0,
+            false,
+        )));
 
         //Migrate any existing data from one database to the other.
         BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
@@ -230,7 +237,76 @@ impl BaseApp {
             event_notify: Arc::new(Notifications::new()),
         })
     }
+    pub fn new_with_secondary(
+        basedir: &Path,
+        empty_block: bool,
+        arc_history: (u16, Option<u16>),
+        is_fresh: bool,
+    ) -> Result<Self> {
+        info!(
+            target: "baseapp",
+            "create new baseapp with basedir {:?}, empty_block {}, trace history {:?} days, is_fresh {}",
+            basedir, empty_block, arc_history, is_fresh
+        );
 
+        // Creates a fresh chain state db and history db
+        let fdb_path = basedir.join(CHAIN_STATE_PATH);
+        let fdb_secondary_path = basedir.join(CHAIN_STATE_SECONDARY_PATH);
+        let fdb =
+            FinDB::open_as_secondary(fdb_path.as_path(), fdb_secondary_path.as_path())?;
+
+        let opts = ChainStateOpts {
+            name: Some("findora_db".to_owned()),
+            ver_window: BLOCKS_IN_DAY * arc_history.0 as u64,
+            cleanup_aux: is_fresh,
+            interval: arc_history
+                .1
+                .map_or(SNAPSHOT_INTERVAL * arc_history.0 as u64, |v| {
+                    BLOCKS_IN_DAY * v as u64
+                }),
+        };
+        let chain_state =
+            Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, true)));
+
+        let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
+        let rdb_secondary_path = basedir.join(CHAIN_HISTORY_SECONDARY_DATA_PATH);
+        let rdb = RocksDB::open_as_secondary(
+            rdb_path.as_path(),
+            rdb_secondary_path.as_path(),
+        )?;
+
+        let chain_db = Arc::new(RwLock::new(ChainState::new(
+            rdb,
+            "rocks_db".to_owned(),
+            0,
+            true,
+        )));
+
+        Ok(BaseApp {
+            name: APP_NAME.to_string(),
+            version: "1.0.0".to_string(),
+            app_version: 1,
+            chain_state: chain_state.clone(),
+            chain_db: chain_db.clone(),
+            check_state: Context::new(chain_state.clone(), chain_db.clone()),
+            deliver_state: Context::new(chain_state, chain_db),
+            modules: ModuleManager {
+                ethereum_module: module_ethereum::App::<Self>::new(empty_block),
+                ..Default::default()
+            },
+            event_notify: Arc::new(Notifications::new()),
+        })
+    }
+    pub fn secondary_catch_up_primary(&self) -> Result<()> {
+        self.chain_state
+            .read()
+            .secondary_catch_up_primary()
+            .map_err(|e| eg!("chain_state secondary_catch_up_primary fail:{}", e))?;
+        self.chain_db
+            .read()
+            .secondary_catch_up_primary()
+            .map_err(|e| eg!("chain_db secondary_catch_up_primary fail:{}", e))
+    }
     pub fn derive_app(&self) -> Self {
         let chain_state = self.chain_state.clone();
         let chain_db = self.chain_db.clone();
