@@ -120,8 +120,7 @@ impl ModuleManager {
         &mut self,
         ctx: &Context,
         tx: &FindoraTransaction,
-        hash: H256,
-    ) -> Result<()> {
+    ) -> Result<Option<H256>> {
         let (from, owner, amount, asset, lowlevel) =
             check_convert_account(tx, ctx.header.height)?;
 
@@ -148,7 +147,6 @@ impl ModuleManager {
                     balance,
                     lowlevel,
                     transaction_index,
-                    hash,
                 ) {
                     Ok(r) => r,
                     Err(e) => {
@@ -166,10 +164,9 @@ impl ModuleManager {
                     U256::from(amount),
                     lowlevel,
                     transaction_index,
-                    hash,
                 )?
             };
-
+            let tx_hash = tx_status.transaction_hash;
             TransactionIndex::insert(
                 &mut *ctx.db.write(),
                 &HA256::new(tx_status.transaction_hash),
@@ -178,11 +175,12 @@ impl ModuleManager {
 
             pending_txs.push((tx, tx_status, receipt));
 
-            Ok(())
+            Ok(Some(tx_hash))
         } else {
             let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
             module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+                .map(|_| None)
         }
     }
 }

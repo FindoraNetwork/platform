@@ -13,13 +13,12 @@ use {
         },
     },
     abci::{
-        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
-        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        CheckTxType, Event, Pair, RequestBeginBlock, RequestCheckTx, RequestCommit,
+        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     config::abci::global_cfg::CFG,
-    cryptohash::sha256,
     enterprise_web3::{
         Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
         REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
@@ -330,16 +329,32 @@ pub fn deliver_tx(
                             resp.log = e.to_string();
                         }
                     } else if is_convert_account(&tx) {
-                        let hash = sha256::hash(req.get_tx());
-                        if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
-                        {
-                            info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
+                        match s.account_base_app.write().deliver_findora_tx(&tx) {
+                            Ok(v) => {
+                                if let Some(hash) = v {
+                                    let mut event = Event::new();
+                                    event.field_type = String::from("evm_hash");
+                                    let mut pair = Pair::new();
+                                    pair.set_key("hash".to_string().as_bytes().into());
+                                    pair.set_value(
+                                        format!("{:?}", hash).as_bytes().into(),
+                                    );
+                                    let attributes = vec![pair];
+                                    event.set_attributes(RepeatedField::from_vec(
+                                        attributes,
+                                    ));
+                                    resp.events.push(event);
+                                }
+                            }
+                            Err(err) => {
+                                info!(target: "abciapp", "deliver convert account tx failed: {err:?}");
 
-                            resp.code = 1;
-                            resp.log =
-                                format!("deliver convert account tx failed: {err:?}");
-                            return resp;
+                                resp.code = 1;
+                                resp.log = format!(
+                                    "deliver convert account tx failed: {err:?}"
+                                );
+                                return resp;
+                            }
                         }
 
                         if s.la.write().cache_transaction(tx).is_ok() {

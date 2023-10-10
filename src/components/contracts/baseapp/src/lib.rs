@@ -378,10 +378,8 @@ impl BaseApp {
     pub fn deliver_findora_tx(
         &mut self,
         tx: &FindoraTransaction,
-        hash: &[u8],
-    ) -> Result<()> {
-        self.modules
-            .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
+    ) -> Result<Option<H256>> {
+        self.modules.process_findora_tx(&self.deliver_state, tx)
     }
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
