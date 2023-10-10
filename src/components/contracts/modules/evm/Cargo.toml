@@ -35,8 +35,8 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.7" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.7" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.8" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.8" }
 ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3" }
 module-ethereum = { path = "../ethereum" }
