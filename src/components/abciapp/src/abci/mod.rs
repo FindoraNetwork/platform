@@ -59,7 +59,7 @@ pub fn run() -> Result<()> {
     let app = server::ABCISubmissionServer::new(
         basedir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
-        CFG.enable_eth_api_service,
+        CFG.enable_eth_api_secondary,
     )?;
 
     if CFG.enable_query_service {
@@ -88,7 +88,11 @@ pub fn run() -> Result<()> {
     }
 
     if CFG.enable_eth_api_service {
-        let base_app = app.eth_api_base_app.clone().c(d!())?;
+        let base_app = if CFG.enable_eth_api_secondary {
+            app.eth_api_base_app.clone().c(d!())?
+        } else {
+            app.account_base_app.clone()
+        };
         let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
         let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
         let tendermint_rpc = format!(

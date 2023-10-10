@@ -765,6 +765,7 @@ pub mod global_cfg {
         pub enable_query_service: bool,
         pub disable_eth_empty_blocks: bool,
         pub enable_eth_api_service: bool,
+        pub enable_eth_api_secondary: bool,
         pub evm_http_port: u16,
         pub evm_ws_port: u16,
         pub tendermint_node_self_addr: Option<String>,
@@ -801,6 +802,7 @@ pub mod global_cfg {
             .arg_from_usage("-q, --enable-query-service")
             .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
             .arg_from_usage("--enable-eth-api-service")
+            .arg_from_usage("--enable-eth-api-secondary")
             .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
             .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
             .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
@@ -919,6 +921,10 @@ pub mod global_cfg {
             || env::var("DISABLE_ETH_EMPTY_BLOCKS").is_ok();
         let eas = m.is_present("enable-eth-api-service")
             || env::var("ENABLE_ETH_API_SERVICE").is_ok();
+
+        let enable_eth_api_secondary = m.is_present("enable-eth-api-secondary")
+            || env::var("ENABLE_ETH_API_SECONDARY").is_ok();
+
         let ehp = m
             .value_of("evm-http-port")
             .map(|v| v.to_owned())
@@ -951,6 +957,7 @@ pub mod global_cfg {
             enable_query_service: eqs,
             disable_eth_empty_blocks: eeb,
             enable_eth_api_service: eas,
+            enable_eth_api_secondary,
             evm_http_port: ehp,
             evm_ws_port: ewp,
             tendermint_node_self_addr: tnsa,
