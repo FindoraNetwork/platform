@@ -2,9 +2,6 @@
 //! # Impl function of tendermint ABCI
 //!
 
-use chrono::Local;
-use fp_storage::BorrowMut;
-
 mod utils;
 
 use {
@@ -21,12 +18,17 @@ use {
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
+    chrono::Local,
     config::abci::global_cfg::CFG,
     enterprise_web3::{
         Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
         REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
-    fp_storage::hash::{Sha256, StorageHasher},
+    fp_storage::{
+        hash::{Sha256, StorageHasher},
+        BorrowMut,
+    },
+    futures::executor::ThreadPool,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -70,8 +72,8 @@ lazy_static! {
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
         Arc::new(RwLock::new(new_mapx!("tx_history")));
+    pub static ref CATCH_UP_POOL: ThreadPool = pnk!(ThreadPool::new());
 }
-
 // #[cfg(feature = "debug_env")]
 // pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 1;
 //
@@ -635,10 +637,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     IN_SAFE_ITV.store(false, Ordering::Release);
     if let Some(eth_api_base_app) = &s.eth_api_base_app {
-        pnk!(eth_api_base_app
-            .write()
-            .borrow_mut()
-            .secondary_catch_up_primary());
+        let tmp_app = eth_api_base_app.clone();
+        CATCH_UP_POOL.spawn_ok(async move {
+            if let Err(e) = tmp_app.write().borrow_mut().secondary_catch_up_primary() {
+                tracing::error!(target: "abciapp", "catch up:{}",e);
+            };
+        });
     }
     let catch_up = Local::now().timestamp_millis();
     info!(target: "abcitime", "catch_up height:{}, catch_up:{}-commit:{}={}", td_height, catch_up, commit, catch_up - commit);
