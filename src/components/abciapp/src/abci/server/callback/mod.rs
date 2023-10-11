@@ -2,6 +2,7 @@
 //! # Impl function of tendermint ABCI
 //!
 
+use chrono::Local;
 use fp_storage::BorrowMut;
 
 mod utils;
@@ -58,6 +59,9 @@ use {
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
+
+pub(crate) static BEGIN_BLOCK_TIME: AtomicI64 = AtomicI64::new(0);
+pub(crate) static END_BLOCK_TIME: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
     // save the request parameters from the begin_block for use in the end_block
@@ -234,6 +238,10 @@ pub fn begin_block(
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
     LEDGER_TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
     *REQ_BEGIN_BLOCK.lock() = req.clone();
+
+    let start = Local::now().timestamp_millis();
+    BEGIN_BLOCK_TIME.swap(start, Ordering::Relaxed);
+    info!(target: "abcitime", "begin_block  height:{}, milliseconds:{}", header.height, start);
 
     let mut la = s.la.write();
 
@@ -581,6 +589,10 @@ pub fn end_block(
     {
         resp.validator_updates = evm_resp.validator_updates;
     }
+    let start = BEGIN_BLOCK_TIME.load(Ordering::Relaxed);
+    let end = Local::now().timestamp_millis();
+    END_BLOCK_TIME.swap(end, Ordering::Relaxed);
+    info!(target: "abcitime", "end_block  height:{}, end:{}-start:{}={}", header.height, end, start, end - start);
 
     resp
 }
@@ -603,8 +615,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
+    let begin_la_hash = Local::now().timestamp_millis();
     let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+    let begin_cs_hash = Local::now().timestamp_millis();
     let cs_hash = s.account_base_app.write().commit(req).data;
+    let end_cs_hash = Local::now().timestamp_millis();
+    info!(target: "abcitime", "commit height:{}, la_hash:{} cs_hash:{}", td_height, begin_cs_hash - begin_la_hash, end_cs_hash - begin_cs_hash);
 
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
@@ -613,6 +629,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
+    let end = END_BLOCK_TIME.load(Ordering::Relaxed);
+    let commit = Local::now().timestamp_millis();
+    info!(target: "abcitime", "commit height:{}, commit:{}-end:{}={}", td_height, commit, end, commit - end);
 
     IN_SAFE_ITV.store(false, Ordering::Release);
     if let Some(eth_api_base_app) = &s.eth_api_base_app {
@@ -621,6 +640,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             .borrow_mut()
             .secondary_catch_up_primary());
     }
+    let catch_up = Local::now().timestamp_millis();
+    info!(target: "abcitime", "catch_up height:{}, catch_up:{}-commit:{}={}", td_height, catch_up, commit, catch_up - commit);
 
     if CFG.enable_enterprise_web3 && td_height as u64 > *WEB3_SERVICE_START_HEIGHT {
         let height = td_height as u32;
