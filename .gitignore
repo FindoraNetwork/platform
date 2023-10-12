@@ -14,6 +14,7 @@ target
 stack.yaml.lock
 **/history.txt
 **/__pycache__
+
 .idea
 
 node_modules
