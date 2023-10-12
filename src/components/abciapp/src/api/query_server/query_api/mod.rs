@@ -2,6 +2,9 @@
 //! need to transform the data in ledgerState to store
 //!
 
+use fp_types::U256;
+use ledger::staking::{DelegationState, StakerMemo, ValidatorKind};
+
 // pub it for doc
 pub mod ledger_api;
 
@@ -488,6 +491,112 @@ pub async fn get_checkpoint(
 ) -> actix_web::Result<web::Json<CheckPointConfig>, actix_web::error::Error> {
     Ok(web::Json(CFG.checkpoint.clone()))
 }
+fn mapping_rate(rate: [u64; 2]) -> U256 {
+    if rate[0] == 0 {
+        return U256::zero();
+    }
+
+    let deciamls = 1_000_000_u64;
+    U256::from(rate[0].saturating_mul(deciamls) / rate[1])
+}
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Validator {
+    pub id: String,
+    pub td_pubkey: String,
+    pub td_addr: String,
+    pub td_power: u64,
+    pub commission_rate: U256,
+    pub memo: StakerMemo,
+    pub kind: ValidatorKind,
+    pub signed_last_block: bool,
+    pub signed_cnt: u64,
+    pub delegators: BTreeMap<String, u64>,
+}
+#[allow(missing_docs)]
+pub async fn get_all_validators(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<Vec<Validator>>, actix_web::error::Error> {
+    let l = data.read();
+    let staking = l.ledger_cloned.get_staking();
+    let validators = staking
+        .validator_get_effective_at_height(
+            CFG.checkpoint.evm_staking_inital_height.try_into().unwrap(),
+        )
+        .map(|v| v.get_validators().values().cloned().collect::<Vec<_>>())
+        .map(|v| {
+            v.iter()
+                .map(|v| Validator {
+                    id: format!("0x{}", hex::encode(v.id.as_bytes())),
+                    td_pubkey: format!("0x{}", hex::encode(&v.td_pubkey)),
+                    td_addr: format!("0x{}", hex::encode(&v.td_addr)),
+                    td_power: v.td_power,
+                    commission_rate: mapping_rate(v.commission_rate),
+                    memo: v.memo.clone(),
+                    kind: v.kind.clone(),
+                    signed_last_block: v.signed_last_block,
+                    signed_cnt: v.signed_cnt,
+                    delegators: v
+                        .delegators
+                        .iter()
+                        .map(|v| (format!("0x{}", hex::encode(v.0.as_bytes())), *v.1))
+                        .collect(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap();
+    Ok(web::Json(validators))
+}
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Delegation {
+    pub delegations: BTreeMap<String, u64>,
+    pub id: String,
+    pub receiver_pk: Option<String>,
+    pub tmp_delegators: BTreeMap<String, u64>,
+    pub start_height: u64,
+    pub end_height: u64,
+
+    pub state: DelegationState,
+    pub rwd_amount: u64,
+    pub proposer_rwd_cnt: u64,
+    pub delegation_rwd_cnt: u64,
+}
+#[inline(always)]
+#[allow(missing_docs)]
+pub async fn get_all_delegators(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<Vec<Delegation>>, actix_web::error::Error> {
+    let l = data.read();
+    let staking = l.ledger_cloned.get_staking();
+    let delegations = staking
+        .get_global_delegation_records()
+        .values()
+        .map(|v| Delegation {
+            delegations: v
+                .delegations
+                .iter()
+                .map(|v| (format!("0x{}", hex::encode(v.0.as_bytes())), *v.1))
+                .collect(),
+            id: format!("0x{}", hex::encode(v.id.as_bytes())),
+            receiver_pk: v
+                .receiver_pk
+                .map(|v| format!("0x{}", hex::encode(v.as_bytes()))),
+            tmp_delegators: v
+                .tmp_delegators
+                .iter()
+                .map(|v| (format!("0x{}", hex::encode(v.0.as_bytes())), *v.1))
+                .collect(),
+            start_height: v.start_height,
+            end_height: v.end_height,
+            state: v.state,
+            rwd_amount: v.rwd_amount,
+            proposer_rwd_cnt: v.proposer_rwd_cnt,
+            delegation_rwd_cnt: v.delegation_rwd_cnt,
+        })
+        .collect();
+    Ok(web::Json(delegations))
+}
 
 /// Structures exposed to the outside world
 pub struct QueryApi;
@@ -647,6 +756,14 @@ impl QueryApi {
                 .service(
                     web::resource("/display_checkpoint")
                         .route(web::get().to(get_checkpoint)),
+                )
+                .service(
+                    web::resource("/validators")
+                        .route(web::get().to(get_all_validators)),
+                )
+                .service(
+                    web::resource("/delegators")
+                        .route(web::get().to(get_all_delegators)),
                 )
         });
 
