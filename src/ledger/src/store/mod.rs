@@ -1730,7 +1730,7 @@ impl LedgerStatus {
     //
     // This drains every field of `block` except `txns` and `temp_sids`.
     #[allow(unused_mut)]
-    #[allow(clippy::unwrap_or_else_default)]
+    #[allow(clippy::unwrap_or_default)]
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
         let handle_asset_type_code = |code: AssetTypeCode| {
