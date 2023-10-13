@@ -26,10 +26,7 @@ use {
         Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
         REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
-    fp_storage::{
-        hash::{Sha256, StorageHasher},
-        BorrowMut,
-    },
+    fp_storage::hash::{Sha256, StorageHasher},
     futures::executor::ThreadPool,
     globutils::wallet,
     lazy_static::lazy_static,
@@ -644,8 +641,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             CATCH_UP_RUNNING.swap(true, Ordering::Relaxed);
             let tmp_app = eth_api_base_app.clone();
             CATCH_UP_POOL.spawn_ok(async move {
-                if let Err(e) = tmp_app.write().borrow_mut().secondary_catch_up_primary()
-                {
+                if let Err(e) = tmp_app.read().secondary_catch_up_primary() {
                     tracing::error!(target: "abciapp", "catch up:{}",e);
                 };
                 CATCH_UP_RUNNING.swap(false, Ordering::Relaxed);

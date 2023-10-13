@@ -297,7 +297,7 @@ impl BaseApp {
             event_notify: Arc::new(Notifications::new()),
         })
     }
-    pub fn secondary_catch_up_primary(&mut self) -> Result<()> {
+    pub fn secondary_catch_up_primary(&self) -> Result<()> {
         self.chain_state
             .write()
             .borrow_mut()
