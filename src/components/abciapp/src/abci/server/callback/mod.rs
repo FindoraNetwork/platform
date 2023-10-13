@@ -2,6 +2,8 @@
 //! # Impl function of tendermint ABCI
 //!
 
+use std::sync::atomic::AtomicBool;
+
 mod utils;
 
 use {
@@ -64,6 +66,7 @@ pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 pub(crate) static BEGIN_BLOCK_TIME: AtomicI64 = AtomicI64::new(0);
 pub(crate) static END_BLOCK_TIME: AtomicI64 = AtomicI64::new(0);
+pub(crate) static CATCH_UP_RUNNING: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
     // save the request parameters from the begin_block for use in the end_block
@@ -637,12 +640,17 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     IN_SAFE_ITV.store(false, Ordering::Release);
     if let Some(eth_api_base_app) = &s.eth_api_base_app {
-        let tmp_app = eth_api_base_app.clone();
-        CATCH_UP_POOL.spawn_ok(async move {
-            if let Err(e) = tmp_app.write().borrow_mut().secondary_catch_up_primary() {
-                tracing::error!(target: "abciapp", "catch up:{}",e);
-            };
-        });
+        if !CATCH_UP_RUNNING.load(Ordering::Relaxed) {
+            CATCH_UP_RUNNING.swap(true, Ordering::Relaxed);
+            let tmp_app = eth_api_base_app.clone();
+            CATCH_UP_POOL.spawn_ok(async move {
+                if let Err(e) = tmp_app.write().borrow_mut().secondary_catch_up_primary()
+                {
+                    tracing::error!(target: "abciapp", "catch up:{}",e);
+                };
+                CATCH_UP_RUNNING.swap(false, Ordering::Relaxed);
+            });
+        }
     }
     let catch_up = Local::now().timestamp_millis();
     info!(target: "abcitime", "catch_up height:{}, catch_up:{}-commit:{}={}", td_height, catch_up, commit, catch_up - commit);
