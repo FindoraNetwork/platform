@@ -1547,20 +1547,21 @@ impl LedgerStatus {
             // Asset issuance should match the currently registered key
         }
 
-        let get_effect_asset = |derived_asset_code: &AssetTypeCode| -> Option<AssetType> {
-            for (code, asset) in &txn_effect.new_asset_codes {
-                let dc = AssetTypeCode::from_prefix_and_raw_asset_type_code(
-                    AssetTypePrefix::UserDefined,
-                    &code,
-                    &CFG.checkpoint,
-                    self.td_commit_height,
-                );
-                if dc == *derived_asset_code {
-                    return Some(asset.clone())
+        let get_effect_asset =
+            |derived_asset_code: &AssetTypeCode| -> Option<AssetType> {
+                for (code, asset) in &txn_effect.new_asset_codes {
+                    let dc = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                        AssetTypePrefix::UserDefined,
+                        &code,
+                        &CFG.checkpoint,
+                        self.td_commit_height,
+                    );
+                    if dc == *derived_asset_code {
+                        return Some(asset.clone());
+                    }
                 }
-            }
-            return None
-        };
+                None
+            };
         // New issuance numbers
         // (1) Must refer to a created asset type
         //  - NOTE: if the asset type is created in this transaction, this
