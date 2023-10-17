@@ -1562,6 +1562,7 @@ impl LedgerStatus {
         //        }
         //        None
         //    };
+
         // New issuance numbers
         // (1) Must refer to a created asset type
         //  - NOTE: if the asset type is created in this transaction, this
