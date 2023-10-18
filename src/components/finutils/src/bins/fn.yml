@@ -158,7 +158,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `staker-priv-key` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - staker-priv-key
   - claim:
       about: Claim accumulated FRA rewards
@@ -183,7 +183,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - seckey
   - delegate:
       about: Delegating operations
@@ -213,7 +213,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - seckey
   - undelegate:
       about: Undelegating operations
@@ -237,7 +237,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - seckey
   - transfer:
       about: Transfer tokens from one address to another
@@ -285,7 +285,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - transfer-batch:
       about: Transfer tokens from one address to many others
@@ -324,7 +324,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - wallet:
       about: manipulates a findora wallet
@@ -355,14 +355,14 @@ subcommands:
         - gen-eth-address:
             help: generate the keypair of an eth address
             long: gen-eth-address
-            conflicts-with:
+            conflicts_with:
               - show
               - seckey
               - asset
         - use-default-eth-address:
             help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - seckey
               - create
   - asset:
@@ -466,7 +466,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - seckey
   - account:
       about: Return user contract account information or the balance if secret key is provided
@@ -492,7 +492,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `sec-key` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - sec-key
   - contract-deposit:
       about: Transfer an asset from the UTXO chain to the EVM chain
@@ -582,7 +582,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
@@ -611,7 +611,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair using commitment
@@ -634,7 +634,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - owned-utxos:
       about: List owned UTXOs for a public key
@@ -674,7 +674,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - convert-abar-to-bar:
       about: Convert an ABAR to BAR
@@ -717,7 +717,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - anon-transfer:
       about: Perform an anonymous transfer
@@ -759,7 +759,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
@@ -801,7 +801,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - anon-fetch-merkle-proof:
       about: Query Merkle tree leaf info
@@ -834,7 +834,7 @@ subcommands:
         - use-default-eth-address:
             help: use a private key of the eth address if `from-seckey` is not provided
             long: use-default-eth-address
-            conflicts-with:
+            conflicts_with:
               - from-seckey
   - replace_staker:
       about: Replace the staker of the validator with target address
