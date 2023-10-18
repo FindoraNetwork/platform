@@ -234,6 +234,7 @@ pub fn get_validators(
 /// - pay delegation rewards
 /// - pay proposer rewards(traditional block rewards)
 /// - do governance operations
+#[allow(noop_method_call)]
 pub fn system_ops(
     la: &mut LedgerState,
     header: &Header,
