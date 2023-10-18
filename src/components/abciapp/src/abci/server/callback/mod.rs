@@ -524,6 +524,7 @@ pub fn deliver_tx(
 }
 
 /// putting block in the ledgerState
+#[allow(noop_method_call)]
 pub fn end_block(
     s: &mut ABCISubmissionServer,
     req: &RequestEndBlock,
