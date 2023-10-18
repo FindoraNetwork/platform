@@ -809,7 +809,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .entry(end_height)
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(owner);
 
         // There should be no failure here !!
@@ -903,7 +903,7 @@ impl Staking {
             self.delegation_info
                 .end_height_map
                 .entry(h + CFG.checkpoint.unbond_block_cnt)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(*addr);
         }
 
@@ -995,7 +995,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .entry(h + CFG.checkpoint.unbond_block_cnt)
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(pu.new_delegator_id);
 
         // update delegator entries for pu target_validator
@@ -1078,7 +1078,7 @@ impl Staking {
             self.delegation_info
                 .end_height_map
                 .entry(end_height)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(addr.to_owned());
             Ok(())
         } else {

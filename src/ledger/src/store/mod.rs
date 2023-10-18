@@ -1547,6 +1547,22 @@ impl LedgerStatus {
             // Asset issuance should match the currently registered key
         }
 
+        let get_effect_asset =
+            |derived_asset_code: &AssetTypeCode| -> Option<AssetType> {
+                for (code, asset) in &txn_effect.new_asset_codes {
+                    let dc = AssetTypeCode::from_prefix_and_raw_asset_type_code(
+                        AssetTypePrefix::UserDefined,
+                        &code,
+                        &CFG.checkpoint,
+                        self.td_commit_height,
+                    );
+                    if dc == *derived_asset_code {
+                        return Some(asset.clone());
+                    }
+                }
+                None
+            };
+        
         // New issuance numbers
         // (1) Must refer to a created asset type
         //  - NOTE: if the asset type is created in this transaction, this
@@ -1560,7 +1576,7 @@ impl LedgerStatus {
             let asset_type = self
                 .asset_types
                 .get(&code)
-                .or_else(|| txn_effect.new_asset_codes.get(&code).cloned())
+                .or_else(|| get_effect_asset(&code))
                 .c(d!())?;
             let proper_key = asset_type.properties.issuer;
             if *iss_key != proper_key {
@@ -1715,6 +1731,7 @@ impl LedgerStatus {
     //
     // This drains every field of `block` except `txns` and `temp_sids`.
     #[allow(unused_mut)]
+    #[allow(clippy::unwrap_or_default)]
     fn apply_block_effects(&mut self, block: &mut BlockEffect) -> (TmpSidMap, u64, u64) {
         let base_sid = self.next_txo.0;
         let handle_asset_type_code = |code: AssetTypeCode| {
