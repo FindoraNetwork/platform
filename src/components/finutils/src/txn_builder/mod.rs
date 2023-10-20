@@ -6,7 +6,6 @@
 #![allow(clippy::needless_borrow)]
 
 use {
-    credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
     digest::Digest,
     fp_types::{crypto::MultiSigner, H160},
@@ -53,7 +52,7 @@ use {
         noah_api::{
             anon_creds::{
                 ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
-                ConfidentialAC, Credential,
+                ACUserSecretKey, ConfidentialAC, Credential,
             },
             anon_xfr::{
                 abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
@@ -1303,7 +1302,7 @@ impl TransferOperationBuilder {
         asset_record_template: &AssetRecordTemplate,
         tracing_policies: Option<TracingPolicies>,
         identity_commitment: Option<ACCommitment>,
-        credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
+        credential_record: Option<(&ACUserSecretKey, &Credential, &ACCommitmentKey)>,
     ) -> Result<&mut Self> {
         let prng = &mut ChaChaRng::from_entropy();
         if self.transfer.is_some() {
@@ -1318,7 +1317,7 @@ impl TransferOperationBuilder {
             AssetRecord::from_template_with_identity_tracing(
                 prng,
                 asset_record_template,
-                user_secret_key.get_ref(),
+                user_secret_key,
                 credential,
                 commitment_key,
             )
@@ -1337,7 +1336,7 @@ impl TransferOperationBuilder {
     pub fn add_output_and_store_blinds<R: CryptoRng + RngCore>(
         &mut self,
         asset_record_template: &AssetRecordTemplate,
-        credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
+        credential_record: Option<(&ACUserSecretKey, &Credential, &ACCommitmentKey)>,
         prng: &mut R,
         blinds: &mut ((Scalar, Scalar), Scalar),
     ) -> Result<&mut Self> {
@@ -1364,7 +1363,7 @@ impl TransferOperationBuilder {
                             Some(reveal_policy) => {
                                 let conf_ac = ac_confidential_open_commitment(
                                     prng,
-                                    user_secret_key.get_ref(),
+                                    user_secret_key,
                                     credential,
                                     commitment_key,
                                     &policy.enc_keys.attrs_enc_key,

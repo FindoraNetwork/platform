@@ -35,12 +35,12 @@ bs58 = "0.4"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 finutils = { path = "../finutils", default-features = false }
 
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "fix_dep" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "fix_dep" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
 
 ledger = { path = "../../ledger" }

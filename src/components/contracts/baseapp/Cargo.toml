@@ -25,7 +25,7 @@ serde_json = "1.0.40"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.9" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.9" }
 sha3 = "0.10"
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 config = { path = "../../config"}
 

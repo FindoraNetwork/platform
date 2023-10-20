@@ -584,6 +584,7 @@ impl LedgerState {
             fdb,
             "abar_db".to_string(),
             VERSION_WINDOW,
+            false,
         )));
         Ok(State::new(cs, false))
     }
@@ -1562,7 +1563,7 @@ impl LedgerStatus {
                 }
                 None
             };
-        
+
         // New issuance numbers
         // (1) Must refer to a created asset type
         //  - NOTE: if the asset type is created in this transaction, this
