@@ -32,13 +32,13 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
 fp-utils = { path = "../contracts/primitives/utils" }
-globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "develop" }
-credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "develop" }
+globutils = { git = "https://github.com/FindoraNetwork/platform-lib-utils", branch = "fix_dep" }
+credentials = { git = "https://github.com/FindoraNetwork/platform-lib-credentials", branch = "fix_dep" }
 cryptohash = { git = "https://github.com/FindoraNetwork/platform-lib-cryptohash", branch = "develop" }
 
 ledger = { path = "../../ledger" }
