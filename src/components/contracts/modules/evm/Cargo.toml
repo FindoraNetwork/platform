@@ -24,7 +24,7 @@ serde_json = "1.0.64"
 sha3 = { version = "0.10", default-features = false }
 hex = "0.4.3"
 ethabi = "17.1.0"
-zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "develop" }
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 protobuf = "2.16"
 
 # primitives, don't depend on any modules

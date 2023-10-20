@@ -1165,7 +1165,7 @@ pub fn get_claim_on_contract_address(url: &str, staking_address: H160) -> Result
 
 #[allow(missing_docs)]
 pub fn mapping_address(pk: &XfrPublicKey) -> H160 {
-    let result = <Keccak256 as sha3::Digest>::digest(pk.as_bytes());
+    let result = <Keccak256 as sha3::Digest>::digest(pk.to_bytes());
     H160::from_slice(&result.as_slice()[..20])
 }
 
