@@ -37,7 +37,8 @@ use ledger::LEDGER_TENDERMINT_BLOCK_HEIGHT;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
-use ruc::{eg, Result};
+use ruc::{d, eg, Result, RucResult};
+use std::fs::remove_dir_all;
 use std::sync::atomic::Ordering;
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::{ChainState, ChainStateOpts};
@@ -252,6 +253,9 @@ impl BaseApp {
         // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb_secondary_path = basedir.join(CHAIN_STATE_SECONDARY_PATH);
+        if fdb_secondary_path.exists() {
+            remove_dir_all(&fdb_secondary_path).c(d!())?;
+        }
         let fdb =
             FinDB::open_as_secondary(fdb_path.as_path(), fdb_secondary_path.as_path())?;
 
@@ -270,6 +274,9 @@ impl BaseApp {
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb_secondary_path = basedir.join(CHAIN_HISTORY_SECONDARY_DATA_PATH);
+        if rdb_secondary_path.exists() {
+            remove_dir_all(&rdb_secondary_path).c(d!())?;
+        }
         let rdb = RocksDB::open_as_secondary(
             rdb_path.as_path(),
             rdb_secondary_path.as_path(),

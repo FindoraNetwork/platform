@@ -2,7 +2,7 @@
 //! # Impl function of tendermint ABCI
 //!
 
-use std::sync::atomic::AtomicBool;
+use std::{sync::atomic::AtomicBool, thread::sleep, time::Duration};
 
 mod utils;
 
@@ -644,6 +644,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 if let Err(e) = tmp_app.read().secondary_catch_up_primary() {
                     tracing::error!(target: "abciapp", "catch up:{}",e);
                 };
+                sleep(Duration::from_millis(15));
                 CATCH_UP_RUNNING.swap(false, Ordering::Relaxed);
             });
         }
