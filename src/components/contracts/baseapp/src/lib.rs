@@ -38,6 +38,7 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::{ChainState, ChainStateOpts};
@@ -60,6 +61,8 @@ const SNAPSHOT_INTERVAL: u64 = 10 * 24;
 
 #[derive(Clone)]
 pub struct BaseApp {
+    pub basedir: PathBuf,
+    pub opts: ChainStateOpts,
     /// application name from abci.Info
     pub name: String,
     /// application's version string
@@ -207,8 +210,11 @@ impl BaseApp {
                     BLOCKS_IN_DAY * v as u64
                 }),
         };
-        let chain_state =
-            Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, false)));
+        let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(
+            fdb,
+            opts.clone(),
+            false,
+        )));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;
@@ -223,6 +229,8 @@ impl BaseApp {
         BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
 
         Ok(BaseApp {
+            basedir: basedir.into(),
+            opts,
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
             app_version: 1,
@@ -265,8 +273,11 @@ impl BaseApp {
                     BLOCKS_IN_DAY * v as u64
                 }),
         };
-        let chain_state =
-            Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, true)));
+        let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(
+            fdb,
+            opts.clone(),
+            true,
+        )));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb_secondary_path = basedir.join(CHAIN_HISTORY_SECONDARY_DATA_PATH);
@@ -283,6 +294,8 @@ impl BaseApp {
         )));
 
         Ok(BaseApp {
+            basedir: basedir.into(),
+            opts,
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
             app_version: 1,
@@ -314,6 +327,8 @@ impl BaseApp {
         let chain_db = self.chain_db.clone();
 
         BaseApp {
+            basedir: self.basedir.clone(),
+            opts: self.opts.clone(),
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
             app_version: 1,
