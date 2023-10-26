@@ -23,6 +23,7 @@ use {
     serde::{self, Deserialize, Serialize},
     serde_json::Value,
     sha2::{Digest, Sha256},
+    sha3::Keccak256,
     std::{
         collections::{BTreeMap, HashMap},
         str::FromStr,
@@ -32,7 +33,7 @@ use {
     web3::{
         ethabi::{Function, Param, ParamType, StateMutability, Token},
         transports::Http,
-        types::{BlockId, BlockNumber, Bytes, CallRequest, H160},
+        types::{BlockId, BlockNumber, Bytes, CallRequest, H160, U256},
         Web3,
     },
     zei::xfr::{
@@ -744,4 +745,212 @@ pub fn get_validator_memo_and_rate(
         return Err(eg!("rate not found"));
     };
     Ok((memo, rate))
+}
+
+#[allow(missing_docs)]
+pub fn get_evm_delegation_info(
+    url: &str,
+    staking_address: H160,
+    validator_address: H160,
+    address: H160,
+) -> Result<(U256, U256)> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "delegators".to_owned(),
+        inputs: vec![
+            Param {
+                name: String::new(),
+                kind: ParamType::Address,
+                internal_type: Some(String::from("address")),
+            },
+            Param {
+                name: String::new(),
+                kind: ParamType::Address,
+                internal_type: Some(String::from("address")),
+            },
+        ],
+        outputs: vec![
+            Param {
+                name: String::from("boundAmount"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+            Param {
+                name: String::from("unboundAmount"),
+                kind: ParamType::Uint(256),
+                internal_type: Some(String::from("uint256")),
+            },
+        ],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+    let data = function
+        .encode_input(&[Token::Address(validator_address), Token::Address(address)])
+        .map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(staking_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+    let bound_amount = if let Some(Token::Uint(bound_amount)) = ret.get(0) {
+        bound_amount
+    } else {
+        return Err(eg!("bound_amount not found"));
+    };
+    let unbound_amount = if let Some(Token::Uint(unbound_amount)) = ret.get(1) {
+        unbound_amount
+    } else {
+        return Err(eg!("unbound_amount not found"));
+    };
+    Ok((*bound_amount, *unbound_amount))
+}
+
+#[allow(missing_docs)]
+pub fn get_reward_info(url: &str, rewards_address: H160, address: H160) -> Result<U256> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "rewards".to_owned(),
+        inputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Address,
+            internal_type: Some(String::from("address")),
+        }],
+        outputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Uint(256),
+            internal_type: Some(String::from("uint256")),
+        }],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+    let data = function
+        .encode_input(&[Token::Address(address)])
+        .map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(rewards_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+    let reward = if let Some(Token::Uint(reward)) = ret.get(0) {
+        reward
+    } else {
+        return Err(eg!("reward not found"));
+    };
+
+    Ok(*reward)
+}
+
+#[allow(missing_docs)]
+pub fn get_trigger_on_contract_address(
+    url: &str,
+    staking_address: H160,
+) -> Result<H160> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "getTriggerOnContractAddress".to_owned(),
+        inputs: vec![],
+        outputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Address,
+            internal_type: Some(String::from("address")),
+        }],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+    let data = function.encode_input(&[]).map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(staking_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+    let address = if let Some(Token::Address(address)) = ret.get(0) {
+        address
+    } else {
+        return Err(eg!("staking address not found"));
+    };
+
+    Ok(*address)
+}
+
+#[allow(missing_docs)]
+pub fn get_claim_on_contract_address(url: &str, staking_address: H160) -> Result<H160> {
+    let transport = Http::new(url).c(d!())?;
+    let web3 = Web3::new(transport);
+
+    #[allow(deprecated)]
+    let function = Function {
+        name: "getClaimOnContractAddress".to_owned(),
+        inputs: vec![],
+        outputs: vec![Param {
+            name: String::new(),
+            kind: ParamType::Address,
+            internal_type: Some(String::from("address")),
+        }],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
+    let data = function.encode_input(&[]).map_err(|e| eg!("{:?}", e))?;
+
+    let ret_data = Runtime::new()
+        .c(d!())?
+        .block_on(web3.eth().call(
+            CallRequest {
+                to: Some(staking_address),
+                data: Some(Bytes(data)),
+                ..Default::default()
+            },
+            Some(BlockId::Number(BlockNumber::Latest)),
+        ))
+        .c(d!())?;
+
+    let ret = function.decode_output(&ret_data.0).c(d!())?;
+    let address = if let Some(Token::Address(address)) = ret.get(0) {
+        address
+    } else {
+        return Err(eg!("reward address not found"));
+    };
+
+    Ok(*address)
+}
+
+#[allow(missing_docs)]
+pub fn mapping_address(pk: &XfrPublicKey) -> H160 {
+    let result = <Keccak256 as sha3::Digest>::digest(pk.as_bytes());
+    H160::from_slice(&result.as_slice()[..20])
 }
