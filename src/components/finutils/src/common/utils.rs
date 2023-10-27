@@ -2,6 +2,8 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use std::ops::Div;
+
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -818,20 +820,32 @@ pub fn get_evm_delegation_info(
 }
 
 #[allow(missing_docs)]
-pub fn get_reward_info(url: &str, rewards_address: H160, address: H160) -> Result<U256> {
+pub fn get_reward_info(
+    url: &str,
+    rewards_address: H160,
+    validator_address: H160,
+    address: H160,
+) -> Result<U256> {
     let transport = Http::new(url).c(d!())?;
     let web3 = Web3::new(transport);
 
     #[allow(deprecated)]
     let function = Function {
-        name: "rewards".to_owned(),
-        inputs: vec![Param {
-            name: String::new(),
-            kind: ParamType::Address,
-            internal_type: Some(String::from("address")),
-        }],
+        name: "unclaimed".to_owned(),
+        inputs: vec![
+            Param {
+                name: String::from("validators"),
+                kind: ParamType::Array(Box::new(ParamType::Address)),
+                internal_type: Some(String::from("address[]")),
+            },
+            Param {
+                name: String::from("delegator"),
+                kind: ParamType::Address,
+                internal_type: Some(String::from("address")),
+            },
+        ],
         outputs: vec![Param {
-            name: String::new(),
+            name: String::from("pending"),
             kind: ParamType::Uint(256),
             internal_type: Some(String::from("uint256")),
         }],
@@ -839,7 +853,10 @@ pub fn get_reward_info(url: &str, rewards_address: H160, address: H160) -> Resul
         state_mutability: StateMutability::View,
     };
     let data = function
-        .encode_input(&[Token::Address(address)])
+        .encode_input(&[
+            Token::Array(vec![Token::Address(validator_address)]),
+            Token::Address(address),
+        ])
         .map_err(|e| eg!("{:?}", e))?;
 
     let ret_data = Runtime::new()
@@ -856,12 +873,12 @@ pub fn get_reward_info(url: &str, rewards_address: H160, address: H160) -> Resul
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
     let reward = if let Some(Token::Uint(reward)) = ret.get(0) {
-        reward
+        reward.div(U256::from(10_u64.pow(12)))
     } else {
         return Err(eg!("reward not found"));
     };
 
-    Ok(*reward)
+    Ok(reward)
 }
 
 #[allow(missing_docs)]

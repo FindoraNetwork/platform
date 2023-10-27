@@ -323,19 +323,24 @@ pub fn show(basic: bool) -> Result<()> {
         (i, addr)
     })?;
 
+    let validator_address = H160::from_str(&addr).c(d!())?;
     let evm_staking_address = get_evm_staking_address()?;
     let url = format!("{}:8545", get_serv_addr()?);
     let address = utils::get_trigger_on_contract_address(&url, evm_staking_address)?;
     let (bound_amount, unbound_amount) = utils::get_evm_delegation_info(
         &url,
         address,
-        H160::from_str(&addr).c(d!())?,
+        validator_address,
         mapping_address(kp.get_pk_ref()),
     )?;
 
     let address = utils::get_claim_on_contract_address(&url, evm_staking_address)?;
-    let reward =
-        utils::get_reward_info(&url, address, mapping_address(kp.get_pk_ref()))?;
+    let reward = utils::get_reward_info(
+        &url,
+        address,
+        validator_address,
+        mapping_address(kp.get_pk_ref()),
+    )?;
 
     println!(
         "\x1b[31;01mYour Delegation:\x1b[00m\nbound_amount:{:?}\nunbound_amount:{:?}\nreward:{:?}",
