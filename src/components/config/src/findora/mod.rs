@@ -3,6 +3,7 @@ pub mod init {
         ruc::*,
         std::{fs, str},
     };
+    
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
     const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
