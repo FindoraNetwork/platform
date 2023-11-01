@@ -10,19 +10,26 @@ args:
 
 subcommands:
   - genkey:
-      about: Generate a random Findora public key/private key Pair
+      about: Generate a new Findora key pair
+      args:
+        - gen-eth-address:
+            help: generate eth address
+            long: gen-eth-address
   - show:
-      about: View Validator status and accumulated rewards
+      about: View the validator status and accumulated rewards
       args:
         - basic:
             help: show basic account info
             short: b
             long: basic
+        - eth-address:
+            help: use the eth address
+            long: eth-address
   - setup:
-      about: Setup environment variables for staking transactions
+      about: Set up environment variables for staking transactions
       args:
         - serv-addr:
-            help: a node address of Findora Network
+            help: a node address of the Findora network
             short: S
             long: serv-addr
             takes_value: true
@@ -40,7 +47,7 @@ subcommands:
             takes_value: true
             value_name: Path
   - stake:
-      about: Stake tokens (i.e. bond tokens) from a Findora account to a Validator
+      about: Stake tokens (i.e. bond tokens) from a Findora account to a validator
       args:
         - amount:
             help: how much `FRA unit`s you want to stake
@@ -66,7 +73,7 @@ subcommands:
             short: a
             long: append
         - staker-priv-key:
-            help: the file which contains private key (in base64 format) of proposer
+            help: the file which contains the mnemonic of proposer
             short: S
             long: staker-priv-key
             takes_value: true
@@ -80,6 +87,11 @@ subcommands:
         - force:
             help: ignore warning and stake FRAs to your target node
             long: force
+        - use-default-eth-address:
+            help: use a private key of the eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
       groups:
         - staking-flags:
             args:
@@ -119,11 +131,14 @@ subcommands:
             long: validator-memo-logo
             takes_value: true
             value_name: Logo
+        - use-eth-address:
+            help: use a private key of the eth address
+            long: use-eth-address
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
         - staker-priv-key:
-            help: the file which contains private key (in base64 format) of proposer
+            help: the file which contains the mnemonic of proposer
             short: S
             long: staker-priv-key
             takes_value: true
@@ -140,6 +155,11 @@ subcommands:
             long: amount
             takes_value: true
             value_name: Amount
+        - use-default-eth-address:
+            help: use a private key of the eth address if `staker-priv-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - staker-priv-key
   - claim:
       about: Claim accumulated FRA rewards
       args:
@@ -156,10 +176,15 @@ subcommands:
             takes_value: true
             value_name: Amount
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - delegate:
       about: Delegating operations
       args:
@@ -170,7 +195,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -185,6 +210,11 @@ subcommands:
             conflicts_with:
               - amount
               - validator
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - undelegate:
       about: Undelegating operations
       args:
@@ -195,7 +225,7 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -204,26 +234,33 @@ subcommands:
             long: validator
             takes_value: true
             value_name: VALIDATOR ADDRESS
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - transfer:
       about: Transfer tokens from one address to another
       args:
         - asset:
-            help: asset code which you want to tansfer
+            help: asset code which you want to transfer
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
         - from-seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the sender
             short: f
             long: from-seckey
             takes_value: true
             value_name: SecKey
         - to-pubkey:
-            help: base64-formated `XfrPublicKey` of the receiver
+            help: base64-formatted `XfrPublicKey` of the receiver
             short: t
             long: to-pubkey
             takes_value: true
             value_name: PubKey
+            allow_hyphen_values: true
         - to-wallet-address:
             help: fra prefixed address of FindoraNetwork
             short: T
@@ -245,11 +282,16 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
   - transfer-batch:
       about: Transfer tokens from one address to many others
       args:
         - from-seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            help: the file which contains base64-formatted `XfrPrivateKey` of the receiver
             short: f
             long: from-seckey
             takes_value: true
@@ -279,6 +321,11 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
   - wallet:
       about: manipulates a findora wallet
       args:
@@ -295,14 +342,28 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
             conflicts_with:
               - create
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            help: the file which contains base64-formatted `XfrPrivateKey` of an existing wallet
             long: seckey
             takes_value: true
             value_name: SECRET KEY
             conflicts_with:
+              - create
+        - gen-eth-address:
+            help: generate the keypair of an eth address
+            long: gen-eth-address
+            conflicts_with:
+              - show
+              - seckey
+              - asset
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
               - create
   - asset:
       about: manipulate custom asset
@@ -365,13 +426,14 @@ subcommands:
             long: code
             takes_value: true
             value_name: ASSET CODE
+            allow_hyphen_values: true
         - addr:
             help: Findora wallet address
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
         - seckey:
-            help: the file which contains base64-formated `XfrPrivateKey` of findora account
+            help: the file which contains base64-formatted `XfrPrivateKey` of findora account
             long: seckey
             takes_value: true
             value_name: SECRET KEY
@@ -401,26 +463,13 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
-  #- history
-  #    about: query operating history
-  #    args:
-  #      - coinbase:
-  #          help: show coinbase history
-  #          long: coinbase
-  #          conflicts_with:
-  #            - transaction
-  #      - transaction:
-  #          help: show transaction history
-  #          conflicts_with:
-  #            - coinbase
-  #      - wallet:
-  #          help: wallet nick name
-  #          long: wallet
-  #          takes_value: true
-  #          value_name: WALLET
-  #          required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - seckey
   - account:
-      about: Return user contract account information
+      about: Return user contract account information or the balance if secret key is provided
       args:
         - addr:
             help: findora account(eg:fra1rkv...) or Ethereum address(g:0xd3Bf...)
@@ -428,19 +477,35 @@ subcommands:
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
-            required: true
+        - sec-key:
+            help: base64-formatted `XfrPrivateKey`
+            short: s
+            long: sec-key
+            takes_value: true
+            value_name: SECRET KEY
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `sec-key` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - sec-key
   - contract-deposit:
-      about: Transfer FRA from a Findora account to the specified Ethereum address
+      about: Transfer an asset from the UTXO chain to the EVM chain
       args:
         - addr:
-            help: ethereum address to receive FRA, eg:0xd3Bf...
+            help: ethereum address to receive asset, eg:0xd3Bf...
             short: a
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
             required: true
         - amount:
-            help: deposit FRA amount
+            help: deposit asset amount
             short: n
             long: amount
             takes_value: true
@@ -460,11 +525,14 @@ subcommands:
             takes_value: true
             value_name: LOWLEVEL
             required: false
+        - eth-address:
+            help: use the eth address
+            long: eth-address
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
         - addr:
-            help: findora account to receive FRA, eg:fra1rkv...
+            help: Findora account to receive FRA, eg:fra1rkv...
             short: a
             long: addr
             takes_value: true
@@ -477,14 +545,297 @@ subcommands:
             value_name: AMOUNT
             required: true
         - eth-key:
-            help: ethereum account mnemonic phrase sign withdraw tx
+            help: mnemonic phrase for the EVM account to sign the withdraw tx
             short: e
             long: eth-key
             takes_value: true
             value_name: MNEMONIC
             required: true
+        - eth-address:
+            help: use the eth address
+            long: eth-address
   - gen-eth-key:
       about: Generate an Ethereum address
+  - owned-abars:
+      about: Get Anon UTXOs for a keypair using the commitment
+      args:
+        - commitments:
+            help: Commitment of the ABAR
+            short: c
+            long: commitments
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of receiver
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - anon-balance:
+      about: List Anon balance and spending status for a public key and a list of commitments
+      args:
+        - commitments:
+            help: the list of commitments in base64 form.
+            short: c
+            long: commitments
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - owned-open-abars:
+      about: Get Open Anon UTXOs for a keypair using commitment
+      args:
+        - commitment:
+            help: The commitment of ABAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - owned-utxos:
+      about: List owned UTXOs for a public key
+      args:
+        - asset:
+            help: asset code which you want to tansfer
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            allow_hyphen_values: true
+        - eth-address:
+            help: use the eth address
+            long: eth-address
+  - convert-bar-to-abar:
+      about: Convert a BAR to Anon BAR for yourself
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - to-address:
+            help: bech32 address of receiver keys
+            short: a
+            long: to-address
+            takes_value: true
+            value_name: TO ADDRESS
+            required: true
+        - txo-sid:
+            help: Txo Sid of input to convert
+            short: t
+            long: txo-sid
+            takes_value: true
+            value_name: TXO SID
+            required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - convert-abar-to-bar:
+      about: Convert an ABAR to BAR
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - to-pubkey:
+            help: base64-formatted `XfrPublicKey` of the receiver
+            short: t
+            long: to-pubkey
+            takes_value: true
+            value_name: PubKey
+            allow_hyphen_values: true
+        - to-wallet-address:
+            help: Xfr public key of the receiver
+            short: T
+            long: to-wallet-address
+            takes_value: true
+            value_name: XFR WALLET ADDRESS
+            conflicts_with:
+              - to-pubkey
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - anon-transfer:
+      about: Perform an anonymous transfer
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - fra-commitment:
+            help: Commitment for the input FRA Anon BAR
+            long: fra-commitment
+            takes_value: true
+            value_name: FRA COMMITMENT
+            allow_hyphen_values: true
+        - to-address:
+            help: Address of the receiver
+            long: to-address
+            takes_value: true
+            value_name: ADDRESS
+            required: true
+            allow_hyphen_values: true
+        - amount:
+            help: how much units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - anon-transfer-batch:
+      about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - commitment-file:
+            help: Commitments for the input Anon BARs
+            short: c
+            long: commitment-file
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+        - to-address-file:
+            help: Xfr public keys of the receivers
+            long: to-address-file
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+        - amount-file:
+            help: how much units to transfer for each receiver
+            short: n
+            long: amount-file
+            takes_value: true
+            value_name: Amount
+            required: true
+        - asset-file:
+            help: Relative asset code type.
+            short: a
+            long: asset-file
+            takes_value: true
+            value_name: Asset
+            required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
+  - anon-fetch-merkle-proof:
+      about: Query Merkle tree leaf info
+      args:
+        - atxo-sid:
+            help: ATXO SID of the ABAR
+            short: a
+            long: atxo-sid
+            takes_value: true
+            value_name: ATXO SID
+            required: true
+  - check-abar-status:
+      about: Check the spending status and balance of ABAR
+      args:
+        - commitment:
+            help: Commitment of the ABAR
+            short: c
+            long: commitment
+            takes_value: true
+            value_name: COMMITMENT
+            required: true
+            allow_hyphen_values: true
+        - from-seckey:
+            help: Xfr secret key file path of sender
+            short: s
+            long: from-seckey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - use-default-eth-address:
+            help: use a private key of the eth address if `from-seckey` is not provided
+            long: use-default-eth-address
+            conflicts_with:
+              - from-seckey
   - replace_staker:
       about: Replace the staker of the validator with target address
       args:
@@ -501,6 +852,23 @@ subcommands:
             takes_value: true
             value_name: TARGET PUBLIC KEY
             required: true
+            allow_hyphen_values: true
+        - td_address:
+            help: the tendermint address that you may want to replace.
+            long: td_address
+            takes_value: true
+            value_name: TENDERMINT ADDRESS
+            required: false
+        - td_pubkey:
+            help: the tendermint public key that you may want to replace.
+            long: td_pubkey
+            takes_value: true
+            value_name: TENDERMINT PUBKEY
+            required: false
+            allow_hyphen_values: true
+        - eth-address:
+            help: use the eth address
+            long: eth-address
   - dev:
       about: Manage development clusters on your localhost
       args:

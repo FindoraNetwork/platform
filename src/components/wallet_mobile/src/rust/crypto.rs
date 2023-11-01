@@ -2,7 +2,7 @@
 use wasm_bindgen::prelude::*;
 
 use super::data_model::*;
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
+use aes_gcm::aead::{generic_array::GenericArray, Aead, KeyInit};
 use aes_gcm::Aes256Gcm;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -11,27 +11,28 @@ use credentials::{
     CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
+use getrandom::getrandom;
 use globutils::wallet;
 use ledger::{
-    data_model::{
-        AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING,
-        TX_FEE_MIN,
-    },
+    data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN},
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
-use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ring::pbkdf2;
-use ruc::Result;
+use ruc::{d, Result, RucResult};
 use std::num::NonZeroU32;
 use std::str;
-use zei::serialization::ZeiFromToBytes;
-use zei::xfr::asset_record::open_blind_asset_record as open_bar;
-use zei::xfr::lib::trace_assets as zei_trace_assets;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-use zei::xfr::structs::{
-    AssetType as ZeiAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
+use zei::{
+    noah_algebra::serialization::NoahFromToBytes,
+    noah_api::xfr::{
+        asset_record::open_blind_asset_record as open_bar,
+        structs::{
+            AssetType as NoahAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
+        },
+        trace_assets as noah_trace_assets,
+    },
+    XfrKeyPair, XfrPublicKey, XfrSecretKey,
 };
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -47,7 +48,7 @@ pub fn random_asset_type() -> String {
 /// Generates asset type as a Base64 string from given code.
 pub fn rs_asset_type_from_value(code: [u8; ASSET_TYPE_LENGTH]) -> String {
     AssetTypeCode {
-        val: ZeiAssetType(code),
+        val: NoahAssetType(code),
     }
     .to_base64()
 }
@@ -57,7 +58,8 @@ pub fn rs_trace_assets(
     xfr_body: XfrBody,
     tracer_keypair: &AssetTracerKeyPair,
 ) -> Result<Vec<(u64, String)>> {
-    Ok(zei_trace_assets(&xfr_body, tracer_keypair.get_keys())?
+    Ok(noah_trace_assets(&xfr_body, tracer_keypair.get_keys())
+        .c(d!())?
         .iter()
         .map(|(amt, asset_type, _, _)| {
             let asset_type_code = AssetTypeCode { val: *asset_type };
@@ -71,7 +73,7 @@ pub fn rs_trace_assets(
 /// Returns an address to use for cancelling debt tokens in a debt swap.
 /// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
-    XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
+    XfrPublicKey::noah_from_bytes(&[0; 32]).unwrap()
 }
 
 /// Returns a JavaScript object containing decrypted owner record information,
@@ -82,10 +84,11 @@ pub fn rs_open_client_asset_record(
     keypair: &XfrKeyPair,
 ) -> Result<OpenAssetRecord> {
     open_bar(
-        record.get_bar_ref(),
+        &record.get_bar_ref().into_noah(),
         &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-        keypair,
+        &keypair.into_noah(),
     )
+    .c(d!())
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -103,8 +106,8 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
-    let mut small_rng = rand::thread_rng();
-    XfrKeyPair::generate(&mut small_rng)
+    let mut prng = ChaChaRng::from_entropy();
+    XfrKeyPair::generate(&mut prng)
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -131,14 +134,14 @@ pub fn rs_public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-    hex::encode(key_pair.zei_to_bytes())
+    hex::encode(key_pair.noah_to_bytes())
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
+    XfrKeyPair::noah_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 /// Generates a new credential issuer key.
@@ -167,7 +170,7 @@ pub fn rs_wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        xfr_pk.as_bytes(),
+        &xfr_pk.noah_to_bytes(),
     )
 }
 
@@ -248,7 +251,7 @@ pub fn rs_wasm_credential_commit(
         &mut prng,
         user_secret_key,
         credential.get_cred_ref(),
-        user_public_key.as_bytes(),
+        &user_public_key.noah_to_bytes(),
     )?;
     Ok(CredentialCommitmentData {
         commitment: CredentialCommitment { commitment },
@@ -319,10 +322,9 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
     let n_iter = NonZeroU32::new(32).unwrap();
-    let mut rng = thread_rng();
 
     let mut salt = [0u8; CREDENTIAL_LEN];
-    rng.fill(&mut salt);
+    getrandom(&mut salt).unwrap();
     let mut derived_key = [0u8; CREDENTIAL_LEN];
     pbkdf2::derive(
         pbkdf2::PBKDF2_HMAC_SHA512,
@@ -333,7 +335,7 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     );
 
     let mut iv = [0u8; IV_LEN];
-    rng.fill(&mut iv);
+    getrandom(&mut iv).unwrap();
 
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher
@@ -474,7 +476,7 @@ pub fn fra_get_minimal_fee() -> u64 {
 /// The destination for fee to be transfered to.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
-    *BLACK_HOLE_PUBKEY
+    XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 /// The system address used to reveive delegation principals.
@@ -486,13 +488,13 @@ pub fn get_delegation_target_address() -> String {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING))
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

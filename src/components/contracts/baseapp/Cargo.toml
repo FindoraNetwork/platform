@@ -24,8 +24,8 @@ serde = {version = "1.0.124", features = ["derive"]}
 serde_json = "1.0.40"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.9" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.9" }
-sha3 = "0.8"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+sha3 = "0.10"
+zei = { package="platform-lib-noah", git = "https://github.com/FindoraNetwork/platform-lib-noah", branch = "main" }
 
 config = { path = "../../config"}
 
@@ -48,7 +48,10 @@ evm-precompile = {path = "../modules/evm/precompile"}
 evm-precompile-basic = {path = "../modules/evm/precompile/basic"}
 evm-precompile-frc20 = {path = "../modules/evm/precompile/frc20"}
 evm-precompile-modexp = {path = "../modules/evm/precompile/modexp"}
-evm-precompile-sha3fips = {path = "../modules/evm/precompile/sha3fips"}
+evm-precompile-blake2 = {path = "../modules/evm/precompile/blake2"}
+evm-precompile-bn128 = {path = "../modules/evm/precompile/bn128"}
+evm-precompile-anemoi = {path = "../modules/evm/precompile/anemoi"}
+
 
 [features]
 abci_mock = []

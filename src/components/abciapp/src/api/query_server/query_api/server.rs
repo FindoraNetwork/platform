@@ -3,11 +3,12 @@
 //!
 
 use {
+    globutils::HashOf,
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, StateCommitmentData,
+            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
         staking::{ops::mint_fra::MintEntry, BlockHeight},
         store::LedgerState,
@@ -15,7 +16,10 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::xfr::structs::OwnerMemo,
+    zei::{
+        noah_api::anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
+        OwnerMemo,
+    },
 };
 
 lazy_static! {
@@ -298,6 +302,81 @@ impl QueryServer {
             .unwrap()
             .owner_memos
             .get(&txo_sid)
+    }
+
+    /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
+    #[inline(always)]
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<AxfrOwnerMemo> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| api.abar_memos.get(&atxo_sid))
+    }
+
+    /// Returns the owner memos required to decrypt the asset record stored at between start and end,
+    /// include start and end, limit 100.
+    #[inline(always)]
+    pub fn get_abar_memos(&self, start: u64, end: u64) -> Vec<(u64, AxfrOwnerMemo)> {
+        let mut memos = vec![];
+        let cache = self.ledger_cloned.api_cache.as_ref().unwrap();
+        for i in start..=end {
+            if let Some(memo) = cache.abar_memos.get(&ATxoSID(i)) {
+                memos.push((i, memo));
+            }
+        }
+        memos
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_state_commitment_from_api_cache(
+        &self,
+    ) -> (HashOf<Option<StateCommitmentData>>, u64) {
+        let block_count = self.ledger_cloned.get_block_commit_count();
+        let commitment = self
+            .ledger_cloned
+            .api_cache
+            .as_ref()
+            .unwrap()
+            .state_commitment_version
+            .clone()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
+    }
+
+    /// Returns the abar commitment by given index, if it exists.
+    pub fn get_abar_commitment(&self, atxo_sid: ATxoSID) -> Option<Commitment> {
+        self.ledger_cloned.get_abar(&atxo_sid)
+    }
+
+    /// Returns the Merkle proof from the given ATxoSID
+    #[inline(always)]
+    pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
+        self.ledger_cloned.get_abar_proof(atxo_sid).ok()
+    }
+
+    /// Returns a bool value from the given hash
+    #[inline(always)]
+    pub fn check_nullifier_hash(&self, null_hash: String) -> Option<bool> {
+        self.ledger_cloned.check_nullifier_hash(null_hash).ok()
+    }
+
+    /// Returns an int value for the max ATxoSid
+    #[inline(always)]
+    pub fn max_atxo_sid(&self) -> Option<usize> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| api.abar_memos.len().checked_sub(1))
+    }
+
+    /// Returns an int value for the max ATxoSid at a given block height
+    #[inline(always)]
+    pub fn max_atxo_sid_at_height(&self, height: BlockHeight) -> Option<usize> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| api.height_to_max_atxo.get(&height).unwrap_or(None))
     }
 
     /// retrieve block reward rate at specified block height

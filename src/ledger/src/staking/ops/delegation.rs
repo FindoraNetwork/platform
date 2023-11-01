@@ -21,9 +21,9 @@ use {
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::xfr::{
-        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-        structs::{XfrAmount, XfrAssetType},
+    zei::{
+        noah_api::xfr::structs::{XfrAmount, XfrAssetType},
+        XfrKeyPair, XfrPublicKey, XfrSignature,
     },
 };
 
@@ -148,7 +148,7 @@ impl DelegationOps {
         nonce: NoReplayToken,
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, amount, nonce));
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         let v_signature: Option<Ed25519Signature> = vltor_key
             .and_then(|pk| pk.ed25519_keypair().map(|k| k.sign(&body.to_bytes())));
         DelegationOps {
@@ -243,7 +243,7 @@ fn check_delegation_context_principal(
     tx: &Transaction,
     owner: (XfrPublicKey, Amount),
 ) -> Result<Amount> {
-    let target_pk = *BLACK_HOLE_PUBKEY_STAKING;
+    let target_pk = XfrPublicKey::from_noah(&BLACK_HOLE_PUBKEY_STAKING);
 
     let am = tx
         .body

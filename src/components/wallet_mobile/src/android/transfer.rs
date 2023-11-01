@@ -3,8 +3,13 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, jvalue, JNI_TRUE};
 use jni::JNIEnv;
 use ledger::data_model::AssetType as PlatformAssetType;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::OwnerMemo as ZeiOwnerMemo;
+use zei::{
+    noah_api::{
+        keys::{KeyPair, PublicKey},
+        xfr::structs::OwnerMemo as NoahOwnerMemo,
+    },
+    XfrKeyPair, XfrPublicKey,
+};
 
 use super::{jStringToString, parseU64};
 
@@ -189,8 +194,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_ownerMemoFromJson(
         .expect("Couldn't get java string!")
         .into();
 
-    let zei_owner_memo: ZeiOwnerMemo = serde_json::from_str(val.as_str()).unwrap();
-    Box::into_raw(Box::new(OwnerMemo::from_json(zei_owner_memo).unwrap())) as jlong
+    let noah_owner_memo: NoahOwnerMemo = serde_json::from_str(val.as_str()).unwrap();
+    Box::into_raw(Box::new(OwnerMemo::from_json(noah_owner_memo).unwrap())) as jlong
 }
 
 #[no_mangle]
@@ -273,7 +278,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         Some(memo.clone())
     };
     let tracing_policies = &*(tracing_policies_ptr as *mut TracingPolicies);
-    let key = &*(key_ptr as *mut XfrKeyPair);
+    let key = &*(key_ptr as *mut KeyPair);
     let amount = parseU64(env, amount);
 
     let builder = builder
@@ -283,7 +288,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
             asset_record.clone(),
             owner_memo,
             tracing_policies,
-            key,
+            &XfrKeyPair::from_noah(key).unwrap(),
             amount,
         )
         .unwrap();
@@ -328,12 +333,18 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         let memo = &*(owner_memo_ptr as *mut OwnerMemo);
         Some(memo.clone())
     };
-    let key = &*(key_ptr as *mut XfrKeyPair);
+    let key = &*(key_ptr as *mut KeyPair);
     let amount = parseU64(env, amount);
 
     let builder = builder
         .clone()
-        .add_input_no_tracing(txo_ref, asset_record, owner_memo, key, amount)
+        .add_input_no_tracing(
+            txo_ref,
+            asset_record,
+            owner_memo,
+            &XfrKeyPair::from_noah(key).unwrap(),
+            amount,
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -369,7 +380,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
     let tracing_policies = &*(tracing_policies_ptr as *mut TracingPolicies);
-    let recipient = &*(recipient as *mut XfrPublicKey);
+    let recipient = &*(recipient as *mut PublicKey);
     let amount = parseU64(env, amount);
     let code = jStringToString(env, code);
 
@@ -377,7 +388,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         .clone()
         .add_output_with_tracing(
             amount,
-            recipient,
+            &XfrPublicKey::from_noah(recipient).unwrap(),
             tracing_policies,
             code,
             conf_amount == JNI_TRUE,
@@ -413,7 +424,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     conf_type: jboolean,
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
-    let recipient = &*(recipient as *mut XfrPublicKey);
+    let recipient = &*(recipient as *mut PublicKey);
     let amount = parseU64(env, amount);
     let code = jStringToString(env, code);
 
@@ -421,7 +432,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         .clone()
         .add_output_no_tracing(
             amount,
-            recipient,
+            &XfrPublicKey::from_noah(recipient).unwrap(),
             code,
             conf_amount == JNI_TRUE,
             conf_type == JNI_TRUE,
@@ -459,7 +470,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         let policies = &*(tracing_policies_ptr as *mut TracingPolicies);
         Some(policies)
     };
-    let key = &*(key_ptr as *mut XfrKeyPair);
+    let key = &*(key_ptr as *mut KeyPair);
 
     let builder = builder
         .clone()
@@ -468,7 +479,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
             asset_record,
             owner_memo,
             tracing_policies,
-            key,
+            &XfrKeyPair::from_noah(key).unwrap(),
             parseU64(env, amount),
         )
         .unwrap();
@@ -496,7 +507,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         let policies = &*(tracing_policies_ptr as *mut TracingPolicies);
         Some(policies)
     };
-    let recipient = &*(recipient as *mut XfrPublicKey);
+    let recipient = &*(recipient as *mut PublicKey);
     let code: String = env
         .get_string(code)
         .expect("Couldn't get java string!")
@@ -506,7 +517,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         .clone()
         .add_output(
             parseU64(env, amount),
-            recipient,
+            &XfrPublicKey::from_noah(&recipient).unwrap(),
             tracing_policies,
             code,
             conf_amount == JNI_TRUE,
@@ -562,9 +573,14 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderSi
     key_ptr: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
-    let key = &*(key_ptr as *mut XfrKeyPair);
+    let key = &*(key_ptr as *mut KeyPair);
 
-    Box::into_raw(Box::new(builder.clone().sign(key).unwrap())) as jlong
+    Box::into_raw(Box::new(
+        builder
+            .clone()
+            .sign(&XfrKeyPair::from_noah(&key).unwrap())
+            .unwrap(),
+    )) as jlong
 }
 
 #[no_mangle]

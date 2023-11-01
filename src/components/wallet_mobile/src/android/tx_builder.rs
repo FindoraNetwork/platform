@@ -4,10 +4,10 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, JNI_TRUE};
 use jni::JNIEnv;
 use ledger::data_model::AssetTypeCode;
-use zei::xfr::sig::XfrKeyPair;
+use zei::XfrKeyPair;
 #[no_mangle]
 /// # Safety
-/// @param kp: owner's XfrKeyPair
+/// @param kp: owner's KeyPair
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFeeRelativeAuto(
     _env: JNIEnv,
     _: JClass,
@@ -15,8 +15,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFeeRe
     kp: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let kp = &*(kp as *mut XfrKeyPair);
-    let builder = builder.clone().add_fee_relative_auto(kp.clone()).unwrap();
+    let kp = &*(kp as *mut KeyPair);
+    let builder = builder
+        .clone()
+        .add_fee_relative_auto(XfrKeyPair::from_noah(kp).unwrap())
+        .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
 
@@ -91,7 +94,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderNew(
 ///     console.log(err)
 /// }
 ///
-/// @param {XfrKeyPair} key_pair -  Issuer XfrKeyPair.
+/// @param {KeyPair} key_pair -  Issuer KeyPair.
 /// @param {string} memo - Text field for asset definition.
 /// @param {string} token_code - Optional Base64 string representing the token code of the asset to be issued.
 /// If empty, a token code will be chosen at random.
@@ -107,7 +110,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     asset_rules: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let key_pair = &*(key_pair as *mut XfrKeyPair);
+    let key_pair = &*(key_pair as *mut KeyPair);
     let memo: String = env
         .get_string(memo)
         .expect("Couldn't get java string!")
@@ -119,7 +122,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     let asset_rules = &*(asset_rules as *mut AssetRules);
     let builder = builder
         .clone()
-        .add_operation_create_asset(key_pair, memo, token_code, asset_rules.clone())
+        .add_operation_create_asset(
+            &XfrKeyPair::from_noah(key_pair).unwrap(),
+            memo,
+            token_code,
+            asset_rules.clone(),
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -130,13 +138,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 ///
 /// Use this function for simple one-shot issuances.
 ///
-/// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
+/// @param {KeyPair} key_pair  - Issuer KeyPair.
 /// and types of traced assets.
 /// @param {string} code - base64 string representing the token code of the asset to be issued.
 /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
 /// @param {BigInt} amount - Amount to be issued.
 /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-/// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasicIssueAsset(
     env: JNIEnv,
     _: JClass,
@@ -146,24 +153,21 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
     seq_num: jlong,
     amount: JString,
     conf_amount: jboolean,
-    zei_params: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let key_pair = &*(key_pair as *mut XfrKeyPair);
+    let key_pair = &*(key_pair as *mut KeyPair);
     let code: String = env
         .get_string(code)
         .expect("Couldn't get java string!")
         .into();
-    let zei_params = &*(zei_params as *mut PublicParams);
     let builder = builder
         .clone()
         .add_basic_issue_asset(
-            key_pair,
+            &XfrKeyPair::from_noah(key_pair).unwrap(),
             code,
             seq_num as u64,
             parseU64(env, amount),
             conf_amount == JNI_TRUE,
-            zei_params,
         )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
@@ -173,7 +177,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
 /// # Safety
 /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
 /// store.
-/// @param {XfrKeyPair} auth_key_pair - Asset creator key pair.
+/// @param {KeyPair} auth_key_pair - Asset creator key pair.
 /// @param {String} code - base64 string representing token code of the asset whose memo will be updated.
 /// transaction validates.
 /// @param {String} new_memo - The new asset memo.
@@ -188,7 +192,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     new_memo: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let auth_key_pair = &*(auth_key_pair as *mut XfrKeyPair);
+    let auth_key_pair = &*(auth_key_pair as *mut KeyPair);
     let code: String = env
         .get_string(code)
         .expect("Couldn't get java string!")
@@ -199,7 +203,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .into();
     let builder = builder
         .clone()
-        .add_operation_update_memo(auth_key_pair, code, new_memo)
+        .add_operation_update_memo(
+            &XfrKeyPair::from_noah(auth_key_pair).unwrap(),
+            code,
+            new_memo,
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -216,7 +224,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     validator: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let keypair = &*(keypair as *mut XfrKeyPair);
+    let keypair = &*(keypair as *mut KeyPair);
     let validator: String = env
         .get_string(validator)
         .expect("Couldn't get java string!")
@@ -224,7 +232,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 
     let builder = builder
         .clone()
-        .add_operation_delegate(keypair, parseU64(env, amount), validator)
+        .add_operation_delegate(
+            &XfrKeyPair::from_noah(keypair).unwrap(),
+            parseU64(env, amount),
+            validator,
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -239,8 +251,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     keypair: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let keypair = &*(keypair as *mut XfrKeyPair);
-    let builder = builder.clone().add_operation_undelegate(keypair).unwrap();
+    let keypair = &*(keypair as *mut KeyPair);
+    let builder = builder
+        .clone()
+        .add_operation_undelegate(&XfrKeyPair::from_noah(keypair).unwrap())
+        .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
 
@@ -256,7 +271,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     validator: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let keypair = &*(keypair as *mut XfrKeyPair);
+    let keypair = &*(keypair as *mut KeyPair);
 
     let validator: String = env
         .get_string(validator)
@@ -264,7 +279,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .into();
     let builder = builder
         .clone()
-        .add_operation_undelegate_partially(keypair, parseU64(env, am), validator)
+        .add_operation_undelegate_partially(
+            &XfrKeyPair::from_noah(keypair).unwrap(),
+            parseU64(env, am),
+            validator,
+        )
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -285,9 +304,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .expect("Couldn't get java string!")
         .into();
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
-    let td_address = hex::decode(addr) .expect("addr format error!");
+    let td_address = hex::decode(addr).expect("addr format error!");
     let keypair = &*(keypair as *mut XfrKeyPair);
-    let builder = builder.clone().add_operation_claim(td_address,keypair).unwrap();
+    let builder = builder
+        .clone()
+        .add_operation_claim(td_address, keypair)
+        .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
 
@@ -303,16 +325,16 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     am: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let keypair = &*(keypair as *mut XfrKeyPair);
+    let keypair = &*(keypair as *mut KeyPair);
     let td_addr: String = env
-    .get_string(td_addr)
-    .expect("Couldn't get java string!")
-    .into();
+        .get_string(td_addr)
+        .expect("Couldn't get java string!")
+        .into();
     let addr = td_addr.strip_prefix("0x").unwrap_or(&td_addr);
-    let td_address = hex::decode(addr) .expect("addr format error!");
+    let td_address = hex::decode(addr).expect("addr format error!");
     let builder = builder
         .clone()
-        .add_operation_claim_custom(td_address,keypair, parseU64(env, am))
+        .add_operation_claim_custom(td_address, keypair, parseU64(env, am))
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -344,7 +366,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 ///
 /// Adds a serialized transfer-account operation to transaction builder instance.
 /// @param {string} amount - amount to transfer.
-/// @param {XfrKeyPair} keypair - FRA account key pair.
+/// @param {KeyPair} keypair - FRA account key pair.
 /// @param {String} address - FRA account key pair.
 /// @throws Will throw an error if `address` is invalid.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationConvertAccount(
@@ -363,7 +385,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .expect("Couldn't get java string!")
         .into();
 
-    let fra_kp = &*(keypair as *mut XfrKeyPair);
+    let fra_kp = &*(keypair as *mut KeyPair);
 
     let asset_str: String = env
         .get_string(asset)
@@ -390,7 +412,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .add_transfer_to_account_operation(
             parseU64(env, amount),
             Some(addr),
-            fra_kp,
+            &XfrKeyPair::from_noah(fra_kp).unwrap(),
             asset,
             lowlevel_data,
         )
@@ -408,8 +430,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSign(
     kp: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
-    let kp = &*(kp as *mut XfrKeyPair);
-    let builder = builder.clone().sign(kp).unwrap();
+    let kp = &*(kp as *mut KeyPair);
+    let builder = builder
+        .clone()
+        .sign(&XfrKeyPair::from_noah(kp).unwrap())
+        .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
 
@@ -422,7 +447,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransact
     _: JClass,
     builder: jlong,
 ) -> jstring {
-    let builder = &*(builder as *mut TransactionBuilder);
+    let builder = &mut *(builder as *mut TransactionBuilder);
     let output = env
         .new_string(builder.transaction())
         .expect("Couldn't create java string!");

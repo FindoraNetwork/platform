@@ -12,7 +12,7 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
@@ -51,7 +51,7 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{noah_api::keys::PublicKey as NoahXfrPublicKey, XfrKeyPair, XfrPublicKey},
 };
 
 // height, reward rate
@@ -80,14 +80,14 @@ lazy_static! {
     pub static ref KEEP_HIST: bool = env::var("FINDORAD_KEEP_HIST").is_ok();
 
     /// Reserved accounts of EcoSystem.
-    pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
+    pub static ref FF_PK_LIST: Vec<NoahXfrPublicKey> = FF_ADDR_LIST
         .iter()
-        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
+        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)).into_noah())
         .collect();
 
     /// Reserved accounts of Findora Foundation.
-    pub static ref FF_PK_EXTRA_120_0000: XfrPublicKey =
-        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000));
+    pub static ref FF_PK_EXTRA_120_0000: NoahXfrPublicKey =
+        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000)).into_noah();
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();
@@ -809,7 +809,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .entry(end_height)
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(owner);
 
         // There should be no failure here !!
@@ -903,7 +903,7 @@ impl Staking {
             self.delegation_info
                 .end_height_map
                 .entry(h + CFG.checkpoint.unbond_block_cnt)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(*addr);
         }
 
@@ -995,7 +995,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .entry(h + CFG.checkpoint.unbond_block_cnt)
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(pu.new_delegator_id);
 
         // update delegator entries for pu target_validator
@@ -1078,7 +1078,7 @@ impl Staking {
             self.delegation_info
                 .end_height_map
                 .entry(end_height)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(addr.to_owned());
             Ok(())
         } else {
@@ -1604,7 +1604,7 @@ impl Staking {
         &self.coinbase.distribution_plan
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     /// set_proposer_rewards sets the rewards for the block proposer
     /// All rewards are allocated to the proposer only
     pub(crate) fn set_proposer_rewards(
@@ -1646,7 +1646,7 @@ impl Staking {
             .map(|_| ())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         // p[0] = Validator power which voted for this block
@@ -2099,7 +2099,7 @@ impl Delegation {
     }
 
     #[inline(always)]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.delegations.contains_key(validator)
     }
@@ -2119,7 +2119,7 @@ impl Delegation {
     // > **NOTE:**
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_delegation_rewards(
         &mut self,
@@ -2208,7 +2208,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,
