@@ -1,5 +1,6 @@
 use ethereum_types::H160;
 use evm::{executor::stack::PrecompileSet, Context};
+use evm_precompile_ed25519_verify::Ed25519Verify;
 use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
@@ -78,6 +79,9 @@ where
             }
             a if a == H160::from_low_u64_be(Anemoi::contract_id()) => {
                 Some(Anemoi::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(Ed25519Verify::contract_id()) => {
+                Some(Ed25519Verify::execute(input, target_gas, context, ctx))
             }
             //a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
             //    Some(EthPairing::execute(input, target_gas, context, ctx))

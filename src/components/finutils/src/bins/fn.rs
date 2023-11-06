@@ -277,7 +277,7 @@ fn run() -> Result<()> {
         let td_addr = m.value_of("validator-td-addr");
         common::unstake(am, staker.as_deref(), td_addr).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("claim") {
-        let am = m.value_of("amount");
+        let am = None;
         let seckey = match m.value_of("seckey") {
             Some(path) => {
                 Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
