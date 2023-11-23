@@ -46,6 +46,23 @@ subcommands:
             long: validator-key
             takes_value: true
             value_name: Path
+  - sign:
+      about: Sign message
+      args:
+        - sk:
+            help: secret key in hex
+            short: s
+            long: secret-key
+            takes_value: true
+            value_name: SecretKey
+            required: true
+        - message:
+            help: the message string
+            short: m
+            long: message
+            takes_value: true
+            value_name: Message
+            required: true
   - stake:
       about: Stake tokens (i.e. bond tokens) from a Findora account to a validator
       args:

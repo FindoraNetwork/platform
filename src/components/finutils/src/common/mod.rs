@@ -6,8 +6,10 @@
 //! This module is the library part of FN.
 //!
 
+use sha2::{Digest, Sha256};
 use std::str::FromStr;
-
+use zei::noah_algebra::serialization::NoahFromToBytes;
+use zei::noah_api::keys::SecretKey;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
 
@@ -379,6 +381,27 @@ pub fn show(basic: bool, is_address_eth: bool) -> Result<()> {
     println!(
         "\x1b[31;01mYour Delegation:\x1b[00m\nbound_amount:{:?}\nunbound_amount:{:?}\nreward:{:?}",
         bound_amount, unbound_amount,reward
+    );
+
+    Ok(())
+}
+
+/// Sign message
+///     Secret Key
+///     Message
+pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
+    let msg_hash = Sha256::digest(message.unwrap().as_bytes());
+
+    let binding = hex::decode(secret_key.unwrap()).unwrap();
+    let sk_bytes = binding.as_slice();
+    let sk = XfrSecretKey::from_noah(&SecretKey::noah_from_bytes(sk_bytes).unwrap());
+    let pair = sk.into_keypair();
+    let sig = pair.get_sk_ref().sign(msg_hash.as_slice()).unwrap();
+    println!(
+        "data: 0x{}{}{}",
+        hex::encode(pair.get_pk_ref().noah_to_bytes()),
+        hex::encode(msg_hash.as_slice()),
+        hex::encode(sig.noah_to_bytes())
     );
 
     Ok(())
