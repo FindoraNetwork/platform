@@ -295,6 +295,10 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("show") {
         let basic = m.is_present("basic");
         common::show(basic).c(d!())?;
+    } else if let Some(m) = matches.subcommand_matches("sign") {
+        let sk = m.value_of("sk");
+        let msg = m.value_of("message");
+        common::sign(sk, msg).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("setup") {
         let sa = m.value_of("serv-addr");
         let om = m.value_of("owner-mnemonic-path");

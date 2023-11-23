@@ -6,7 +6,9 @@
 //! This module is the library part of FN.
 //!
 
+use sha2::{Digest, Sha256};
 use std::str::FromStr;
+use zei::serialization::ZeiFromToBytes;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
@@ -345,6 +347,28 @@ pub fn show(basic: bool) -> Result<()> {
     println!(
         "\x1b[31;01mYour Delegation:\x1b[00m\nbound_amount:{:?}\nunbound_amount:{:?}\nreward:{:?}",
         bound_amount, unbound_amount,reward
+    );
+
+    Ok(())
+}
+
+/// Sign message using ed25519
+///     Secret Key
+///     Message
+pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
+    let pair = XfrSecretKey::zei_from_bytes(
+        hex::decode(secret_key.unwrap()).unwrap().as_slice(),
+    )?
+    .into_keypair();
+
+    let d = Sha256::digest(message.unwrap().as_bytes());
+    let sig = pair.get_sk_ref().sign(d.as_ref(), pair.get_pk_ref());
+
+    println!(
+        "data: 0x{}{}{}",
+        hex::encode(pair.get_pk_ref().zei_to_bytes()),
+        hex::encode(d),
+        hex::encode(sig.zei_to_bytes())
     );
 
     Ok(())
