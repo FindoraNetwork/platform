@@ -611,11 +611,11 @@ impl LedgerState {
         let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
-        fs::create_dir_all(&basedir).c(d!())?;
+        fs::create_dir_all(basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
 
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
-        env::set_var(LSSED_VAR, &snapshot_entries_dir);
+        env::set_var(LSSED_VAR, snapshot_entries_dir);
 
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
