@@ -1,4 +1,4 @@
-# Data recover mechanism
+# Data recovery mechanism
 
 ## Command line functions
 
@@ -28,13 +28,13 @@ findorad node
 
 #### Prepare the environment
 
-1. install and configure the basic file system:
+1. Install and configure the basic file system:
     - zfs: [official documents](https://openzfs.github.io/openzfs-docs/Getting%20Started/index.html)
     - btrfs: [official documents](https://btrfs.wiki.kernel.org/index.php/Main_Page)
-2. swith to root account
+2. Switch to root account
     - the user whose UID is 0
     - its name is usually 'root', but it may not be
-3. create a root volume for testing
+3. Create a root volume for testing
     - zfs
         - `zpool create zfs /dev/sdX` or `zpool create zfs <PATH-TO-A-FILE>`
         ```
