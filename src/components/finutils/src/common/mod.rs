@@ -6,7 +6,9 @@
 //! This module is the library part of FN.
 //!
 
+use sha2::{Digest, Sha256};
 use std::str::FromStr;
+use zei::serialization::ZeiFromToBytes;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
@@ -167,6 +169,28 @@ pub fn stake(
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
+}
+
+/// Sign message using ed25519
+///     Secret Key
+///     Message
+pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
+    let pair = XfrSecretKey::zei_from_bytes(
+        hex::decode(secret_key.unwrap()).unwrap().as_slice(),
+    )?
+    .into_keypair();
+
+    let d = Sha256::digest(message.unwrap().as_bytes());
+    let sig = pair.get_sk_ref().sign(d.as_ref(), pair.get_pk_ref());
+
+    println!(
+        "data: 0x{}{}{}",
+        hex::encode(pair.get_pk_ref().zei_to_bytes()),
+        hex::encode(d),
+        hex::encode(sig.zei_to_bytes())
+    );
+
+    Ok(())
 }
 
 /// Append more FRA token to the specified tendermint node
