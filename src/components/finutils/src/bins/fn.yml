@@ -50,7 +50,7 @@ subcommands:
             value_name: SecretKey
             required: true
         - message:
-            help: the message string./
+            help: the message string
             short: m
             long: message
             takes_value: true
