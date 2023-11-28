@@ -6,7 +6,7 @@
 //! This module is the library part of FN.
 //!
 
-use sha2::{Digest, Sha256};
+use sha3::{Digest, Keccak256};
 use std::str::FromStr;
 use zei::serialization::ZeiFromToBytes;
 
@@ -180,15 +180,20 @@ pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
     )?
     .into_keypair();
 
-    let d = Sha256::digest(message.unwrap().as_bytes());
-    let sig = pair.get_sk_ref().sign(d.as_ref(), pair.get_pk_ref());
+    let msg_bytes = message.unwrap().as_bytes();
+    let d = Keccak256::digest(msg_bytes);
 
-    println!(
-        "data: 0x{}{}{}",
-        hex::encode(pair.get_pk_ref().zei_to_bytes()),
-        hex::encode(d),
-        hex::encode(sig.zei_to_bytes())
-    );
+    let sig = pair.get_sk_ref().sign(d.as_slice(), pair.get_pk_ref());
+
+    let pk_hex = hex::encode(pair.get_pk_ref().zei_to_bytes());
+    let msg_hex = hex::encode(d.as_slice());
+    let sig_hex = hex::encode(sig.zei_to_bytes());
+
+    println!("message hex: 0x{}", hex::encode(msg_bytes));
+    println!("public key: 0x{}", pk_hex);
+    println!("message hash: 0x{}", msg_hex);
+    println!("signature: 0x{}", sig_hex);
+    println!("data: 0x{}{}{}", pk_hex, msg_hex, sig_hex);
 
     Ok(())
 }
