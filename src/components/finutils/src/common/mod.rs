@@ -174,13 +174,12 @@ pub fn stake(
 /// Sign message using ed25519
 ///     Secret Key
 ///     Message
-pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
-    let pair = XfrSecretKey::zei_from_bytes(
-        hex::decode(secret_key.unwrap()).unwrap().as_slice(),
-    )?
-    .into_keypair();
+pub fn sign(secret_key: &str, message: &str) -> Result<()> {
+    let pair =
+        XfrSecretKey::zei_from_bytes(hex::decode(secret_key).c(d!())?.as_slice())?
+            .into_keypair();
 
-    let msg_bytes = message.unwrap().as_bytes();
+    let msg_bytes = message.as_bytes();
     let d = Keccak256::digest(msg_bytes);
 
     let sig = pair.get_sk_ref().sign(d.as_slice(), pair.get_pk_ref());
@@ -189,9 +188,9 @@ pub fn sign(secret_key: Option<&str>, message: Option<&str>) -> Result<()> {
     let msg_hex = hex::encode(d.as_slice());
     let sig_hex = hex::encode(sig.zei_to_bytes());
 
-    println!("message hex: 0x{}", hex::encode(msg_bytes));
-    println!("public key: 0x{}", pk_hex);
+    println!("message: 0x{}", hex::encode(msg_bytes));
     println!("message hash: 0x{}", msg_hex);
+    println!("public key: 0x{}", pk_hex);
     println!("signature: 0x{}", sig_hex);
     println!("data: 0x{}{}{}", pk_hex, msg_hex, sig_hex);
 
