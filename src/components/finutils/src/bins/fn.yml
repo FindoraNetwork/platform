@@ -149,12 +149,6 @@ subcommands:
             long: validator-td-addr
             takes_value: true
             value_name: TendermintAddr
-        - amount:
-            help: how much `FRA unit`s to claim
-            short: n
-            long: amount
-            takes_value: true
-            value_name: Amount
         - seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
             long: seckey
