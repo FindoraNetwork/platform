@@ -6,7 +6,9 @@
 //! This module is the library part of FN.
 //!
 
+use sha3::{Digest, Keccak256};
 use std::str::FromStr;
+use zei::serialization::ZeiFromToBytes;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
@@ -167,6 +169,32 @@ pub fn stake(
     tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
+}
+
+/// Sign message using ed25519
+///     Secret Key
+///     Message
+pub fn sign(secret_key: &str, message: &str) -> Result<()> {
+    let pair =
+        XfrSecretKey::zei_from_bytes(hex::decode(secret_key).c(d!())?.as_slice())?
+            .into_keypair();
+
+    let msg_bytes = message.as_bytes();
+    let d = Keccak256::digest(msg_bytes);
+
+    let sig = pair.get_sk_ref().sign(d.as_slice(), pair.get_pk_ref());
+
+    let pk_hex = hex::encode(pair.get_pk_ref().zei_to_bytes());
+    let msg_hex = hex::encode(d.as_slice());
+    let sig_hex = hex::encode(sig.zei_to_bytes());
+
+    println!("message: 0x{}", hex::encode(msg_bytes));
+    println!("message hash: 0x{}", msg_hex);
+    println!("public key: 0x{}", pk_hex);
+    println!("signature: 0x{}", sig_hex);
+    println!("data: 0x{}{}{}", pk_hex, msg_hex, sig_hex);
+
+    Ok(())
 }
 
 /// Append more FRA token to the specified tendermint node

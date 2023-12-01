@@ -304,6 +304,10 @@ fn run() -> Result<()> {
         } else {
             common::setup(sa, om, tp).c(d!())?;
         }
+    } else if let Some(m) = matches.subcommand_matches("sign") {
+        let sk = m.value_of("sk");
+        let msg = m.value_of("message");
+        common::sign(sk.c(d!())?, msg.c(d!())?).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("transfer") {
         let f = match m.value_of("from-seckey") {
             Some(path) => {
