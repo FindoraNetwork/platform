@@ -281,6 +281,7 @@ impl TransactionBuilder {
                             id: None,
                             record: new.0,
                             lien: None,
+                            memo: None,
                         },
                     }
                     .to_json()
