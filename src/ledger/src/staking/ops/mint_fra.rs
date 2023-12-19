@@ -87,6 +87,7 @@ impl MintEntry {
             id: None,
             record: ba,
             lien: None,
+            memo: None,
         };
 
         MintEntry {

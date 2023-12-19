@@ -296,6 +296,7 @@ impl TxnEffect {
                     id: None,
                     record: output.record.clone(),
                     lien: None,
+                    memo: None,
                 })
             {
                 return Err(eg!());
@@ -475,6 +476,7 @@ impl TxnEffect {
                             id: None,
                             record: record.clone(),
                             lien: lien.cloned(),
+                            memo: None,
                         },
                     );
                 }
@@ -495,6 +497,7 @@ impl TxnEffect {
                 id: None,
                 record: out.clone(),
                 lien: lien.cloned(),
+                memo: None,
             }));
             *txo_count += 1;
         }

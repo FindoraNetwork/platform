@@ -321,6 +321,7 @@ impl TransactionBuilder {
                     id: None,
                     record: ba,
                     lien: None,
+                    memo: None,
                 },
                 owner_memo,
             )],

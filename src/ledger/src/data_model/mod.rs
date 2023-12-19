@@ -790,6 +790,7 @@ pub struct TxOutput {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub lien: Option<HashOf<Vec<TxOutput>>>,
+    pub memo: Option<Vec<u8>>,
 }
 
 #[allow(missing_docs)]
@@ -929,6 +930,7 @@ impl TransferAssetBody {
                 id: None,
                 record: rec.clone(),
                 lien: None,
+                memo: None,
             })
             .collect();
         Ok(TransferAssetBody {

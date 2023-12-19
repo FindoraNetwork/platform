@@ -249,6 +249,7 @@ mod issue {
                         id: None,
                         record: ba,
                         lien: None,
+                        memo: None,
                     },
                     None,
                 )

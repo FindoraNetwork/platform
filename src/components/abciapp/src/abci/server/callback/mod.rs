@@ -289,6 +289,18 @@ pub fn deliver_tx(
                                 resp.code = 1;
                                 return resp;
                             }
+
+                            // check output memo length
+                            for output in &op.body.outputs {
+                                if let Some(memo) = &output.memo {
+                                    if memo.len() > 300 {
+                                        resp.log =
+                                            "memo exceeds max length 300".to_owned();
+                                        resp.code = 1;
+                                        return resp;
+                                    }
+                                }
+                            }
                         }
                     }
                     let mut signatures = tx.signatures.clone();
