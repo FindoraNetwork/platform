@@ -194,7 +194,7 @@ impl From<FeeInput> for PlatformFeeInput {
         PlatformFeeInput {
             am: fi.am,
             tr: fi.tr.txo_ref,
-            ar: fi.ar.txo,
+            ar: fi.ar.txo.to_tx_uxto(),
             om: fi.om.map(|om| om.memo),
             kp: fi.kp,
         }
@@ -277,10 +277,11 @@ impl TransactionBuilder {
             .fold(vec![], |mut base, new| {
                 base.push(
                     ClientAssetRecord {
-                        txo: TxOutput {
+                        txo: TxOutputWithMemo {
                             id: None,
                             record: new.0,
                             lien: None,
+                            memo: None,
                         },
                     }
                     .to_json()
@@ -597,8 +598,14 @@ impl TransactionBuilder {
     /// Fetches a client record from a transaction.
     /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
     pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
+        let out = self.get_builder().get_output_ref(idx);
         ClientAssetRecord {
-            txo: self.get_builder().get_output_ref(idx),
+            txo: TxOutputWithMemo {
+                id: out.id,
+                record: out.record,
+                lien: out.lien,
+                memo: None,
+            },
         }
     }
 
@@ -1288,12 +1295,15 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
+use crate::wasm_data_model::TxOutputWithMemo;
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use ledger::data_model::TxoSID;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use zei::xfr::structs::BlindAssetRecord;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.

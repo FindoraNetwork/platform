@@ -145,13 +145,33 @@ impl AuthenticatedAssetRecord {
     }
 }
 
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TxOutputWithMemo {
+    pub id: Option<TxoSID>,
+    pub record: BlindAssetRecord,
+    #[serde(default)]
+    pub lien: Option<HashOf<Vec<TxOutput>>>,
+    pub memo: Option<Vec<u8>>,
+}
+
+impl TxOutputWithMemo {
+    pub fn to_tx_uxto(self) -> TxOutput {
+        TxOutput {
+            id: self.id,
+            record: self.record,
+            lien: self.lien,
+        }
+    }
+}
+
 #[wasm_bindgen]
 /// This object represents an asset record owned by a ledger key pair.
 /// @see {@link module:Findora-Wasm.open_client_asset_record|open_client_asset_record} for information about how to decrypt an encrypted asset
 /// record.
 #[derive(Clone)]
 pub struct ClientAssetRecord {
-    pub(crate) txo: TxOutput,
+    pub(crate) txo: TxOutputWithMemo,
 }
 
 impl ClientAssetRecord {
