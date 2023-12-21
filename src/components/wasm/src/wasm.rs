@@ -251,8 +251,39 @@ impl FeeInputs {
     }
 }
 
+/// An simple builder for findora transaction with memo.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionWithMemo {
+    pub txn: Transaction,
+    pub memo: Option<Vec<u8>>,
+}
+
+impl TransactionWithMemo {
+    /// Wrap Transaction with input.
+    pub fn wrap(tx: &Transaction, input: &str) -> Self {
+        TransactionWithMemo {
+            txn: tx.clone(),
+            memo: Some(input.as_bytes().to_vec()),
+        }
+    }
+}
+
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// Add tx memo, max length is 300 bytes.
+    pub fn add_tx_memo(mut self, input: &str) -> Result<String, JsValue> {
+        if input.len() > 300 {
+            return Err(error_to_jsvalue("input exceeds max length"));
+        }
+
+        let tx_with_memo =
+            TransactionWithMemo::wrap(self.transaction_builder.get_transaction(), input);
+        let s = serde_json::to_string(&tx_with_memo).map_err(error_to_jsvalue)?;
+
+        Ok(s)
+    }
+
     /// @param am: amount to pay
     /// @param kp: owner's XfrKeyPair
     pub fn add_fee_relative_auto(
@@ -1290,8 +1321,10 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use ledger::data_model::{NoReplayToken, Transaction};
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
+use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 use std::str;
 
