@@ -793,6 +793,17 @@ pub struct TxOutput {
 }
 
 #[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TxOutput2 {
+    pub id: Option<TxoSID>,
+    pub record: BlindAssetRecord,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub lien: Option<HashOf<Vec<TxOutput>>>,
+    pub memo: Option<String>,
+}
+
+#[allow(missing_docs)]
 #[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
     Spent,
@@ -867,6 +878,31 @@ pub struct TransferAssetBody {
     pub policies: XfrNotePolicies,
     /// A array of transaction outputs
     pub outputs: Vec<TxOutput>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    /// (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
+    /// the input `inp_idx` gets assigned to the output `out_idx`
+    pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
+    /// TODO(joe): we probably don't need the whole XfrNote with input records
+    /// once it's on the chain
+    /// Encrypted transfer note
+    pub transfer: Box<XfrBody>,
+
+    /// Only Standard type supported
+    pub transfer_type: TransferType,
+}
+
+/// The inner data of Transfer Operation
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransferAssetBody2 {
+    /// Ledger address of inputs
+    pub inputs: Vec<TxoRef>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    /// Transfer policies
+    pub policies: XfrNotePolicies,
+    /// A array of transaction outputs
+    pub outputs: Vec<TxOutput2>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     /// (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
@@ -1120,6 +1156,13 @@ pub struct TransferAsset {
     pub body_signatures: Vec<IndexedSignature<TransferAssetBody>>,
 }
 
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransferAsset2 {
+    pub body: TransferAssetBody2,
+    pub body_signatures: Vec<IndexedSignature<TransferAssetBody>>,
+}
+
 impl TransferAsset {
     #[inline(always)]
     #[allow(missing_docs)]
@@ -1316,6 +1359,60 @@ pub enum Operation {
     ///replace staker.
     ReplaceStaker(ReplaceStakerOps),
 }
+impl Operation {
+    /// Convert operation to operation2
+    pub fn to_operation2(self) -> Operation2 {
+        match self {
+            Operation::IssueAsset(op) => Operation2::IssueAsset(op),
+            Operation::DefineAsset(op) => Operation2::DefineAsset(op),
+            Operation::UpdateMemo(op) => Operation2::UpdateMemo(op),
+            Operation::UpdateStaker(op) => Operation2::UpdateStaker(op),
+            Operation::Delegation(op) => Operation2::Delegation(op),
+            Operation::UnDelegation(op) => Operation2::UnDelegation(op),
+            Operation::Claim(op) => Operation2::Claim(op),
+            Operation::UpdateValidator(op) => Operation2::UpdateValidator(op),
+            Operation::Governance(op) => Operation2::Governance(op),
+            Operation::FraDistribution(op) => Operation2::FraDistribution(op),
+            Operation::MintFra(op) => Operation2::MintFra(op),
+            Operation::ConvertAccount(op) => Operation2::ConvertAccount(op),
+            Operation::ReplaceStaker(op) => Operation2::ReplaceStaker(op),
+            Operation::TransferAsset(_) => todo!(),
+        }
+    }
+}
+
+/// Operation list supported in findora network
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Operation2 {
+    /// Transfer a findora asset, FRA or custom asset
+    TransferAsset(TransferAsset2),
+    /// Issue a custom asset in findora network
+    IssueAsset(IssueAsset),
+    /// Create a new asset for a findora account
+    DefineAsset(DefineAsset),
+    /// Update memo for a findora custom asset
+    UpdateMemo(UpdateMemo),
+    /// Add or remove validator from findora network
+    UpdateStaker(UpdateStakerOps),
+    /// Delegate FRA token to existed validator or self-delegation
+    Delegation(DelegationOps),
+    /// Withdraw FRA token from findora network
+    UnDelegation(Box<UnDelegationOps>),
+    /// Claim rewards
+    Claim(ClaimOps),
+    /// Update initial validator list
+    UpdateValidator(UpdateValidatorOps),
+    /// Findora network goverance operation
+    Governance(GovernanceOps),
+    /// Update FRA distribution
+    FraDistribution(FraDistributionOps),
+    /// Coinbase operation
+    MintFra(MintFraOps),
+    /// Convert UTXOs to EVM Account balance
+    ConvertAccount(ConvertAccount),
+    ///replace staker.
+    ReplaceStaker(ReplaceStakerOps),
+}
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     match op {
@@ -1362,6 +1459,22 @@ pub struct TransactionBody {
     pub memos: Vec<Memo>,
 }
 
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+pub struct TransactionBody2 {
+    pub no_replay_token: NoReplayToken,
+    pub operations: Vec<Operation2>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub credentials: Vec<CredentialProof>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub policy_options: Option<TxnPolicyData>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub memos: Vec<Memo>,
+}
+
 impl TransactionBody {
     #[inline(always)]
     fn from_token(no_replay_token: NoReplayToken) -> Self {
@@ -1375,6 +1488,18 @@ impl TransactionBody {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Transaction {
     pub body: TransactionBody,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Transaction2 {
+    pub body: TransactionBody2,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,

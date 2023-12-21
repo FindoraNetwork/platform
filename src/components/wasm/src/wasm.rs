@@ -162,6 +162,7 @@ pub fn get_null_pk() -> XfrPublicKey {
 /// Structure that allows users to construct arbitrary transactions.
 pub struct TransactionBuilder {
     transaction_builder: PlatformTransactionBuilder,
+    memos: Vec<String>,
 }
 
 impl TransactionBuilder {
@@ -253,6 +254,17 @@ impl FeeInputs {
 
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// Add output memo.
+    pub fn add_output_memo(mut self, memo: &str) -> Result<TransactionBuilder, JsValue> {
+        if memo.len() > 300 {
+            return Err(error_to_jsvalue("memo exceeds max length 300"));
+        }
+
+        self.memos.push(String::from(memo));
+
+        Ok(self)
+    }
+
     /// @param am: amount to pay
     /// @param kp: owner's XfrKeyPair
     pub fn add_fee_relative_auto(
@@ -312,6 +324,7 @@ impl TransactionBuilder {
     pub fn new(seq_id: u64) -> Self {
         TransactionBuilder {
             transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id),
+            memos: vec![],
         }
     }
 
@@ -554,12 +567,76 @@ impl TransactionBuilder {
     pub fn add_transfer_operation(
         mut self,
         op: String,
+        memo: &str,
     ) -> Result<TransactionBuilder, JsValue> {
         let op = serde_json::from_str::<Operation>(&op)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
+        self.memos.push(String::from(memo));
+
         Ok(self)
+    }
+
+    /// Serialize transaction object to string.
+    pub fn serialize(mut self) -> Result<String, JsValue> {
+        let tx = self.transaction_builder.get_transaction();
+        let mut tx2 = Transaction2 {
+            body: TransactionBody2::default(),
+            signatures: tx.signatures.clone(),
+            pubkey_sign_map: tx.pubkey_sign_map.clone(),
+        };
+
+        if self.memos.len() > 0 {
+            let mut index: usize = 0;
+            let mut ops: Vec<Operation2> = vec![];
+
+            for transfer_op in &tx.body.operations {
+                if let Operation::TransferAsset(op) = transfer_op {
+                    let mut outputs2: Vec<TxOutput2> = vec![];
+                    for out in &op.body.outputs {
+                        outputs2.push(TxOutput2 {
+                            id: out.id,
+                            record: out.record.clone(),
+                            lien: out.lien.clone(),
+                            memo: Some(self.memos[index].clone()),
+                        });
+                    }
+
+                    let transfer_asset_body2 = TransferAssetBody2 {
+                        inputs: op.body.inputs.clone(),
+                        policies: op.body.policies.clone(),
+                        outputs: outputs2,
+                        lien_assignments: op.body.lien_assignments.clone(),
+                        transfer: op.body.transfer.clone(),
+                        transfer_type: op.body.transfer_type,
+                    };
+
+                    let transfer_operation2 = TransferAsset2 {
+                        body: transfer_asset_body2,
+                        body_signatures: op.body_signatures.clone(),
+                    };
+                    ops.push(Operation2::TransferAsset(transfer_operation2));
+                    index += 1;
+                } else {
+                    ops.push(transfer_op.clone().to_operation2());
+                }
+            }
+
+            let tx_body2 = TransactionBody2 {
+                no_replay_token: tx.body.no_replay_token.clone(),
+                operations: ops,
+                credentials: tx.body.credentials.clone(),
+                policy_options: tx.body.policy_options.clone(),
+                memos: tx.body.memos.clone(),
+            };
+
+            tx2.body = tx_body2;
+        }
+
+        let s = serde_json::to_string(&tx2).map_err(error_to_jsvalue)?;
+
+        Ok(s)
     }
 
     /// Do nothing, compatible with frontend
@@ -1290,6 +1367,10 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use ledger::data_model::{
+    CredentialProof, Memo, NoReplayToken, Operation2, Transaction2, TransactionBody2,
+    TransferAsset2, TransferAssetBody, TransferAssetBody2, TxOutput2,
+};
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
