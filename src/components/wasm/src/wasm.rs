@@ -573,9 +573,8 @@ impl TransactionBuilder {
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
-        self.memos.push(String::from(memo));
 
-        Ok(self)
+        Ok(self.add_output_memo(memo)?)
     }
 
     /// Serialize transaction object to string.
