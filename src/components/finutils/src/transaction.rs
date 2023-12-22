@@ -409,9 +409,10 @@ impl From<BuildTransactionBody> for TransactionBody {
 impl BuildTransactionBody {
     #[inline(always)]
     fn from_token(no_replay_token: NoReplayToken) -> Self {
-        let mut result = Self::default();
-        result.no_replay_token = no_replay_token;
-        result
+        BuildTransactionBody {
+            no_replay_token,
+            ..Default::default()
+        }
     }
 }
 

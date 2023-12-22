@@ -382,7 +382,7 @@ fn run() -> Result<()> {
         } else {
             common::transfer_asset_batch(
                 f.as_deref(),
-                &t.iter().map(|v| (v.clone(), None)).collect::<Vec<_>>(),
+                &t.iter().map(|v| (*v, None)).collect::<Vec<_>>(),
                 None,
                 am.unwrap(),
                 m.is_present("confidential-amount"),

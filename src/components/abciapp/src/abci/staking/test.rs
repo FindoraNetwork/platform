@@ -144,7 +144,7 @@ fn gen_transfer_tx(
 
     for output in outputs {
         trans_builder
-            .add_output(&output, None, None, None)
+            .add_output(&output, None, None, None, None)
             .c(d!())?;
     }
 
@@ -159,5 +159,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction())
+    Ok(tx_builder.take_transaction().into())
 }

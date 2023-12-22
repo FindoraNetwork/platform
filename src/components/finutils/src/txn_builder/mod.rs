@@ -1253,7 +1253,7 @@ mod tests {
                 20,
             )
             .c(d!())?
-            .add_output(&output_template, None, None, None)
+            .add_output(&output_template, None, None, None, None)
             .c(d!())?
             .balance(None);
 
@@ -1276,7 +1276,7 @@ mod tests {
                 20,
             )
             .c(d!())?
-            .add_output(&output_template, None, None, None)
+            .add_output(&output_template, None, None, None, None)
             .c(d!())?
             .balance(None)
             .c(d!())?
@@ -1284,7 +1284,7 @@ mod tests {
             .c(d!())?
             .sign(&alice)
             .c(d!())?
-            .add_output(&output_template, None, None, None);
+            .add_output(&output_template, None, None, None, None);
         assert!(res.is_err());
 
         // Not all signatures present
@@ -1304,7 +1304,7 @@ mod tests {
                 20,
             )
             .c(d!())?
-            .add_output(&output_template, None, None, None)
+            .add_output(&output_template, None, None, None, None)
             .c(d!())?
             .balance(None)
             .c(d!())?
@@ -1368,17 +1368,17 @@ mod tests {
                 20,
             )
             .c(d!())?
-            .add_output(&output_bob5_code1_template, None, None, None)
+            .add_output(&output_bob5_code1_template, None, None, None, None)
             .c(d!())?
-            .add_output(&output_charlie13_code1_template, None, None, None)
+            .add_output(&output_charlie13_code1_template, None, None, None, None)
             .c(d!())?
-            .add_output(&output_ben2_code1_template, None, None, None)
+            .add_output(&output_ben2_code1_template, None, None, None, None)
             .c(d!())?
-            .add_output(&output_bob5_code2_template, None, None, None)
+            .add_output(&output_bob5_code2_template, None, None, None, None)
             .c(d!())?
-            .add_output(&output_charlie13_code2_template, None, None, None)
+            .add_output(&output_charlie13_code2_template, None, None, None, None)
             .c(d!())?
-            .add_output(&output_ben2_code2_template, None, None, None)
+            .add_output(&output_ben2_code2_template, None, None, None, None)
             .c(d!())?
             .balance(None)
             .c(d!())?
@@ -1438,7 +1438,7 @@ mod tests {
                         100 * TX_FEE_MIN,
                     )
                     .unwrap()
-                    .add_output(&output_bob_fra_template, None, None, None)
+                    .add_output(&output_bob_fra_template, None, None, None, None)
                     .unwrap()
                     .balance(None)
                     .unwrap()
@@ -1453,11 +1453,11 @@ mod tests {
 
         let mut tx2 = TransactionBuilder::from_seq_id(1);
         tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk()))
-            .add_fee_relative_auto(&fra_owner_kp)
+            .add_fee_relative_auto(&fra_owner_kp, None)
             .unwrap();
         assert!(tx2.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
+        let effect = TxnEffect::compute_effect(tx2.into_transaction().into()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
@@ -1483,10 +1483,10 @@ mod tests {
         let mut tx3 = TransactionBuilder::from_seq_id(2);
         pnk!(tx3
             .add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
-            .add_fee(fi));
+            .add_fee(fi, None));
         assert!(tx3.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
+        let effect = TxnEffect::compute_effect(tx3.into_transaction().into()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
@@ -1512,11 +1512,11 @@ mod tests {
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);
         tx4.add_operation(transfer_to_bob!(txo_sid[1], bob_kp.get_pk()))
-            .add_fee(fi)
+            .add_fee(fi, None)
             .unwrap();
         assert!(tx4.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx4.into_transaction()).unwrap();
+        let effect = TxnEffect::compute_effect(tx4.into_transaction().into()).unwrap();
         let mut block = ledger.start_block().unwrap();
         ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
