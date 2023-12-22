@@ -6,10 +6,6 @@
 //! This module is the library part of FN.
 //!
 
-use sha3::{Digest, Keccak256};
-use std::str::FromStr;
-use zei::serialization::ZeiFromToBytes;
-
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
 
@@ -20,14 +16,18 @@ pub mod evm;
 pub mod utils;
 
 use {
-    self::utils::{get_evm_staking_address, get_validator_memo_and_rate},
-    crate::api::DelegationInfo,
-    crate::common::utils::mapping_address,
+    crate::{
+        api::DelegationInfo,
+        common::utils::{
+            get_evm_staking_address, get_validator_memo_and_rate, mapping_address,
+        },
+        transaction::BuildTransaction,
+    },
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            gen_random_keypair, AssetRules, AssetTypeCode, AssetTypePrefix, Transaction,
+            gen_random_keypair, AssetRules, AssetTypeCode, AssetTypePrefix,
             BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
@@ -37,10 +37,13 @@ use {
         },
     },
     ruc::*,
+    sha3::{Digest, Keccak256},
+    std::str::FromStr,
     std::{env, fs},
     tendermint::PrivateKey,
     utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
     web3::types::H160,
+    zei::serialization::ZeiFromToBytes,
     zei::{
         setup::PublicParams,
         xfr::{
@@ -156,7 +159,7 @@ pub fn stake(
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, am, None)],
         None,
         false,
         false,
@@ -221,7 +224,7 @@ pub fn stake_append(
     builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, am, None)],
         None,
         false,
         false,
@@ -423,6 +426,7 @@ pub fn setup(
 pub fn transfer_asset(
     owner_sk: Option<&str>,
     target_addr: XfrPublicKey,
+    memo: Option<String>,
     token_code: Option<AssetTypeCode>,
     am: &str,
     confidential_am: bool,
@@ -430,7 +434,7 @@ pub fn transfer_asset(
 ) -> Result<()> {
     transfer_asset_batch(
         owner_sk,
-        &[target_addr],
+        &[(target_addr, memo)],
         token_code,
         am,
         confidential_am,
@@ -443,6 +447,7 @@ pub fn transfer_asset(
 pub fn transfer_asset_x(
     kp: &XfrKeyPair,
     target_addr: XfrPublicKey,
+    memo: Option<String>,
     token_code: Option<AssetTypeCode>,
     am: u64,
     confidential_am: bool,
@@ -450,7 +455,7 @@ pub fn transfer_asset_x(
 ) -> Result<()> {
     transfer_asset_batch_x(
         kp,
-        &[target_addr],
+        &[(target_addr, memo)],
         token_code,
         am,
         confidential_am,
@@ -462,7 +467,7 @@ pub fn transfer_asset_x(
 #[allow(missing_docs)]
 pub fn transfer_asset_batch(
     owner_sk: Option<&str>,
-    target_addr: &[XfrPublicKey],
+    target_addr: &[(XfrPublicKey, Option<String>)],
     token_code: Option<AssetTypeCode>,
     am: &str,
     confidential_am: bool,
@@ -485,7 +490,7 @@ pub fn transfer_asset_batch(
 #[allow(missing_docs)]
 pub fn transfer_asset_batch_x(
     kp: &XfrKeyPair,
-    target_addr: &[XfrPublicKey],
+    target_addr: &[(XfrPublicKey, Option<String>)],
     token_code: Option<AssetTypeCode>,
     am: u64,
     confidential_am: bool,
@@ -493,7 +498,10 @@ pub fn transfer_asset_batch_x(
 ) -> Result<()> {
     utils::transfer_batch(
         kp,
-        target_addr.iter().map(|addr| (addr, am)).collect(),
+        target_addr
+            .iter()
+            .map(|(addr, memo)| (addr, am, memo.clone()))
+            .collect(),
         token_code,
         confidential_am,
         confidential_ty,
@@ -677,7 +685,7 @@ pub fn show_delegations(sk_str: Option<&str>) -> Result<()> {
 fn gen_undelegate_tx(
     owner_kp: &XfrKeyPair,
     param: Option<(u64, &str)>,
-) -> Result<Transaction> {
+) -> Result<BuildTransaction> {
     let mut builder = utils::new_tx_builder().c(d!())?;
     utils::gen_fee_op(owner_kp).c(d!()).map(|op| {
         builder.add_operation(op);
@@ -706,12 +714,12 @@ fn gen_delegate_tx(
     owner_kp: &XfrKeyPair,
     amount: u64,
     validator: &str,
-) -> Result<Transaction> {
+) -> Result<BuildTransaction> {
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     utils::gen_transfer_op(
         owner_kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount, None)],
         None,
         false,
         false,

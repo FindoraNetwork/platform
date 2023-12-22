@@ -129,7 +129,10 @@ pub fn run_all() -> Result<()> {
         .map(|v| &v.keypair)
         .filter(|kp| kp.get_pk() != v0_kp.get_pk())
         .collect::<Vec<_>>();
-    let targets = target_kps.iter().map(|kp| kp.get_pk()).collect::<Vec<_>>();
+    let targets = target_kps
+        .iter()
+        .map(|kp| (kp.get_pk(), None))
+        .collect::<Vec<_>>();
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, true, true).c(d!())?;
     sleep_n_block!(1.2);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, false, true).c(d!())?;
@@ -257,7 +260,7 @@ pub fn run_all() -> Result<()> {
                 balances += n;
                 transfer_asset_batch_x(
                     &v.keypair,
-                    &[v_set[0].pubkey],
+                    &[(v_set[0].pubkey, None)],
                     None,
                     n,
                     false,
@@ -283,7 +286,10 @@ pub fn run_all() -> Result<()> {
     // 17.
     println!(">>> Transfer to 10 random addresses ...");
     let rkps = (0..10).map(|_| gen_random_keypair()).collect::<Vec<_>>();
-    let targets = rkps.iter().map(|kp| kp.get_pk()).collect::<Vec<_>>();
+    let targets = rkps
+        .iter()
+        .map(|kp| (kp.get_pk(), None))
+        .collect::<Vec<_>>();
     transfer_asset_batch_x(
         &v_set[0].keypair,
         &targets,

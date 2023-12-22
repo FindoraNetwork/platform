@@ -5,7 +5,7 @@
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 
-mod __trash__;
+pub mod __trash__;
 mod effects;
 mod test;
 

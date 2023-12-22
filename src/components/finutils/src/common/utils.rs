@@ -2,20 +2,18 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use std::ops::Div;
-
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
         common::get_serv_addr,
+        transaction::{BuildOperation, BuildTransaction},
         txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
-            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AssetType, AssetTypeCode, DefineAsset, StateCommitmentData, TransferType,
+            TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             init::get_inital_validators, StakerMemo, TendermintAddrRef, FRA_TOTAL_AMOUNT,
@@ -28,6 +26,7 @@ use {
     sha3::Keccak256,
     std::{
         collections::{BTreeMap, HashMap},
+        ops::Div,
         str::FromStr,
     },
     tendermint::{PrivateKey, PublicKey},
@@ -57,7 +56,7 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn send_tx(tx: &Transaction) -> Result<()> {
+pub fn send_tx(tx: &BuildTransaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
     let tx_bytes = serde_json::to_vec(tx).c(d!())?;
 
@@ -96,6 +95,7 @@ pub fn transfer(
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
+    memo: Option<String>,
 ) -> Result<()> {
     // FRA asset is the default case
     if token_code.is_none() && FRA_TOTAL_AMOUNT < am {
@@ -105,7 +105,7 @@ pub fn transfer(
     }
     transfer_batch(
         owner_kp,
-        vec![(target_pk, am)],
+        vec![(target_pk, am, memo)],
         token_code,
         confidential_am,
         confidential_ty,
@@ -117,7 +117,7 @@ pub fn transfer(
 #[allow(missing_docs)]
 pub fn transfer_batch(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(&XfrPublicKey, u64, Option<String>)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
@@ -145,12 +145,12 @@ pub fn transfer_batch(
 #[inline(always)]
 pub fn gen_transfer_op(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(&XfrPublicKey, u64, Option<String>)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<Operation> {
+) -> Result<BuildOperation> {
     gen_transfer_op_x(
         owner_kp,
         target_list,
@@ -166,13 +166,13 @@ pub fn gen_transfer_op(
 #[allow(missing_docs)]
 pub fn gen_transfer_op_x(
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(&XfrPublicKey, u64, Option<String>)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<Operation> {
+) -> Result<BuildOperation> {
     gen_transfer_op_xx(
         None,
         owner_kp,
@@ -191,23 +191,23 @@ pub fn gen_transfer_op_x(
 pub fn gen_transfer_op_xx(
     rpc_endpoint: Option<&str>,
     owner_kp: &XfrKeyPair,
-    mut target_list: Vec<(&XfrPublicKey, u64)>,
+    mut target_list: Vec<(&XfrPublicKey, u64, Option<String>)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<Operation> {
+) -> Result<BuildOperation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN));
+        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN, None));
         op_fee += TX_FEE_MIN;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
 
     let mut trans_builder = TransferOperationBuilder::new();
 
-    let mut am = target_list.iter().map(|(_, am)| *am).sum();
+    let mut am = target_list.iter().map(|(_, am, _)| *am).sum();
     if asset_type != ASSET_TYPE_FRA {
         am -= op_fee;
     } else {
@@ -265,6 +265,7 @@ pub fn gen_transfer_op_xx(
                 None,
                 None,
                 None,
+                None,
             )
             .c(d!())?;
     }
@@ -276,18 +277,21 @@ pub fn gen_transfer_op_xx(
         _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     };
 
-    let outputs = target_list.into_iter().map(|(pk, n)| {
-        AssetRecordTemplate::with_no_asset_tracing(
-            n,
-            token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA),
-            art,
-            *pk,
+    let outputs = target_list.into_iter().map(|(pk, n, memo)| {
+        (
+            AssetRecordTemplate::with_no_asset_tracing(
+                n,
+                token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA),
+                art,
+                *pk,
+            ),
+            memo,
         )
     });
 
-    for output in outputs {
+    for (output, memo) in outputs {
         trans_builder
-            .add_output(&output, None, None, None)
+            .add_output(&output, None, None, None, memo)
             .c(d!())?;
     }
 
@@ -305,7 +309,7 @@ pub fn gen_transfer_op_xx(
 /// for scenes that need to pay a standalone fee without other transfers
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
+pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<BuildOperation> {
     gen_transfer_op(owner_kp, vec![], None, false, false, None).c(d!())
 }
 

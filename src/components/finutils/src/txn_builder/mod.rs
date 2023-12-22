@@ -5,6 +5,13 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
+use crate::transaction::{
+    BuildOperation, BuildTransaction, BuildTransferAsset, BuildTransferAssetBody,
+};
+
+//#[cfg(not(target_arch = "wasm32"))]
+use zei::serialization::ZeiFromToBytes;
+
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
@@ -15,10 +22,9 @@ use {
         data_model::{
             AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
             IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
-            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
-            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            TX_FEE_MIN,
+            IssuerPublicKey, Memo, NoReplayToken, TransactionBody, TransferAssetBody,
+            TransferType, TxOutput, TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -50,7 +56,6 @@ use {
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
         },
-        serialization::ZeiFromToBytes,
         setup::PublicParams,
         xfr::{
             asset_record::{
@@ -115,7 +120,7 @@ impl FeeInputs {
 /// An simple builder for findora transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBuilder {
-    txn: Transaction,
+    txn: BuildTransaction,
     outputs: u64,
     #[allow(missing_docs)]
     pub no_replay_token: NoReplayToken,
@@ -123,12 +128,12 @@ pub struct TransactionBuilder {
 
 impl TransactionBuilder {
     /// Convert builder to it's inner transaction
-    pub fn into_transaction(self) -> Transaction {
+    pub fn into_transaction(self) -> BuildTransaction {
         self.txn
     }
 
     /// Get reference of it's inner transaction
-    pub fn get_transaction(&self) -> &Transaction {
+    pub fn get_transaction(&self) -> &BuildTransaction {
         &self.txn
     }
 
@@ -152,10 +157,10 @@ impl TransactionBuilder {
             .operations
             .iter()
             .flat_map(|new| match new {
-                Operation::TransferAsset(d) => {
+                BuildOperation::TransferAsset(d) => {
                     seek!(d)
                 }
-                Operation::IssueAsset(d) => d
+                BuildOperation::IssueAsset(d) => d
                     .body
                     .records
                     .iter()
@@ -172,6 +177,7 @@ impl TransactionBuilder {
     pub fn add_fee_relative_auto(
         &mut self,
         kp: &XfrKeyPair,
+        memo: Option<String>,
     ) -> Result<&mut TransactionBuilder> {
         let mut opb = TransferOperationBuilder::default();
         let outputs = self.get_relative_outputs();
@@ -202,6 +208,7 @@ impl TransactionBuilder {
             None,
             None,
             None,
+            memo,
         )
         .c(d!())
         .and_then(|o| o.balance(None).c(d!()))
@@ -213,7 +220,11 @@ impl TransactionBuilder {
 
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+    pub fn add_fee(
+        &mut self,
+        inputs: FeeInputs,
+        memo: Option<String>,
+    ) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
@@ -239,6 +250,7 @@ impl TransactionBuilder {
             None,
             None,
             None,
+            memo,
         )
         .c(d!())
         .and_then(|o| o.balance(None).c(d!()))
@@ -279,7 +291,7 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
         TransactionBuilder {
-            txn: Transaction::from_seq_id(seq_id),
+            txn: BuildTransaction::from_seq_id(seq_id),
             outputs: 0,
             no_replay_token,
         }
@@ -329,12 +341,12 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn transaction(&self) -> &Transaction {
+    pub fn transaction(&self) -> &BuildTransaction {
         &self.txn
     }
 
     #[allow(missing_docs)]
-    pub fn take_transaction(self) -> Transaction {
+    pub fn take_transaction(self) -> BuildTransaction {
         self.txn
     }
 
@@ -357,7 +369,7 @@ impl TransactionBuilder {
             None => AssetTypeCode::gen_random(),
         };
         let iss_keypair = IssuerKeyPair { keypair: &key_pair };
-        self.txn.add_operation(Operation::DefineAsset(
+        self.txn.add_operation(BuildOperation::DefineAsset(
             DefineAsset::new(
                 DefineAssetBody::new(
                     &token_code,
@@ -387,7 +399,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         let iss_keypair = IssuerKeyPair { keypair: &key_pair };
 
-        self.txn.add_operation(Operation::IssueAsset(
+        self.txn.add_operation(BuildOperation::IssueAsset(
             IssueAsset::new(
                 IssueAssetBody::new(token_code, seq_num, &records_and_memos).c(d!())?,
                 &iss_keypair,
@@ -407,6 +419,7 @@ impl TransactionBuilder {
         input_tracing_policies: Vec<Option<TracingPolicy>>,
         _input_identity_commitments: Vec<Option<ACCommitment>>,
         output_records: &[AssetRecord],
+        output_memos: &[Option<String>],
         _output_identity_commitments: Vec<Option<ACCommitment>>,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
@@ -428,12 +441,13 @@ impl TransactionBuilder {
             );
         }
 
-        let mut xfr = TransferAsset::new(
-            TransferAssetBody::new(
+        let mut xfr = BuildTransferAsset::new(
+            BuildTransferAssetBody::new(
                 &mut prng,
                 input_sids,
                 &input_asset_records[..],
                 output_records,
+                output_memos,
                 None,
                 vec![],
                 TransferType::Standard,
@@ -443,7 +457,7 @@ impl TransactionBuilder {
         .c(d!())?;
         xfr.sign(&keys);
 
-        self.txn.add_operation(Operation::TransferAsset(xfr));
+        self.txn.add_operation(BuildOperation::TransferAsset(xfr));
         Ok(self)
     }
 
@@ -464,7 +478,7 @@ impl TransactionBuilder {
             auth_key_pair,
         );
         memo_update.pubkey = auth_key_pair.get_pk();
-        let op = Operation::UpdateMemo(memo_update);
+        let op = BuildOperation::UpdateMemo(memo_update);
         self.txn.add_operation(op);
         self
     }
@@ -485,7 +499,7 @@ impl TransactionBuilder {
             None,
             self.txn.body.no_replay_token,
         );
-        self.add_operation(Operation::Delegation(op))
+        self.add_operation(BuildOperation::Delegation(op))
     }
 
     /// Add a operation to updating staker memo and commission_rate
@@ -514,7 +528,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         );
 
-        Ok(self.add_operation(Operation::UpdateStaker(op)))
+        Ok(self.add_operation(BuildOperation::UpdateStaker(op)))
     }
 
     /// Add a staking operation to add a tendermint node as a validator
@@ -551,7 +565,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         );
 
-        Ok(self.add_operation(Operation::Delegation(op)))
+        Ok(self.add_operation(BuildOperation::Delegation(op)))
     }
 
     /// Add a operation to reduce delegation amount of a findora account.
@@ -563,7 +577,7 @@ impl TransactionBuilder {
         pu: Option<PartialUnDelegation>,
     ) -> &mut Self {
         let op = UnDelegationOps::new(keypair, self.txn.body.no_replay_token, pu);
-        self.add_operation(Operation::UnDelegation(Box::new(op)))
+        self.add_operation(BuildOperation::UnDelegation(Box::new(op)))
     }
 
     /// Add a operation to claim all the rewards
@@ -574,7 +588,7 @@ impl TransactionBuilder {
         am: Option<u64>,
     ) -> &mut Self {
         let op = ClaimOps::new(td_addr, keypair, am, self.txn.body.no_replay_token);
-        self.add_operation(Operation::Claim(op))
+        self.add_operation(BuildOperation::Claim(op))
     }
 
     #[allow(missing_docs)]
@@ -585,7 +599,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         FraDistributionOps::new(kps, alloc_table, self.txn.body.no_replay_token)
             .c(d!())
-            .map(move |op| self.add_operation(Operation::FraDistribution(op)))
+            .map(move |op| self.add_operation(BuildOperation::FraDistribution(op)))
     }
 
     #[allow(missing_docs)]
@@ -604,7 +618,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         )
         .c(d!())
-        .map(move |op| self.add_operation(Operation::Governance(op)))
+        .map(move |op| self.add_operation(BuildOperation::Governance(op)))
     }
 
     /// Add a operation update the validator set at specified block height.
@@ -616,7 +630,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
             .c(d!())
-            .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
+            .map(move |op| self.add_operation(BuildOperation::UpdateValidator(op)))
     }
 
     /// Add an operation to replace the staker of validator.
@@ -634,7 +648,7 @@ impl TransactionBuilder {
             td_addr,
             self.txn.body.no_replay_token,
         );
-        self.add_operation(Operation::ReplaceStaker(ops));
+        self.add_operation(BuildOperation::ReplaceStaker(ops));
         Ok(self)
     }
 
@@ -647,7 +661,7 @@ impl TransactionBuilder {
         asset: Option<AssetTypeCode>,
         lowlevel_data: Option<Vec<u8>>,
     ) -> Result<&mut Self> {
-        self.add_operation(Operation::ConvertAccount(ConvertAccount {
+        self.add_operation(BuildOperation::ConvertAccount(ConvertAccount {
             signer: kp.get_pk(),
             nonce: self.txn.body.no_replay_token,
             receiver: addr,
@@ -659,7 +673,7 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn add_operation(&mut self, op: Operation) -> &mut Self {
+    pub fn add_operation(&mut self, op: BuildOperation) -> &mut Self {
         self.txn.add_operation(op);
         self
     }
@@ -784,9 +798,11 @@ pub struct TransferOperationBuilder {
     inputs_tracing_policies: Vec<TracingPolicies>,
     input_identity_commitments: Vec<Option<ACCommitment>>,
     output_records: Vec<AssetRecord>,
+    output_memos: Vec<Option<String>>,
+
     outputs_tracing_policies: Vec<TracingPolicies>,
     output_identity_commitments: Vec<Option<ACCommitment>>,
-    transfer: Option<TransferAsset>,
+    transfer: Option<BuildTransferAsset>,
     transfer_type: TransferType,
     auto_refund: bool,
 }
@@ -845,6 +861,7 @@ impl TransferOperationBuilder {
         tracing_policies: Option<TracingPolicies>,
         identity_commitment: Option<ACCommitment>,
         credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
+        output_memo: Option<String>,
     ) -> Result<&mut Self> {
         let prng = &mut ChaChaRng::from_entropy();
         if self.transfer.is_some() {
@@ -869,6 +886,7 @@ impl TransferOperationBuilder {
                 .c(d!())?
         };
         self.output_records.push(ar);
+        self.output_memos.push(output_memo);
         self.outputs_tracing_policies.push(policies);
         self.output_identity_commitments.push(identity_commitment);
         Ok(self)
@@ -881,6 +899,7 @@ impl TransferOperationBuilder {
         credential_record: Option<(&CredUserSecretKey, &Credential, &ACCommitmentKey)>,
         prng: &mut R,
         blinds: &mut ((Scalar, Scalar), Scalar),
+        output_memo: Option<String>,
     ) -> Result<&mut Self> {
         if self.transfer.is_some() {
             return Err(eg!(
@@ -936,6 +955,7 @@ impl TransferOperationBuilder {
         blinds.0 = amount_blinds;
         blinds.1 = type_blind;
         self.output_records.push(ar);
+        self.output_memos.push(output_memo);
         self.outputs_tracing_policies
             .push(asset_record_template.asset_tracing_policies.clone());
         self.output_identity_commitments.push(None);
@@ -975,6 +995,7 @@ impl TransferOperationBuilder {
 
         let spend_total: u64 = self.spend_amounts.iter().sum();
         let mut partially_consumed_inputs = Vec::new();
+        let mut output_memos = Vec::new();
 
         for (idx, ((spend_amount, ar), policies)) in self
             .spend_amounts
@@ -1006,6 +1027,7 @@ impl TransferOperationBuilder {
                     )
                     .c(d!())?;
                     partially_consumed_inputs.push(ar);
+                    output_memos.push(None);
                     self.outputs_tracing_policies.push(policies.clone());
                     self.output_identity_commitments.push(None);
 
@@ -1024,6 +1046,7 @@ impl TransferOperationBuilder {
             return Err(eg!(format!("{spend_total} != {output_total}")));
         }
         self.output_records.append(&mut partially_consumed_inputs);
+        self.output_memos.append(&mut output_memos);
 
         // for: repeated/idempotent balance
         amt_cache.into_iter().for_each(|(idx, am)| {
@@ -1051,17 +1074,18 @@ impl TransferOperationBuilder {
             self.outputs_tracing_policies.clone(),
             vec![None; num_outputs],
         );
-        let body = TransferAssetBody::new(
+        let body = BuildTransferAssetBody::new(
             &mut prng,
             self.input_sids.clone(),
             &self.input_records,
             &self.output_records,
+            &self.output_memos,
             Some(xfr_policies),
             vec![],
             transfer_type,
         )
         .c(d!())?;
-        self.transfer = Some(TransferAsset::new(body).c(d!())?);
+        self.transfer = Some(BuildTransferAsset::new(body).c(d!())?);
         Ok(self)
     }
 
@@ -1112,11 +1136,13 @@ impl TransferOperationBuilder {
     }
 
     /// Return the transaction operation
-    pub fn transaction(&self) -> Result<Operation> {
+    pub fn transaction(&self) -> Result<BuildOperation> {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        Ok(Operation::TransferAsset(self.transfer.clone().c(d!())?))
+        Ok(BuildOperation::TransferAsset(
+            self.transfer.clone().c(d!())?,
+        ))
     }
 
     /// Checks to see whether all necessary signatures are present and valid
@@ -1128,7 +1154,7 @@ impl TransferOperationBuilder {
         let trn = self.transfer.as_ref().c(d!())?;
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
-            if !sig.verify(&trn.body) {
+            if !sig.verify(&trn.body.clone().into()) {
                 return Err(eg!(("Invalid signature")));
             }
             sig_keys.insert(sig.address.key.zei_to_bytes());

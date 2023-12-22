@@ -127,7 +127,7 @@ fn run() -> Result<()> {
             let amount = amount.unwrap().parse::<u64>().c(d!())?;
             delegate::gen_tx(user.unwrap(), amount, validator.unwrap())
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("undelegate") {
         let user = m.value_of("user");
@@ -143,7 +143,7 @@ fn run() -> Result<()> {
             let amount = amount.and_then(|am| am.parse::<u64>().ok());
             undelegate::gen_tx(user.unwrap(), amount, validator)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("claim") {
         let user = m.value_of("user");
@@ -158,7 +158,7 @@ fn run() -> Result<()> {
             };
             claim::gen_tx(user.unwrap(), amount)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
         let from = m.value_of("from-user");
@@ -173,8 +173,10 @@ fn run() -> Result<()> {
                     .c(d!())
                     .map(|kp| kp.get_pk())
                     .or_else(|e| wallet::public_key_from_base64(receiver).c(d!(e)))?;
-                common::utils::transfer(owner_kp, &target_pk, am, None, false, false)
-                    .c(d!())?;
+                common::utils::transfer(
+                    owner_kp, &target_pk, am, None, false, false, None,
+                )
+                .c(d!())?;
             }
             _ => {
                 println!("{}", m.usage());
@@ -199,12 +201,14 @@ fn run() -> Result<()> {
 }
 
 mod issue {
+
     use {
         super::*,
+        finutils::transaction::BuildOperation,
         ledger::{
             data_model::{
-                AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Operation,
-                TxOutput, ASSET_TYPE_FRA,
+                AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, TxOutput,
+                ASSET_TYPE_FRA,
             },
             staking::FRA_PRE_ISSUE_AMOUNT,
         },
@@ -220,7 +224,7 @@ mod issue {
     pub fn issue() -> Result<()> {
         gen_issue_tx()
             .c(d!())
-            .and_then(|tx| common::utils::send_tx(&tx).c(d!()))
+            .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))
     }
 
     fn gen_issue_tx() -> Result<Transaction> {
@@ -265,8 +269,8 @@ mod issue {
         let asset_issuance_operation =
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
-        builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
-        Ok(builder.take_transaction())
+        builder.add_operation(BuildOperation::IssueAsset(asset_issuance_operation));
+        Ok(builder.take_transaction().into())
     }
 }
 
@@ -291,7 +295,7 @@ mod delegate {
 
         common::utils::gen_transfer_op(
             owner_kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount, None)],
             None,
             false,
             false,
@@ -305,7 +309,7 @@ mod delegate {
 
         let mut tx = builder.take_transaction();
         tx.sign(owner_kp);
-        Ok(tx)
+        Ok(tx.into())
     }
 }
 
@@ -341,7 +345,7 @@ mod undelegate {
             }
         })?;
 
-        Ok(builder.take_transaction())
+        Ok(builder.take_transaction().into())
     }
 }
 
@@ -358,7 +362,7 @@ mod claim {
             builder.add_operation_claim(None, owner_kp, amount);
         })?;
 
-        Ok(builder.take_transaction())
+        Ok(builder.take_transaction().into())
     }
 }
 

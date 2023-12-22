@@ -258,9 +258,10 @@ impl TransactionBuilder {
     pub fn add_fee_relative_auto(
         mut self,
         kp: XfrKeyPair,
+        memo: Option<String>,
     ) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
-            .add_fee_relative_auto(&kp)
+            .add_fee_relative_auto(&kp, memo)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -292,9 +293,13 @@ impl TransactionBuilder {
 
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee(mut self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+    pub fn add_fee(
+        mut self,
+        inputs: FeeInputs,
+        memo: Option<String>,
+    ) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
-            .add_fee(inputs.into())
+            .add_fee(inputs.into(), memo)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -555,7 +560,7 @@ impl TransactionBuilder {
         mut self,
         op: String,
     ) -> Result<TransactionBuilder, JsValue> {
-        let op = serde_json::from_str::<Operation>(&op)
+        let op = serde_json::from_str::<BuildOperation>(&op)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
@@ -751,6 +756,7 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
+        memo: Option<String>,
     ) -> Result<TransferOperationBuilder, JsValue> {
         let code = AssetTypeCode::new_from_base64(&code)
             .c(d!())
@@ -780,6 +786,7 @@ impl TransferOperationBuilder {
                 tracing_policies.map(|policies| policies.get_policies_ref().clone()),
                 None,
                 None,
+                memo,
             )
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -868,6 +875,7 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
+        memo: Option<String>,
     ) -> Result<TransferOperationBuilder, JsValue> {
         self.add_output(
             amount,
@@ -876,6 +884,7 @@ impl TransferOperationBuilder {
             code,
             conf_amount,
             conf_type,
+            memo,
         )
     }
 
@@ -894,8 +903,9 @@ impl TransferOperationBuilder {
         code: String,
         conf_amount: bool,
         conf_type: bool,
+        memo: Option<String>,
     ) -> Result<TransferOperationBuilder, JsValue> {
-        self.add_output(amount, recipient, None, code, conf_amount, conf_type)
+        self.add_output(amount, recipient, None, code, conf_amount, conf_type, memo)
     }
 
     /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
@@ -1290,6 +1300,7 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use finutils::transaction::BuildOperation;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;

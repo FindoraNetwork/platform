@@ -30,7 +30,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         println!(">>> Block interval: {interval} seconds");
 
         println!(">>> Define and issue FRA ...");
-        common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
+        common::utils::send_tx(&fra_gen_initial_tx(&root_kp).into()).c(d!())?;
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2, interval);
@@ -44,7 +44,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
             .values()
             .map(|u| &u.pubkey)
             .chain(VALIDATOR_LIST.values().map(|v| &v.pubkey))
-            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 2_000))
+            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 2_000, None))
             .collect::<Vec<_>>();
 
         // Wallet Address: fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5
@@ -56,7 +56,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         let bank = pnk!(wallet::public_key_from_base64(
             "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ="
         ));
-        target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98));
+        target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98, None));
 
         println!(">>> Transfer FRAs to validators ...");
         common::utils::transfer_batch(&root_kp, target_list, None, true, true)
@@ -73,7 +73,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         for (i, v) in VALIDATOR_LIST.values().enumerate() {
             delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
         }
 
         println!(">>> Wait 5 block ...");
@@ -102,7 +102,7 @@ fn re_distribution() -> Result<()> {
             if TX_FEE_MIN < n {
                 transfer_asset_batch_x(
                     &v.keypair,
-                    &[v_set[0].pubkey],
+                    &[(v_set[0].pubkey, None)],
                     None,
                     n - TX_FEE_MIN,
                     true,
@@ -128,7 +128,11 @@ fn re_distribution() -> Result<()> {
     let expected = (400_0000 + 1_0000 * (v_set.len() as u64 - 1) + 1) * FRA;
     transfer_asset_batch_x(
         &v_set[0].keypair,
-        &v_set.iter().skip(1).map(|v| v.pubkey).collect::<Vec<_>>(),
+        &v_set
+            .iter()
+            .skip(1)
+            .map(|v| (v.pubkey, None))
+            .collect::<Vec<_>>(),
         None,
         expected,
         true,
