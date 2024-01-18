@@ -363,36 +363,7 @@ impl EthApi for EthApiImpl {
                 .read()
                 .create_context_at(block.header.number.as_u64())
                 .ok_or_else(|| internal_err("failed to create context"))?;
-            {
-                let (basedir, opts) = {
-                    let app = account_base_app.read();
-                    (app.basedir.clone(), app.opts.clone())
-                };
 
-                // Creates a fresh chain state db and history db
-                let fdb_path = basedir.join(CHAIN_STATE_PATH);
-                let fdb = FinDB::open_read_only(fdb_path.as_path())
-                    .map_err(|e| internal_err(format!("failed to get block: {}", e)))?;
-
-                ctx.state = Arc::new(RwLock::new(State::new(
-                    Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, true))),
-                    true,
-                )));
-
-                let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
-                let rdb = RocksDB::open_read_only(rdb_path.as_path())
-                    .map_err(|e| internal_err(format!("failed to get block: {}", e)))?;
-
-                ctx.db = Arc::new(RwLock::new(State::new(
-                    Arc::new(RwLock::new(ChainState::new(
-                        rdb,
-                        "rocks_db".to_owned(),
-                        0,
-                        true,
-                    ))),
-                    false,
-                )));
-            }
             ctx.header
                 .mut_time()
                 .set_seconds(block.header.timestamp as i64);
@@ -892,43 +863,7 @@ impl EthApi for EthApiImpl {
                     .map_err(|err| {
                         internal_err(format!("create query context error: {err:?}"))
                     })?;
-                {
-                    let (basedir, opts) = {
-                        let app = account_base_app.read();
-                        (app.basedir.clone(), app.opts.clone())
-                    };
 
-                    // Creates a fresh chain state db and history db
-                    let fdb_path = basedir.join(CHAIN_STATE_PATH);
-                    let fdb =
-                        FinDB::open_read_only(fdb_path.as_path()).map_err(|e| {
-                            internal_err(format!("failed to get block: {}", e))
-                        })?;
-
-                    ctx.state = Arc::new(RwLock::new(State::new(
-                        Arc::new(RwLock::new(ChainState::create_with_opts(
-                            fdb, opts, true,
-                        ))),
-                        true,
-                    )));
-
-                    let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
-
-                    let rdb =
-                        RocksDB::open_read_only(rdb_path.as_path()).map_err(|e| {
-                            internal_err(format!("failed to get block: {}", e))
-                        })?;
-
-                    ctx.db = Arc::new(RwLock::new(State::new(
-                        Arc::new(RwLock::new(ChainState::new(
-                            rdb,
-                            "rocks_db".to_owned(),
-                            0,
-                            true,
-                        ))),
-                        false,
-                    )));
-                }
                 let CallRequest {
                     from,
                     to,
