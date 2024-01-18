@@ -10,7 +10,6 @@ use ethereum::{
 };
 use ethereum_types::{BigEndianHash, Bloom, H160, H256, H512, H64, U256, U64};
 use evm::{ExitError, ExitReason};
-use fin_db::{FinDB, RocksDB};
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
     Block, BlockNumber, BlockTransactions, Bytes, CallRequest, Filter, FilteredParams,
@@ -34,14 +33,10 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
-use storage::state::{ChainState, State};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::{Handle, Runtime};
 use tracing::{debug, warn};
-
-const CHAIN_STATE_PATH: &str = "state.db";
-const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 
 lazy_static! {
     static ref RT: Runtime =
@@ -857,7 +852,7 @@ impl EthApi for EthApiImpl {
             let execute_call_or_create = move |request: CallRequest,
                                                gas_limit|
                   -> Result<ExecuteResult> {
-                let mut ctx = account_base_app
+                let ctx = account_base_app
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
                     .map_err(|err| {
