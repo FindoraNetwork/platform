@@ -10,3 +10,6 @@ pub mod api;
 #[cfg(feature = "std")]
 pub mod common;
 pub mod txn_builder;
+
+#[allow(missing_docs)]
+pub mod transaction;

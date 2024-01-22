@@ -51,7 +51,7 @@ pub fn transfer_to_account(
 
     let transfer_op = utils::gen_transfer_op(
         &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount, None)],
         asset,
         false,
         false,

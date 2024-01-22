@@ -128,7 +128,7 @@ impl TransactionBuilder {
         mut self,
         kp: XfrKeyPair,
     ) -> RucResult<TransactionBuilder> {
-        self.transaction_builder.add_fee_relative_auto(&kp)?;
+        self.transaction_builder.add_fee_relative_auto(&kp, None)?;
         Ok(self)
     }
 
@@ -155,7 +155,7 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(mut self, inputs: FeeInputs) -> RucResult<TransactionBuilder> {
-        self.transaction_builder.add_fee(inputs.into())?;
+        self.transaction_builder.add_fee(inputs.into(), None)?;
         Ok(self)
     }
 
@@ -330,7 +330,7 @@ impl TransactionBuilder {
     /// Adds a serialized transfer asset operation to a transaction builder instance.
     pub fn add_transfer_operation(mut self, op: String) -> Result<TransactionBuilder> {
         let op = serde_json::from_str::<Operation>(&op)?;
-        self.get_builder_mut().add_operation(op);
+        self.get_builder_mut().add_operation((&op).into());
         Ok(self)
     }
 
@@ -439,6 +439,7 @@ impl TransferOperationBuilder {
         self.get_builder_mut().add_output(
             &template,
             tracing_policies.map(|policies| policies.get_policies_ref().clone()),
+            None,
             None,
             None,
         )?;

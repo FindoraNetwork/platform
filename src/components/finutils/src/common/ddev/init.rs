@@ -102,7 +102,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         .custom_data
         .initial_validators
         .iter()
-        .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA))
+        .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA, None))
         .collect::<Vec<_>>();
 
     println!("[ {} ] >>> Transfer FRAs to validators ...", &env.name);
@@ -118,7 +118,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         gen_transfer_op_xx(
             Some(&gen_8668_endpoint(env)),
             &v.xfr_keypair,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, am, None)],
             None,
             true,
             false,
@@ -136,7 +136,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         })?;
         let mut tx = builder.take_transaction();
         tx.sign(&v.xfr_keypair);
-        send_tx(env, &tx).c(d!())?;
+        send_tx(env, &tx.into()).c(d!())?;
     }
 
     println!("[ {} ] >>> Init work done !", &env.name);
@@ -154,7 +154,7 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
         .collect::<Vec<_>>();
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(env, &builder.take_transaction()).c(d!())
+    send_tx(env, &builder.take_transaction().into()).c(d!())
 }
 
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
@@ -174,7 +174,7 @@ fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
 fn transfer_batch(
     env: &Env,
     owner_kp: &XfrKeyPair,
-    target_list: Vec<(&XfrPublicKey, u64)>,
+    target_list: Vec<(&XfrPublicKey, u64, Option<String>)>,
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
@@ -196,7 +196,7 @@ fn transfer_batch(
     let mut tx = builder.take_transaction();
     tx.sign(owner_kp);
 
-    send_tx(env, &tx).c(d!())
+    send_tx(env, &tx.into()).c(d!())
 }
 
 fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {

@@ -338,6 +338,7 @@ fn run() -> Result<()> {
             common::transfer_asset(
                 f.as_deref(),
                 t,
+                None,
                 token_code,
                 am.unwrap(),
                 m.is_present("confidential-amount"),
@@ -381,7 +382,7 @@ fn run() -> Result<()> {
         } else {
             common::transfer_asset_batch(
                 f.as_deref(),
-                &t,
+                &t.iter().map(|v| (*v, None)).collect::<Vec<_>>(),
                 None,
                 am.unwrap(),
                 m.is_present("confidential-amount"),
