@@ -10,7 +10,6 @@ use ethereum::{
 };
 use ethereum_types::{BigEndianHash, Bloom, H160, H256, H512, H64, U256, U64};
 use evm::{ExitError, ExitReason};
-use fin_db::{FinDB, RocksDB};
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
     Block, BlockNumber, BlockTransactions, Bytes, CallRequest, Filter, FilteredParams,
@@ -34,14 +33,10 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, convert::Into, ops::Range, sync::Arc};
-use storage::state::{ChainState, State};
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::{Handle, Runtime};
 use tracing::{debug, warn};
-
-const CHAIN_STATE_PATH: &str = "state.db";
-const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 
 lazy_static! {
     static ref RT: Runtime =
@@ -363,36 +358,7 @@ impl EthApi for EthApiImpl {
                 .read()
                 .create_context_at(block.header.number.as_u64())
                 .ok_or_else(|| internal_err("failed to create context"))?;
-            {
-                let (basedir, opts) = {
-                    let app = account_base_app.read();
-                    (app.basedir.clone(), app.opts.clone())
-                };
 
-                // Creates a fresh chain state db and history db
-                let fdb_path = basedir.join(CHAIN_STATE_PATH);
-                let fdb = FinDB::open_read_only(fdb_path.as_path())
-                    .map_err(|e| internal_err(format!("failed to get block: {}", e)))?;
-
-                ctx.state = Arc::new(RwLock::new(State::new(
-                    Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts, true))),
-                    true,
-                )));
-
-                let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
-                let rdb = RocksDB::open_read_only(rdb_path.as_path())
-                    .map_err(|e| internal_err(format!("failed to get block: {}", e)))?;
-
-                ctx.db = Arc::new(RwLock::new(State::new(
-                    Arc::new(RwLock::new(ChainState::new(
-                        rdb,
-                        "rocks_db".to_owned(),
-                        0,
-                        true,
-                    ))),
-                    false,
-                )));
-            }
             ctx.header
                 .mut_time()
                 .set_seconds(block.header.timestamp as i64);
@@ -886,49 +852,13 @@ impl EthApi for EthApiImpl {
             let execute_call_or_create = move |request: CallRequest,
                                                gas_limit|
                   -> Result<ExecuteResult> {
-                let mut ctx = account_base_app
+                let ctx = account_base_app
                     .read()
                     .create_query_context(if pending { None } else { Some(0) }, false)
                     .map_err(|err| {
                         internal_err(format!("create query context error: {err:?}"))
                     })?;
-                {
-                    let (basedir, opts) = {
-                        let app = account_base_app.read();
-                        (app.basedir.clone(), app.opts.clone())
-                    };
 
-                    // Creates a fresh chain state db and history db
-                    let fdb_path = basedir.join(CHAIN_STATE_PATH);
-                    let fdb =
-                        FinDB::open_read_only(fdb_path.as_path()).map_err(|e| {
-                            internal_err(format!("failed to get block: {}", e))
-                        })?;
-
-                    ctx.state = Arc::new(RwLock::new(State::new(
-                        Arc::new(RwLock::new(ChainState::create_with_opts(
-                            fdb, opts, true,
-                        ))),
-                        true,
-                    )));
-
-                    let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
-
-                    let rdb =
-                        RocksDB::open_read_only(rdb_path.as_path()).map_err(|e| {
-                            internal_err(format!("failed to get block: {}", e))
-                        })?;
-
-                    ctx.db = Arc::new(RwLock::new(State::new(
-                        Arc::new(RwLock::new(ChainState::new(
-                            rdb,
-                            "rocks_db".to_owned(),
-                            0,
-                            true,
-                        ))),
-                        false,
-                    )));
-                }
                 let CallRequest {
                     from,
                     to,
