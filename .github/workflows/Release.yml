@@ -171,7 +171,7 @@ jobs:
         DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_FRACTAL_TOKEN}}
       shell: bash
       run: |
-        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_FRACTAL_TOKEN}
+        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
     - name: Build images dockerhub
       env:
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
