@@ -15,7 +15,7 @@ jobs:
       ENV: release
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
-      DOCKERHUB_URL: findoranetwork
+      DOCKERHUB_URL: fractalfoundation
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -168,10 +168,10 @@ jobs:
     - name: Login Dockerhub
       env: 
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
+        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_FRACTAL_TOKEN}}
       shell: bash
       run: |
-        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
+        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_FRACTAL_TOKEN}
     - name: Build images dockerhub
       env:
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
