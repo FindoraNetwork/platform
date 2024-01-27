@@ -302,7 +302,7 @@ ci_build_image_dockerhub:
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker buildx build --platform linux/amd64 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb . --push
+	@ docker buildx build --platform linux/amd64 -t $(DOCKERHUB_URL)/fractal:$(IMAGE_TAG) -f container/Dockerfile-goleveldb . --push
 
 
 # ========================== release ARM64/v8 ===========================
@@ -333,7 +333,7 @@ clean_image:
 
 
 ci_push_image_dockerhub:
-	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
+	docker push $(DOCKERHUB_URL)/fractal:$(IMAGE_TAG)
 
 
 ci_build_wasm_js_bindings:
