@@ -30,7 +30,7 @@ fn from_config_file() -> Result<Vec<u8>> {
             .unwrap_or(CFG_PATH_FF);
     }
 
-    fs::read_to_string(&*CFG_PATH)
+    fs::read_to_string(*CFG_PATH)
         .c(d!())
         .and_then(|cfg| serde_json::from_str::<SelfAddr>(&cfg).c(d!()))
         .and_then(|sa| td_addr_to_bytes(&sa.address).c(d!()))
