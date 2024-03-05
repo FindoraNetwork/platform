@@ -262,11 +262,13 @@ pub(crate) struct BankAccount {
 }
 
 impl BankAccount {
-    const BANK_ACCOUNT_ADDR: &str =
+    const BANK_ACCOUNT_ADDR: &'static str =
         "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5";
-    const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
-    const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
-    const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
+    const BANK_ACCOUNT_PUBKEY: &'static str =
+        "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
+    const BANK_ACCOUNT_SECKEY: &'static str =
+        "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
+    const BANK_ACCOUNT_MNEMONIC: &'static str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
 }
 
 impl Default for BankAccount {
