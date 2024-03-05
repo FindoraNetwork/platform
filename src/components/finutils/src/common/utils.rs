@@ -810,7 +810,7 @@ pub fn get_evm_delegation_info(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let bound_amount = if let Some(Token::Uint(bound_amount)) = ret.get(0) {
+    let bound_amount = if let Some(Token::Uint(bound_amount)) = ret.first() {
         bound_amount
     } else {
         return Err(eg!("bound_amount not found"));
@@ -876,7 +876,7 @@ pub fn get_reward_info(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let reward = if let Some(Token::Uint(reward)) = ret.get(0) {
+    let reward = if let Some(Token::Uint(reward)) = ret.first() {
         reward.div(U256::from(10_u64.pow(12)))
     } else {
         return Err(eg!("reward not found"));
@@ -920,7 +920,7 @@ pub fn get_trigger_on_contract_address(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let address = if let Some(Token::Address(address)) = ret.get(0) {
+    let address = if let Some(Token::Address(address)) = ret.first() {
         address
     } else {
         return Err(eg!("staking address not found"));
@@ -961,7 +961,7 @@ pub fn get_claim_on_contract_address(url: &str, staking_address: H160) -> Result
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let address = if let Some(Token::Address(address)) = ret.get(0) {
+    let address = if let Some(Token::Address(address)) = ret.first() {
         address
     } else {
         return Err(eg!("reward address not found"));
