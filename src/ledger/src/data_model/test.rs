@@ -284,6 +284,7 @@ fn gen_fee_operation(
                     public_key: dest_pubkey,
                 },
                 lien: None,
+                memo: None,
             }],
             lien_assignments: Vec::new(),
             transfer: Box::new(XfrBody {

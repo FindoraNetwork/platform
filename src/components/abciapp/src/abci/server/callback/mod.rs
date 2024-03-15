@@ -48,7 +48,6 @@ use {
     std::{
         fs,
         mem::take,
-        ops::Deref,
         sync::{
             atomic::{AtomicI64, Ordering},
             Arc,
@@ -569,7 +568,7 @@ pub fn end_block(
     }
     if td_height <= CFG.checkpoint.evm_staking_inital_height {
         if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-            la.get_committed_state().read().get_staking().deref(),
+            la.get_committed_state().read().get_staking(),
             begin_block_req.last_commit_info.as_ref()
         )) {
             resp.set_validator_updates(RepeatedField::from_vec(vs));

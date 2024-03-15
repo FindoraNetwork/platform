@@ -204,7 +204,7 @@ mod issue {
 
     use {
         super::*,
-        finutils::transaction::BuildOperation,
+        ledger::data_model::Operation,
         ledger::{
             data_model::{
                 AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, TxOutput,
@@ -253,6 +253,7 @@ mod issue {
                         id: None,
                         record: ba,
                         lien: None,
+                        memo: None,
                     },
                     None,
                 )
@@ -269,7 +270,7 @@ mod issue {
         let asset_issuance_operation =
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
-        builder.add_operation(BuildOperation::IssueAsset(asset_issuance_operation));
+        builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
         Ok(builder.take_transaction().into())
     }
 }

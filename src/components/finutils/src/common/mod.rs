@@ -21,13 +21,12 @@ use {
         common::utils::{
             get_evm_staking_address, get_validator_memo_and_rate, mapping_address,
         },
-        transaction::BuildTransaction,
     },
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            gen_random_keypair, AssetRules, AssetTypeCode, AssetTypePrefix,
+            gen_random_keypair, AssetRules, AssetTypeCode, AssetTypePrefix, Transaction,
             BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
@@ -38,13 +37,12 @@ use {
     },
     ruc::*,
     sha3::{Digest, Keccak256},
-    std::str::FromStr,
-    std::{env, fs},
+    std::{env, fs, str::FromStr},
     tendermint::PrivateKey,
     utils::{get_block_height, get_local_block_height, parse_td_validator_keys},
     web3::types::H160,
-    zei::serialization::ZeiFromToBytes,
     zei::{
+        serialization::ZeiFromToBytes,
         setup::PublicParams,
         xfr::{
             asset_record::AssetRecordType,
@@ -685,7 +683,7 @@ pub fn show_delegations(sk_str: Option<&str>) -> Result<()> {
 fn gen_undelegate_tx(
     owner_kp: &XfrKeyPair,
     param: Option<(u64, &str)>,
-) -> Result<BuildTransaction> {
+) -> Result<Transaction> {
     let mut builder = utils::new_tx_builder().c(d!())?;
     utils::gen_fee_op(owner_kp).c(d!()).map(|op| {
         builder.add_operation(op);
@@ -714,7 +712,7 @@ fn gen_delegate_tx(
     owner_kp: &XfrKeyPair,
     amount: u64,
     validator: &str,
-) -> Result<BuildTransaction> {
+) -> Result<Transaction> {
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     utils::gen_transfer_op(

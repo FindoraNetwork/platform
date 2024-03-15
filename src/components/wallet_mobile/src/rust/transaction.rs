@@ -146,6 +146,7 @@ impl TransactionBuilder {
                         id: None,
                         record: new.0,
                         lien: None,
+                        memo: None,
                     },
                 });
                 base
@@ -330,7 +331,7 @@ impl TransactionBuilder {
     /// Adds a serialized transfer asset operation to a transaction builder instance.
     pub fn add_transfer_operation(mut self, op: String) -> Result<TransactionBuilder> {
         let op = serde_json::from_str::<Operation>(&op)?;
-        self.get_builder_mut().add_operation((&op).into());
+        self.get_builder_mut().add_operation(op);
         Ok(self)
     }
 

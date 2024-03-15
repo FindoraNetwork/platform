@@ -790,6 +790,8 @@ pub struct TxOutput {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub lien: Option<HashOf<Vec<TxOutput>>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub memo: Option<String>,
 }
 
 #[allow(missing_docs)]
@@ -889,6 +891,7 @@ impl TransferAssetBody {
         input_refs: Vec<TxoRef>,
         input_records: &[AssetRecord],
         output_records: &[AssetRecord],
+        output_memos: &[Option<String>],
         policies: Option<XfrNotePolicies>,
         lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
         transfer_type: TransferType,
@@ -925,10 +928,12 @@ impl TransferAssetBody {
         let outputs = transfer
             .outputs
             .iter()
-            .map(|rec| TxOutput {
+            .zip(output_memos.iter())
+            .map(|(rec, memo)| TxOutput {
                 id: None,
                 record: rec.clone(),
                 lien: None,
+                memo: memo.clone(),
             })
             .collect();
         Ok(TransferAssetBody {
