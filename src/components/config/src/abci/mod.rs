@@ -150,6 +150,8 @@ pub struct CheckPointConfig {
 
     #[serde(default = "def_evm_staking_address")]
     pub evm_staking_address: String,
+
+    pub tx_size: u32,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -271,6 +273,7 @@ lazy_static! {
         max_gas_price_limit: 0,
         evm_staking_inital_height: 128,
         evm_staking_address: "0x321DF28026D01858906D322533900aD3435eE964".to_owned(),
+        tx_size: 8192
     };
 }
 
@@ -605,6 +608,7 @@ lazy_static! {
         max_gas_price_limit: 4636000,
         evm_staking_inital_height: 4636000,
         evm_staking_address: "0x38d49e3bd5144059c9f3bA10CF7306E84155B603".to_owned(),
+        tx_size: 8192
     };
 }
 
