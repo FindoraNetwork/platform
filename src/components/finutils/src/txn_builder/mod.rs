@@ -1150,7 +1150,7 @@ impl TransferOperationBuilder {
         let trn = self.transfer.as_ref().c(d!())?;
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
-            if !sig.verify(&trn.body.clone().into()) {
+            if !sig.verify(&trn.body) {
                 return Err(eg!(("Invalid signature")));
             }
             sig_keys.insert(sig.address.key.zei_to_bytes());
@@ -1453,7 +1453,7 @@ mod tests {
             .unwrap();
         assert!(tx2.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx2.into_transaction().into()).unwrap();
+        let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
@@ -1482,7 +1482,7 @@ mod tests {
             .add_fee(fi, None));
         assert!(tx3.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx3.into_transaction().into()).unwrap();
+        let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
@@ -1512,7 +1512,7 @@ mod tests {
             .unwrap();
         assert!(tx4.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx4.into_transaction().into()).unwrap();
+        let effect = TxnEffect::compute_effect(tx4.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();

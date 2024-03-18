@@ -30,7 +30,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         println!(">>> Block interval: {interval} seconds");
 
         println!(">>> Define and issue FRA ...");
-        common::utils::send_tx(&fra_gen_initial_tx(&root_kp).into()).c(d!())?;
+        common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2, interval);
@@ -73,7 +73,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         for (i, v) in VALIDATOR_LIST.values().enumerate() {
             delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
 
         println!(">>> Wait 5 block ...");

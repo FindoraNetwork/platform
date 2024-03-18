@@ -262,7 +262,7 @@ impl TxnEffect {
 
         // (1), within this transaction
         //let v = vec![];
-        let iss_nums = self.new_issuance_nums.entry(code).or_insert_with(Vec::new);
+        let iss_nums = self.new_issuance_nums.entry(code).or_default();
 
         if let Some(last_num) = iss_nums.last() {
             if seq_num <= *last_num {
@@ -666,7 +666,7 @@ impl BlockEffect {
         if self.staking_simulator.cur_height > CFG.checkpoint.fix_check_replay
             && txn_effect.txn.body.operations.len() == 1
         {
-            if let Some(Operation::MintFra(_)) = txn_effect.txn.body.operations.get(0) {
+            if let Some(Operation::MintFra(_)) = txn_effect.txn.body.operations.first() {
                 flag = false;
             }
         }

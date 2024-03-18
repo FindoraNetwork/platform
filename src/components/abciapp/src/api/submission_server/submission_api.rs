@@ -130,7 +130,7 @@ impl SubmissionApi {
                     web::get().to(txn_status::<RNG, TF>),
                 )
         })
-        .bind(&format!("{host}:{port}"))
+        .bind(format!("{host}:{port}"))
         .c(d!())?
         .run();
 

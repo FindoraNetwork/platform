@@ -37,7 +37,7 @@ pub fn forward_txn_with_mode(
     const ASYNC_API: &str = "broadcast_tx_async";
 
     let txn_json = serde_json::to_string(&txn).c(d!())?;
-    let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);
+    let txn_b64 = base64::encode_config(txn_json, base64::URL_SAFE);
     if txn_b64.len() > CFG.checkpoint.tx_size as usize {
         return Err(eg!("Transaction too large"));
     }

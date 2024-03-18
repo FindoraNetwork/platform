@@ -159,5 +159,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction().into())
+    Ok(tx_builder.take_transaction())
 }

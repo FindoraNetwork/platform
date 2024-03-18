@@ -1,7 +1,7 @@
 use crate::{storage::*, App, Config};
 use config::abci::global_cfg::CFG;
 use enterprise_web3::{
-    ALLOWANCES, BALANCE_MAP, TOTAL_ISSUANCE, WEB3_SERVICE_START_HEIGHT,
+    AllowancesKey, ALLOWANCES, BALANCE_MAP, TOTAL_ISSUANCE, WEB3_SERVICE_START_HEIGHT,
 };
 use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::BorrowMut;
@@ -211,9 +211,9 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     fn approve(
         ctx: &Context,
         owner: &Address,
-        owner_addr: H160,
+        owner_address: H160,
         spender: &Address,
-        spender_addr: H160,
+        spender_address: H160,
         amount: U256,
     ) -> Result<()> {
         Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)?;
@@ -222,7 +222,13 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         {
             let mut allowances = ALLOWANCES.lock().c(d!())?;
 
-            allowances.push(((owner_addr, spender_addr), amount));
+            allowances.push((
+                AllowancesKey {
+                    owner_address,
+                    spender_address,
+                },
+                amount,
+            ));
         }
         Ok(())
     }

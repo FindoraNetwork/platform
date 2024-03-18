@@ -168,7 +168,7 @@ fn build_update_info(tk: &Token) -> Result<abci::ValidatorUpdate> {
 
         let mut pub_key = abci::PubKey::default();
 
-        if let Token::Bytes(pk) = v.get(0).ok_or(eg!("update info 0 must bytes"))? {
+        if let Token::Bytes(pk) = v.first().ok_or(eg!("update info 0 must bytes"))? {
             pub_key.set_data(pk.clone());
         } else {
             return Err(eg!("Error type of public key"));
@@ -210,7 +210,7 @@ pub fn build_validator_updates(
     let func = sc.staking.function("getValidatorsList").c(d!())?;
     let dp = func.decode_output(data).c(d!())?;
 
-    if let Token::Array(output) = dp.get(0).c(d!())? {
+    if let Token::Array(output) = dp.first().c(d!())? {
         let mut res = Vec::with_capacity(output.len());
 
         for o in output.iter() {
@@ -227,7 +227,7 @@ pub fn build_validator_updates(
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
     if let Token::Tuple(v) = tk {
         let addr = if let Token::Address(addr) =
-            v.get(0).ok_or(eg!("update info 0 must bytes"))?
+            v.first().ok_or(eg!("update info 0 must bytes"))?
         {
             *addr
         } else {
@@ -254,7 +254,7 @@ pub fn build_claim_ops(sc: &SystemContracts, data: &[u8]) -> Result<Vec<(H160, U
     let func = sc.staking.function("getClaimOps").c(d!())?;
     let dp = func.decode_output(data).c(d!())?;
 
-    if let Token::Array(output) = dp.get(0).c(d!())? {
+    if let Token::Array(output) = dp.first().c(d!())? {
         let mut res = Vec::with_capacity(output.len());
 
         for o in output.iter() {

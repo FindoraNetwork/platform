@@ -238,7 +238,7 @@ fn gen_sample_tx() -> Transaction {
     assert_eq!(transaction.body.operations.len(), 3);
 
     assert_eq!(
-        transaction.body.operations.get(0),
+        transaction.body.operations.first(),
         Some(&Operation::TransferAsset(asset_transfer))
     );
     assert_eq!(

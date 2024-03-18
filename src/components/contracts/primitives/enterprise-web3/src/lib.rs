@@ -16,6 +16,11 @@ pub type Block = EnterpriseBlock;
 pub type Receipt = EnterpriseReceipt;
 pub type TxState = EnterpriseTxState;
 
+pub struct AllowancesKey {
+    pub owner_address: H160,
+    pub spender_address: H160,
+}
+
 lazy_static! {
     pub static ref STATE_UPDATE_LIST: Arc<Mutex<Vec<State>>> =
         Arc::new(Mutex::new(vec![]));
@@ -40,8 +45,8 @@ lazy_static! {
     pub static ref REMOVE_PENDING_STATE_UPDATE_LIST: Arc<Mutex<Vec<(H160, H256)>>> =
         Arc::new(Mutex::new(vec![]));
     pub static ref TOTAL_ISSUANCE: Arc<Mutex<Option<U256>>> = Arc::new(Mutex::new(None));
-    pub static ref ALLOWANCES: Arc<Mutex<Vec<((H160, H160), U256)>>> =
-        Arc::new(Mutex::new(vec![]));
+    pub static ref ALLOWANCES: Arc<Mutex<Vec<(AllowancesKey, U256)>>> =
+        Arc::new(Mutex::new(Vec::new()));
 }
 
 fn gen_redis_client() -> r2d2::Pool<Client> {
