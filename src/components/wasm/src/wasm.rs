@@ -50,7 +50,7 @@ use {
         data_model::{
             gen_random_keypair, AssetTypeCode, AssetTypePrefix,
             AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN_V1,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
@@ -1510,7 +1510,7 @@ pub fn fra_get_asset_code() -> String {
 #[wasm_bindgen]
 /// Fee smaller than this value will be denied.
 pub fn fra_get_minimal_fee() -> u64 {
-    TX_FEE_MIN
+    TX_FEE_MIN_V1
 }
 
 #[wasm_bindgen]

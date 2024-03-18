@@ -13,7 +13,7 @@ use {
         data_model::{
             AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
             Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN_V1,
         },
         staking::{
             init::get_inital_validators, StakerMemo, TendermintAddrRef, FRA_TOTAL_AMOUNT,
@@ -200,8 +200,8 @@ pub fn gen_transfer_op_xx(
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN, None));
-        op_fee += TX_FEE_MIN;
+        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN_V1, None));
+        op_fee += TX_FEE_MIN_V1;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
 
@@ -257,7 +257,7 @@ pub fn gen_transfer_op_xx(
         trans_builder
             .add_output(
                 &AssetRecordTemplate::with_no_asset_tracing(
-                    TX_FEE_MIN,
+                    TX_FEE_MIN_V1,
                     ASSET_TYPE_FRA,
                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                     *BLACK_HOLE_PUBKEY,

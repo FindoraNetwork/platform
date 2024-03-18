@@ -9,10 +9,15 @@ pub mod __trash__;
 mod effects;
 mod test;
 
+use std::sync::atomic::Ordering;
+
+use config::abci::global_cfg::CFG;
 pub use effects::{BlockEffect, TxnEffect};
 use noah_algebra::bls12_381::BLSScalar;
 use noah_algebra::prelude::Scalar;
 use noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381};
+
+use crate::LEDGER_TENDERMINT_BLOCK_HEIGHT;
 
 use {
     crate::converter::ConvertAccount,
@@ -1677,7 +1682,10 @@ lazy_static! {
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
-pub const TX_FEE_MIN: u64 = 1_0000;
+pub const TX_FEE_MIN_V0: u64 = 1_0000;
+
+/// 10fra
+pub const TX_FEE_MIN_V1: u64 = 10_000_000;
 
 impl Transaction {
     #[inline(always)]
@@ -1712,13 +1720,34 @@ impl Transaction {
         self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
+                    let fee = if LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
+                        > CFG.checkpoint.utxo_fee_height
+                    {
+                        let mut fee = TX_FEE_MIN_V1;
+
+                        let len = x.body.outputs.len() as u64;
+                        if len > 3 {
+                            fee += (len - 3) * 2_000_000;
+                        }
+                        let mut memo_num = 0;
+                        for it in x.body.outputs.iter() {
+                            if it.memo.is_some() {
+                                memo_num += 1;
+                            }
+                        }
+                        fee += memo_num * 2_000_000;
+                        fee
+                    } else {
+                        TX_FEE_MIN_V0
+                    };
+
                     return x.body.outputs.iter().any(|o| {
                         if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                             if ty == ASSET_TYPE_FRA
                                 && *BLACK_HOLE_PUBKEY == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
-                                    if am > (TX_FEE_MIN - 1) {
+                                    if am >= fee {
                                         return true;
                                     }
                                 }

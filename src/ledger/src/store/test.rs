@@ -6,7 +6,7 @@ use {
     crate::data_model::{
         AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation,
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
-        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN_V0,
     },
     rand_core::SeedableRng,
     zei::{
@@ -728,7 +728,7 @@ fn gen_fee_operation(
     let input_oar = open_blind_asset_record(&input_bar, &None, &fra_owner_kp).unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
-        input_oar.amount - TX_FEE_MIN,
+        input_oar.amount - TX_FEE_MIN_V0,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         fra_owner_kp.get_pk(),
@@ -740,7 +740,7 @@ fn gen_fee_operation(
     .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
-        TX_FEE_MIN,
+        TX_FEE_MIN_V0,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         *BLACK_HOLE_PUBKEY,

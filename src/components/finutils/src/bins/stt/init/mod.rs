@@ -9,7 +9,7 @@ pub mod i_testing;
 use {
     super::*,
     finutils::common::{transfer_asset_batch_x, utils::get_balance},
-    ledger::data_model::TX_FEE_MIN,
+    ledger::data_model::TX_FEE_MIN_V0,
 };
 
 pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
@@ -99,12 +99,12 @@ fn re_distribution() -> Result<()> {
     // 1.
     for v in v_set.iter().skip(1) {
         get_balance(&v.keypair).c(d!()).and_then(|n| {
-            if TX_FEE_MIN < n {
+            if TX_FEE_MIN_V0 < n {
                 transfer_asset_batch_x(
                     &v.keypair,
                     &[(v_set[0].pubkey, None)],
                     None,
-                    n - TX_FEE_MIN,
+                    n - TX_FEE_MIN_V0,
                     true,
                     true,
                 )
@@ -147,7 +147,7 @@ fn re_distribution() -> Result<()> {
     for v in v_set.iter().skip(1) {
         let actual = get_balance(&v.keypair).c(d!())?;
         alt!(
-            actual > expected + TX_FEE_MIN || actual < expected,
+            actual > expected + TX_FEE_MIN_V0 || actual < expected,
             return Err(eg!("incorrect balance"))
         );
     }
