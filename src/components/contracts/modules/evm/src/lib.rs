@@ -343,7 +343,7 @@ impl<C: Config> App<C> {
             if log.address != addr {
                 continue;
             }
-            match log.topics.get(0).cloned() {
+            match log.topics.first().cloned() {
                 Some(v) => {
                     if v != signature {
                         continue;
@@ -871,7 +871,7 @@ impl<C: Config> App<C> {
             if log.address != addr {
                 continue;
             }
-            match log.topics.get(0).cloned() {
+            match log.topics.first().cloned() {
                 Some(v) => {
                     if v != signature {
                         continue;
@@ -1137,7 +1137,7 @@ pub fn get_claim_on_contract_address<C: Config>(
     )?;
     let ret = function.decode_output(&data).c(d!())?;
 
-    if let Some(Token::Address(addr)) = ret.get(0) {
+    if let Some(Token::Address(addr)) = ret.first() {
         Ok(*addr)
     } else {
         Err(eg!("address not found"))

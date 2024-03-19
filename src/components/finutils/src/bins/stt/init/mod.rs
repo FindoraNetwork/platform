@@ -9,7 +9,7 @@ pub mod i_testing;
 use {
     super::*,
     finutils::common::{transfer_asset_batch_x, utils::get_balance},
-    ledger::data_model::TX_FEE_MIN,
+    ledger::data_model::TX_FEE_MIN_V0,
 };
 
 pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
@@ -30,7 +30,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         println!(">>> Block interval: {interval} seconds");
 
         println!(">>> Define and issue FRA ...");
-        common::utils::send_tx(&fra_gen_initial_tx(&root_kp).into()).c(d!())?;
+        common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2, interval);
@@ -73,7 +73,7 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
         for (i, v) in VALIDATOR_LIST.values().enumerate() {
             delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
 
         println!(">>> Wait 5 block ...");
@@ -99,12 +99,12 @@ fn re_distribution() -> Result<()> {
     // 1.
     for v in v_set.iter().skip(1) {
         get_balance(&v.keypair).c(d!()).and_then(|n| {
-            if TX_FEE_MIN < n {
+            if TX_FEE_MIN_V0 < n {
                 transfer_asset_batch_x(
                     &v.keypair,
                     &[(v_set[0].pubkey, None)],
                     None,
-                    n - TX_FEE_MIN,
+                    n - TX_FEE_MIN_V0,
                     true,
                     true,
                 )
@@ -147,7 +147,7 @@ fn re_distribution() -> Result<()> {
     for v in v_set.iter().skip(1) {
         let actual = get_balance(&v.keypair).c(d!())?;
         alt!(
-            actual > expected + TX_FEE_MIN || actual < expected,
+            actual > expected + TX_FEE_MIN_V0 || actual < expected,
             return Err(eg!("incorrect balance"))
         );
     }

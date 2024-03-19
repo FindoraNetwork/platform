@@ -27,8 +27,6 @@ use {
     tx_sender::TendermintForward,
 };
 
-pub use tx_sender::forward_txn_with_mode;
-
 pub mod callback;
 pub mod tx_sender;
 

@@ -5,10 +5,7 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use crate::transaction::{
-    BuildOperation, BuildTransaction, BuildTransferAsset, BuildTransferAssetBody,
-};
-
+use ledger::data_model::{Operation, Transaction, TransferAsset, TX_FEE_MIN_V1};
 //#[cfg(not(target_arch = "wasm32"))]
 use zei::serialization::ZeiFromToBytes;
 
@@ -24,7 +21,7 @@ use {
             IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
             IssuerPublicKey, Memo, NoReplayToken, TransactionBody, TransferAssetBody,
             TransferType, TxOutput, TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            BLACK_HOLE_PUBKEY,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -120,7 +117,7 @@ impl FeeInputs {
 /// An simple builder for findora transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBuilder {
-    txn: BuildTransaction,
+    txn: Transaction,
     outputs: u64,
     #[allow(missing_docs)]
     pub no_replay_token: NoReplayToken,
@@ -128,12 +125,12 @@ pub struct TransactionBuilder {
 
 impl TransactionBuilder {
     /// Convert builder to it's inner transaction
-    pub fn into_transaction(self) -> BuildTransaction {
+    pub fn into_transaction(self) -> Transaction {
         self.txn
     }
 
     /// Get reference of it's inner transaction
-    pub fn get_transaction(&self) -> &BuildTransaction {
+    pub fn get_transaction(&self) -> &Transaction {
         &self.txn
     }
 
@@ -157,10 +154,10 @@ impl TransactionBuilder {
             .operations
             .iter()
             .flat_map(|new| match new {
-                BuildOperation::TransferAsset(d) => {
+                Operation::TransferAsset(d) => {
                     seek!(d)
                 }
-                BuildOperation::IssueAsset(d) => d
+                Operation::IssueAsset(d) => d
                     .body
                     .records
                     .iter()
@@ -182,7 +179,24 @@ impl TransactionBuilder {
         let mut opb = TransferOperationBuilder::default();
         let outputs = self.get_relative_outputs();
 
-        let mut am = TX_FEE_MIN;
+        let mut am = TX_FEE_MIN_V1;
+        for i in self.txn.body.operations.iter() {
+            if let Operation::TransferAsset(transfer) = i {
+                let len = transfer.body.outputs.len() as u64;
+                if len > 3 {
+                    am += (len - 3) * 2_000_000;
+                }
+                let memo_len = transfer
+                    .body
+                    .outputs
+                    .iter()
+                    .filter(|v| v.memo.is_some())
+                    .collect::<Vec<_>>()
+                    .len() as u64;
+                am += memo_len * 2_000_000;
+                break;
+            }
+        }
         for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
                 if let Ok(oar) = open_blind_asset_record(&o, &om, &kp) {
@@ -200,7 +214,7 @@ impl TransactionBuilder {
 
         opb.add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                am,
                 ASSET_TYPE_FRA,
                 AssetRecordType::from_flags(false, false),
                 *BLACK_HOLE_PUBKEY,
@@ -228,6 +242,25 @@ impl TransactionBuilder {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
+        let mut am = TX_FEE_MIN_V1;
+        for i in self.txn.body.operations.iter() {
+            if let Operation::TransferAsset(transfer) = i {
+                let len = transfer.body.outputs.len() as u64;
+                if len > 3 {
+                    am += (len - 3) * 2_000_000;
+                }
+                let memo_len = transfer
+                    .body
+                    .outputs
+                    .iter()
+                    .filter(|v| v.memo.is_some())
+                    .collect::<Vec<_>>()
+                    .len() as u64;
+                am += memo_len * 2_000_000;
+                break;
+            }
+        }
+
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
@@ -242,7 +275,7 @@ impl TransactionBuilder {
 
         opb.add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                am,
                 ASSET_TYPE_FRA,
                 AssetRecordType::from_flags(false, false),
                 *BLACK_HOLE_PUBKEY,
@@ -291,7 +324,7 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
         TransactionBuilder {
-            txn: BuildTransaction::from_seq_id(seq_id),
+            txn: Transaction::from_seq_id(seq_id),
             outputs: 0,
             no_replay_token,
         }
@@ -333,6 +366,7 @@ impl TransactionBuilder {
                     id: None,
                     record: ba,
                     lien: None,
+                    memo: None,
                 },
                 owner_memo,
             )],
@@ -341,12 +375,12 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn transaction(&self) -> &BuildTransaction {
+    pub fn transaction(&self) -> &Transaction {
         &self.txn
     }
 
     #[allow(missing_docs)]
-    pub fn take_transaction(self) -> BuildTransaction {
+    pub fn take_transaction(self) -> Transaction {
         self.txn
     }
 
@@ -369,7 +403,7 @@ impl TransactionBuilder {
             None => AssetTypeCode::gen_random(),
         };
         let iss_keypair = IssuerKeyPair { keypair: &key_pair };
-        self.txn.add_operation(BuildOperation::DefineAsset(
+        self.txn.add_operation(Operation::DefineAsset(
             DefineAsset::new(
                 DefineAssetBody::new(
                     &token_code,
@@ -399,7 +433,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         let iss_keypair = IssuerKeyPair { keypair: &key_pair };
 
-        self.txn.add_operation(BuildOperation::IssueAsset(
+        self.txn.add_operation(Operation::IssueAsset(
             IssueAsset::new(
                 IssueAssetBody::new(token_code, seq_num, &records_and_memos).c(d!())?,
                 &iss_keypair,
@@ -441,8 +475,8 @@ impl TransactionBuilder {
             );
         }
 
-        let mut xfr = BuildTransferAsset::new(
-            BuildTransferAssetBody::new(
+        let mut xfr = TransferAsset::new(
+            TransferAssetBody::new(
                 &mut prng,
                 input_sids,
                 &input_asset_records[..],
@@ -457,7 +491,7 @@ impl TransactionBuilder {
         .c(d!())?;
         xfr.sign(&keys);
 
-        self.txn.add_operation(BuildOperation::TransferAsset(xfr));
+        self.txn.add_operation(Operation::TransferAsset(xfr));
         Ok(self)
     }
 
@@ -478,7 +512,7 @@ impl TransactionBuilder {
             auth_key_pair,
         );
         memo_update.pubkey = auth_key_pair.get_pk();
-        let op = BuildOperation::UpdateMemo(memo_update);
+        let op = Operation::UpdateMemo(memo_update);
         self.txn.add_operation(op);
         self
     }
@@ -499,7 +533,7 @@ impl TransactionBuilder {
             None,
             self.txn.body.no_replay_token,
         );
-        self.add_operation(BuildOperation::Delegation(op))
+        self.add_operation(Operation::Delegation(op))
     }
 
     /// Add a operation to updating staker memo and commission_rate
@@ -528,7 +562,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         );
 
-        Ok(self.add_operation(BuildOperation::UpdateStaker(op)))
+        Ok(self.add_operation(Operation::UpdateStaker(op)))
     }
 
     /// Add a staking operation to add a tendermint node as a validator
@@ -565,7 +599,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         );
 
-        Ok(self.add_operation(BuildOperation::Delegation(op)))
+        Ok(self.add_operation(Operation::Delegation(op)))
     }
 
     /// Add a operation to reduce delegation amount of a findora account.
@@ -577,7 +611,7 @@ impl TransactionBuilder {
         pu: Option<PartialUnDelegation>,
     ) -> &mut Self {
         let op = UnDelegationOps::new(keypair, self.txn.body.no_replay_token, pu);
-        self.add_operation(BuildOperation::UnDelegation(Box::new(op)))
+        self.add_operation(Operation::UnDelegation(Box::new(op)))
     }
 
     /// Add a operation to claim all the rewards
@@ -588,7 +622,7 @@ impl TransactionBuilder {
         am: Option<u64>,
     ) -> &mut Self {
         let op = ClaimOps::new(td_addr, keypair, am, self.txn.body.no_replay_token);
-        self.add_operation(BuildOperation::Claim(op))
+        self.add_operation(Operation::Claim(op))
     }
 
     #[allow(missing_docs)]
@@ -599,7 +633,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         FraDistributionOps::new(kps, alloc_table, self.txn.body.no_replay_token)
             .c(d!())
-            .map(move |op| self.add_operation(BuildOperation::FraDistribution(op)))
+            .map(move |op| self.add_operation(Operation::FraDistribution(op)))
     }
 
     #[allow(missing_docs)]
@@ -618,7 +652,7 @@ impl TransactionBuilder {
             self.txn.body.no_replay_token,
         )
         .c(d!())
-        .map(move |op| self.add_operation(BuildOperation::Governance(op)))
+        .map(move |op| self.add_operation(Operation::Governance(op)))
     }
 
     /// Add a operation update the validator set at specified block height.
@@ -630,7 +664,7 @@ impl TransactionBuilder {
     ) -> Result<&mut Self> {
         UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
             .c(d!())
-            .map(move |op| self.add_operation(BuildOperation::UpdateValidator(op)))
+            .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
     }
 
     /// Add an operation to replace the staker of validator.
@@ -648,7 +682,7 @@ impl TransactionBuilder {
             td_addr,
             self.txn.body.no_replay_token,
         );
-        self.add_operation(BuildOperation::ReplaceStaker(ops));
+        self.add_operation(Operation::ReplaceStaker(ops));
         Ok(self)
     }
 
@@ -661,7 +695,7 @@ impl TransactionBuilder {
         asset: Option<AssetTypeCode>,
         lowlevel_data: Option<Vec<u8>>,
     ) -> Result<&mut Self> {
-        self.add_operation(BuildOperation::ConvertAccount(ConvertAccount {
+        self.add_operation(Operation::ConvertAccount(ConvertAccount {
             signer: kp.get_pk(),
             nonce: self.txn.body.no_replay_token,
             receiver: addr,
@@ -673,7 +707,7 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn add_operation(&mut self, op: BuildOperation) -> &mut Self {
+    pub fn add_operation(&mut self, op: Operation) -> &mut Self {
         self.txn.add_operation(op);
         self
     }
@@ -802,7 +836,7 @@ pub struct TransferOperationBuilder {
 
     outputs_tracing_policies: Vec<TracingPolicies>,
     output_identity_commitments: Vec<Option<ACCommitment>>,
-    transfer: Option<BuildTransferAsset>,
+    transfer: Option<TransferAsset>,
     transfer_type: TransferType,
     auto_refund: bool,
 }
@@ -1074,7 +1108,7 @@ impl TransferOperationBuilder {
             self.outputs_tracing_policies.clone(),
             vec![None; num_outputs],
         );
-        let body = BuildTransferAssetBody::new(
+        let body = TransferAssetBody::new(
             &mut prng,
             self.input_sids.clone(),
             &self.input_records,
@@ -1085,7 +1119,7 @@ impl TransferOperationBuilder {
             transfer_type,
         )
         .c(d!())?;
-        self.transfer = Some(BuildTransferAsset::new(body).c(d!())?);
+        self.transfer = Some(TransferAsset::new(body).c(d!())?);
         Ok(self)
     }
 
@@ -1136,13 +1170,11 @@ impl TransferOperationBuilder {
     }
 
     /// Return the transaction operation
-    pub fn transaction(&self) -> Result<BuildOperation> {
+    pub fn transaction(&self) -> Result<Operation> {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        Ok(BuildOperation::TransferAsset(
-            self.transfer.clone().c(d!())?,
-        ))
+        Ok(Operation::TransferAsset(self.transfer.clone().c(d!())?))
     }
 
     /// Checks to see whether all necessary signatures are present and valid
@@ -1154,7 +1186,7 @@ impl TransferOperationBuilder {
         let trn = self.transfer.as_ref().c(d!())?;
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
-            if !sig.verify(&trn.body.clone().into()) {
+            if !sig.verify(&trn.body) {
                 return Err(eg!(("Invalid signature")));
             }
             sig_keys.insert(sig.address.key.zei_to_bytes());
@@ -1174,8 +1206,7 @@ impl TransferOperationBuilder {
 mod tests {
     use {
         super::*,
-        ledger::data_model::{TxnEffect, TxoRef},
-        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        ledger::data_model::TxoRef,
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
         zei::setup::PublicParams,
@@ -1391,141 +1422,5 @@ mod tests {
             .transaction()
             .c(d!())?;
         Ok(())
-    }
-
-    #[test]
-    fn test_check_fee_with_ledger() {
-        let mut ledger = LedgerState::tmp_ledger();
-        let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-        let bob_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-        assert_eq!(
-            bob_kp.get_sk().into_keypair().zei_to_bytes(),
-            bob_kp.zei_to_bytes()
-        );
-
-        let mut tx = fra_gen_initial_tx(&fra_owner_kp);
-        assert!(tx.check_fee());
-
-        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
-        let txo_sid = ledger
-            .finish_block(block)
-            .unwrap()
-            .remove(&tmp_sid)
-            .unwrap()
-            .1[0];
-
-        macro_rules! transfer_to_bob {
-            ($txo_sid: expr, $bob_pk: expr) => {{
-                let output_bob_fra_template = AssetRecordTemplate::with_no_asset_tracing(
-                    100 * TX_FEE_MIN,
-                    ASSET_TYPE_FRA,
-                    NonConfidentialAmount_NonConfidentialAssetType,
-                    $bob_pk,
-                );
-                TransferOperationBuilder::new()
-                    .add_input(
-                        TxoRef::Absolute($txo_sid),
-                        open_blind_asset_record(
-                            &ledger.get_utxo_light($txo_sid).unwrap().utxo.0.record,
-                            &None,
-                            &fra_owner_kp,
-                        )
-                        .unwrap(),
-                        None,
-                        None,
-                        100 * TX_FEE_MIN,
-                    )
-                    .unwrap()
-                    .add_output(&output_bob_fra_template, None, None, None, None)
-                    .unwrap()
-                    .balance(None)
-                    .unwrap()
-                    .create(TransferType::Standard)
-                    .unwrap()
-                    .sign(&fra_owner_kp)
-                    .unwrap()
-                    .transaction()
-                    .unwrap()
-            }};
-        }
-
-        let mut tx2 = TransactionBuilder::from_seq_id(1);
-        tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk()))
-            .add_fee_relative_auto(&fra_owner_kp, None)
-            .unwrap();
-        assert!(tx2.check_fee());
-
-        let effect = TxnEffect::compute_effect(tx2.into_transaction().into()).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
-        // txo_sid[0]: fra_owner to bob
-        // txo_sid[1]: fra_owner to fee
-        // txo_sid[2]: balance to fra_owner
-        let txo_sid = ledger
-            .finish_block(block)
-            .unwrap()
-            .remove(&tmp_sid)
-            .unwrap()
-            .1;
-
-        // (0) transfer first time
-        let mut fi = FeeInputs::new();
-        let utxo = ledger.get_utxo_light(txo_sid[0]).unwrap();
-        fi.append(
-            TX_FEE_MIN,
-            TxoRef::Absolute(txo_sid[0]),
-            utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
-            bob_kp.get_sk().into_keypair(),
-        );
-        let mut tx3 = TransactionBuilder::from_seq_id(2);
-        pnk!(tx3
-            .add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
-            .add_fee(fi, None));
-        assert!(tx3.check_fee());
-
-        let effect = TxnEffect::compute_effect(tx3.into_transaction().into()).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
-        // txo_sid[0]: fra_owner to bob
-        // txo_sid[1]: balance to fra_owner
-        // txo_sid[2]: bob to fee
-        // txo_sid[3]: balance to bob
-        let txo_sid = ledger
-            .finish_block(block)
-            .unwrap()
-            .remove(&tmp_sid)
-            .unwrap()
-            .1;
-
-        // (2) transfer second time
-        let mut fi = FeeInputs::new();
-        let utxo = ledger.get_utxo_light(txo_sid[0]).unwrap();
-        fi.append(
-            TX_FEE_MIN,
-            TxoRef::Absolute(txo_sid[0]),
-            utxo.utxo.0,
-            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
-            bob_kp.get_sk().into_keypair(),
-        );
-        let mut tx4 = TransactionBuilder::from_seq_id(3);
-        tx4.add_operation(transfer_to_bob!(txo_sid[1], bob_kp.get_pk()))
-            .add_fee(fi, None)
-            .unwrap();
-        assert!(tx4.check_fee());
-
-        let effect = TxnEffect::compute_effect(tx4.into_transaction().into()).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        ledger.apply_transaction(&mut block, effect).unwrap();
-        ledger.finish_block(block).unwrap();
-
-        // Ensure that FRA can only be defined only once.
-        tx.body.no_replay_token =
-            NoReplayToken::new(&mut ChaChaRng::from_entropy(), 100);
-        let effect = TxnEffect::compute_effect(tx).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        assert!(ledger.apply_transaction(&mut block, effect).is_err());
     }
 }

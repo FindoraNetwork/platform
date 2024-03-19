@@ -7,9 +7,9 @@ ENV PATH=$PATH:/root/.cargo/bin/
 COPY . $WORK_DIR
 WORKDIR $WORK_DIR
 
-RUN rustup toolchain install 1.70 && \
-    rustup component add clippy --toolchain 1.70 && \
-    rustup component add rustfmt --toolchain 1.70
+RUN rustup toolchain install stable && \
+    rustup component add clippy --toolchain stable && \
+    rustup component add rustfmt --toolchain stable
 
 RUN mkdir /binary
 RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb

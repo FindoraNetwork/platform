@@ -92,7 +92,7 @@ pub struct StableTxFee;
 
 impl FeeCalculator for StableTxFee {
     fn min_fee() -> U256 {
-        // TX_FEE_MIN
+        // TX_FEE_MIN_V0
         U256::from(1_0000_0000_0000_0000_u64)
     }
 }

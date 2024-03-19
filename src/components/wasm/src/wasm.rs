@@ -50,7 +50,7 @@ use {
         data_model::{
             gen_random_keypair, AssetTypeCode, AssetTypePrefix,
             AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN_V1,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
@@ -282,6 +282,7 @@ impl TransactionBuilder {
                             id: None,
                             record: new.0,
                             lien: None,
+                            memo: None,
                         },
                     }
                     .to_json()
@@ -560,7 +561,7 @@ impl TransactionBuilder {
         mut self,
         op: String,
     ) -> Result<TransactionBuilder, JsValue> {
-        let op = serde_json::from_str::<BuildOperation>(&op)
+        let op = serde_json::from_str::<Operation>(&op)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
@@ -1300,7 +1301,6 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
-use finutils::transaction::BuildOperation;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
@@ -1510,7 +1510,7 @@ pub fn fra_get_asset_code() -> String {
 #[wasm_bindgen]
 /// Fee smaller than this value will be denied.
 pub fn fra_get_minimal_fee() -> u64 {
-    TX_FEE_MIN
+    TX_FEE_MIN_V1
 }
 
 #[wasm_bindgen]

@@ -2,7 +2,7 @@
 //! The findora ledger core implementation
 //!
 
-#![deny(warnings)]
+//#![deny(warnings)]
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 

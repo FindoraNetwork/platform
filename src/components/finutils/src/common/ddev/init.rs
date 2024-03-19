@@ -136,7 +136,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         })?;
         let mut tx = builder.take_transaction();
         tx.sign(&v.xfr_keypair);
-        send_tx(env, &tx.into()).c(d!())?;
+        send_tx(env, &tx).c(d!())?;
     }
 
     println!("[ {} ] >>> Init work done !", &env.name);
@@ -154,7 +154,7 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
         .collect::<Vec<_>>();
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(env, &builder.take_transaction().into()).c(d!())
+    send_tx(env, &builder.take_transaction()).c(d!())
 }
 
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
@@ -196,7 +196,7 @@ fn transfer_batch(
     let mut tx = builder.take_transaction();
     tx.sign(owner_kp);
 
-    send_tx(env, &tx.into()).c(d!())
+    send_tx(env, &tx).c(d!())
 }
 
 fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
@@ -262,11 +262,13 @@ pub(crate) struct BankAccount {
 }
 
 impl BankAccount {
-    const BANK_ACCOUNT_ADDR: &str =
+    const BANK_ACCOUNT_ADDR: &'static str =
         "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5";
-    const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
-    const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
-    const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
+    const BANK_ACCOUNT_PUBKEY: &'static str =
+        "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
+    const BANK_ACCOUNT_SECKEY: &'static str =
+        "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
+    const BANK_ACCOUNT_MNEMONIC: &'static str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
 }
 
 impl Default for BankAccount {
