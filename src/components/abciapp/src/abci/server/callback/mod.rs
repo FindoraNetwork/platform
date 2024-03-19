@@ -48,7 +48,6 @@ use {
     std::{
         fs,
         mem::take,
-        ops::Deref,
         sync::{
             atomic::{AtomicI64, Ordering},
             Arc,
@@ -569,7 +568,7 @@ pub fn end_block(
     }
     if td_height <= CFG.checkpoint.evm_staking_inital_height {
         if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-            la.get_committed_state().read().get_staking().deref(),
+            la.get_committed_state().read().get_staking(),
             begin_block_req.last_commit_info.as_ref()
         )) {
             resp.set_validator_updates(RepeatedField::from_vec(vs));
@@ -691,13 +690,13 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             Default::default()
         };
 
-        let total_issuance = if let Ok(mut receipts) = TOTAL_ISSUANCE.lock() {
-            take(&mut *receipts)
+        let total_issuance = if let Ok(mut total_issuance) = TOTAL_ISSUANCE.lock() {
+            take(&mut *total_issuance)
         } else {
             Default::default()
         };
-        let allowances = if let Ok(mut receipts) = ALLOWANCES.lock() {
-            take(&mut *receipts)
+        let allowances = if let Ok(mut allowances) = ALLOWANCES.lock() {
+            take(&mut *allowances)
         } else {
             Default::default()
         };
@@ -706,9 +705,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 .set_total_issuance(height, v)
                 .map_err(|e| eg!("set redis error: {:?}", e)));
         }
-        for ((owner, spender), amount) in allowances.iter() {
+        for (key, amount) in allowances.iter() {
             pnk!(setter
-                .set_allowances(height, *owner, *spender, *amount)
+                .set_allowances(height, key.owner_address, key.spender_address, *amount)
                 .map_err(|e| eg!("set redis error: {:?}", e)));
         }
 

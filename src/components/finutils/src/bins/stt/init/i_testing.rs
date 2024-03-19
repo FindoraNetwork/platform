@@ -16,7 +16,7 @@ use {
         utils::{get_asset_balance, get_balance, get_validator_detail},
     },
     ledger::{
-        data_model::{gen_random_keypair, TX_FEE_MIN},
+        data_model::{gen_random_keypair, TX_FEE_MIN_V0},
         staking::FRA,
     },
     ruc::*,
@@ -255,8 +255,8 @@ pub fn run_all() -> Result<()> {
     let mut balances = get_balance(&v_set[0].keypair).c(d!())?;
     for v in v_set.iter().skip(1) {
         get_balance(&v.keypair).c(d!()).and_then(|mut n| {
-            if TX_FEE_MIN < n {
-                n -= TX_FEE_MIN;
+            if TX_FEE_MIN_V0 < n {
+                n -= TX_FEE_MIN_V0;
                 balances += n;
                 transfer_asset_batch_x(
                     &v.keypair,
@@ -294,7 +294,7 @@ pub fn run_all() -> Result<()> {
         &v_set[0].keypair,
         &targets,
         None,
-        1 + TX_FEE_MIN,
+        1 + TX_FEE_MIN_V0,
         false,
         false,
     )
@@ -305,7 +305,7 @@ pub fn run_all() -> Result<()> {
     sleep_n_block!(1.2);
     println!(">>> Check balances of the 10 random addresses ...");
     for k in rkps.iter() {
-        assert_eq!(1 + TX_FEE_MIN, get_asset_balance(k, None).c(d!())?);
+        assert_eq!(1 + TX_FEE_MIN_V0, get_asset_balance(k, None).c(d!())?);
     }
 
     // 19.

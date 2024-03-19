@@ -63,7 +63,7 @@ fn gen() -> Result<()> {
     cfg_template
         .valiators
         .iter_mut()
-        .zip(id_list.into_iter())
+        .zip(id_list)
         .for_each(|(v, id)| {
             v.id = id;
         });

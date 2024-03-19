@@ -127,7 +127,7 @@ fn run() -> Result<()> {
             let amount = amount.unwrap().parse::<u64>().c(d!())?;
             delegate::gen_tx(user.unwrap(), amount, validator.unwrap())
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("undelegate") {
         let user = m.value_of("user");
@@ -143,7 +143,7 @@ fn run() -> Result<()> {
             let amount = amount.and_then(|am| am.parse::<u64>().ok());
             undelegate::gen_tx(user.unwrap(), amount, validator)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("claim") {
         let user = m.value_of("user");
@@ -158,7 +158,7 @@ fn run() -> Result<()> {
             };
             claim::gen_tx(user.unwrap(), amount)
                 .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))?;
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
         let from = m.value_of("from-user");
@@ -204,7 +204,7 @@ mod issue {
 
     use {
         super::*,
-        finutils::transaction::BuildOperation,
+        ledger::data_model::Operation,
         ledger::{
             data_model::{
                 AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, TxOutput,
@@ -224,7 +224,7 @@ mod issue {
     pub fn issue() -> Result<()> {
         gen_issue_tx()
             .c(d!())
-            .and_then(|tx| common::utils::send_tx(&tx.into()).c(d!()))
+            .and_then(|tx| common::utils::send_tx(&tx).c(d!()))
     }
 
     fn gen_issue_tx() -> Result<Transaction> {
@@ -253,6 +253,7 @@ mod issue {
                         id: None,
                         record: ba,
                         lien: None,
+                        memo: None,
                     },
                     None,
                 )
@@ -269,8 +270,8 @@ mod issue {
         let asset_issuance_operation =
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
-        builder.add_operation(BuildOperation::IssueAsset(asset_issuance_operation));
-        Ok(builder.take_transaction().into())
+        builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
+        Ok(builder.take_transaction())
     }
 }
 
@@ -309,7 +310,7 @@ mod delegate {
 
         let mut tx = builder.take_transaction();
         tx.sign(owner_kp);
-        Ok(tx.into())
+        Ok(tx)
     }
 }
 
@@ -345,7 +346,7 @@ mod undelegate {
             }
         })?;
 
-        Ok(builder.take_transaction().into())
+        Ok(builder.take_transaction())
     }
 }
 
@@ -362,7 +363,7 @@ mod claim {
             builder.add_operation_claim(None, owner_kp, amount);
         })?;
 
-        Ok(builder.take_transaction().into())
+        Ok(builder.take_transaction())
     }
 }
 

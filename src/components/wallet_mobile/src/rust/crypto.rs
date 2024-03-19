@@ -15,7 +15,7 @@ use globutils::wallet;
 use ledger::{
     data_model::{
         AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING,
-        TX_FEE_MIN,
+        TX_FEE_MIN_V1,
     },
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
@@ -468,7 +468,7 @@ pub fn fra_get_asset_code() -> String {
 /// Fee smaller than this value will be denied.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn fra_get_minimal_fee() -> u64 {
-    TX_FEE_MIN
+    TX_FEE_MIN_V1
 }
 
 /// The destination for fee to be transfered to.

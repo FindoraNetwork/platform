@@ -35,7 +35,7 @@ use {
     serde::Serialize,
     std::{
         collections::{BTreeMap, BTreeSet},
-        ops::{Deref, DerefMut},
+        ops::DerefMut,
         sync::atomic::Ordering,
     },
 };
@@ -283,10 +283,9 @@ pub fn system_ops(
         }
 
         if online_list.len() != lci.votes.len() {
-            if let Ok(pl) = ruc::info!(gen_offline_punish_list(
-                la.get_staking().deref(),
-                &online_list
-            )) {
+            if let Ok(pl) =
+                ruc::info!(gen_offline_punish_list(la.get_staking(), &online_list))
+            {
                 pl.into_iter().for_each(|v| {
                     let bz = ByzantineInfo {
                         addr: &td_addr_to_string(&v),

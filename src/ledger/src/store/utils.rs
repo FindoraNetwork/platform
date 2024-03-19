@@ -73,6 +73,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
                     id: None,
                     record: ba,
                     lien: None,
+                    memo: None,
                 },
                 None,
             )

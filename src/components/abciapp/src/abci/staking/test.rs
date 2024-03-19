@@ -5,7 +5,7 @@ use {
     ledger::{
         data_model::{
             Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN_V0,
         },
         staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
         store::{utils::fra_gen_initial_tx, LedgerState},
@@ -99,7 +99,7 @@ fn gen_transfer_tx(
 ) -> Result<Transaction> {
     let mut tx_builder = TransactionBuilder::from_seq_id(seq_id);
 
-    let target_list = vec![(target_pk, am), (&*BLACK_HOLE_PUBKEY, TX_FEE_MIN)];
+    let target_list = vec![(target_pk, am), (&*BLACK_HOLE_PUBKEY, TX_FEE_MIN_V0)];
 
     let mut trans_builder = TransferOperationBuilder::new();
 
@@ -159,5 +159,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction().into())
+    Ok(tx_builder.take_transaction())
 }
