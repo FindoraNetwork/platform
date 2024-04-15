@@ -400,11 +400,11 @@ impl LedgerState {
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
-        fs::create_dir_all(&basedir).c(d!())?;
+        fs::create_dir_all(basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
 
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
-        env::set_var(LSSED_VAR, &snapshot_entries_dir);
+        env::set_var(LSSED_VAR, snapshot_entries_dir);
 
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
@@ -801,7 +801,7 @@ impl LedgerState {
 
         let res = sids
             .into_iter()
-            .zip(aus.into_iter())
+            .zip(aus)
             .filter_map(|(sid, au)| au.map(|au| (sid, au)))
             .map(|(sid, au)| {
                 (
@@ -1372,8 +1372,9 @@ impl LedgerStatus {
 
         // Apply memo updates
         for (code, memo) in block.memo_updates.drain() {
-            let mut asset = self.asset_types.get_mut(&code).unwrap();
-            asset.properties.memo = memo;
+            if let Some(ref mut asset) = self.asset_types.get_mut(&code) {
+                asset.properties.memo = memo;
+            }
         }
 
         for (code, amount) in block.issuance_amounts.drain() {

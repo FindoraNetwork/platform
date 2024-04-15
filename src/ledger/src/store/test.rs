@@ -6,7 +6,7 @@ use {
     crate::data_model::{
         AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation,
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
-        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN_V0,
     },
     rand_core::SeedableRng,
     zei::{
@@ -193,6 +193,7 @@ fn test_asset_transfer() {
                     id: None,
                     record: ba,
                     lien: None,
+                    memo: None,
                 },
                 None,
             ),
@@ -201,6 +202,7 @@ fn test_asset_transfer() {
                     id: None,
                     record: second_ba,
                     lien: None,
+                    memo: None,
                 },
                 None,
             ),
@@ -264,6 +266,7 @@ fn test_asset_transfer() {
             vec![TxoRef::Absolute(txo_sid)],
             &[input_ar],
             &[output_ar],
+            &[None],
             None,
             vec![],
             TransferType::Standard,
@@ -384,6 +387,7 @@ fn asset_issued() {
                 id: None,
                 record: ba,
                 lien: None,
+                memo: None,
             },
             None,
         )],
@@ -531,6 +535,7 @@ pub fn test_transferable() {
                 open_blind_asset_record(&bar, &None, &alice).unwrap(),
             )],
             &[record],
+            &[None],
             None,
             vec![],
             TransferType::Standard,
@@ -568,6 +573,7 @@ pub fn test_transferable() {
                 open_blind_asset_record(&bar, &None, &alice).unwrap(),
             )],
             &[record],
+            &[None],
             None,
             vec![],
             TransferType::Standard,
@@ -613,6 +619,7 @@ pub fn test_transferable() {
                 ar.open_asset_record,
             )],
             &[second_record],
+            &[None],
             None,
             vec![],
             TransferType::Standard,
@@ -721,7 +728,7 @@ fn gen_fee_operation(
     let input_oar = open_blind_asset_record(&input_bar, &None, &fra_owner_kp).unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
-        input_oar.amount - TX_FEE_MIN,
+        input_oar.amount - TX_FEE_MIN_V0,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         fra_owner_kp.get_pk(),
@@ -733,7 +740,7 @@ fn gen_fee_operation(
     .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
-        TX_FEE_MIN,
+        TX_FEE_MIN_V0,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         *BLACK_HOLE_PUBKEY,
@@ -752,6 +759,7 @@ fn gen_fee_operation(
             vec![TxoRef::Absolute(txo_sid)],
             &[input_ar],
             &[output_ar, output_ar_fee],
+            &[None, None],
             None,
             vec![],
             TransferType::Standard,

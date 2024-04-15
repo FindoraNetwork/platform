@@ -238,7 +238,7 @@ fn gen_sample_tx() -> Transaction {
     assert_eq!(transaction.body.operations.len(), 3);
 
     assert_eq!(
-        transaction.body.operations.get(0),
+        transaction.body.operations.first(),
         Some(&Operation::TransferAsset(asset_transfer))
     );
     assert_eq!(
@@ -284,6 +284,7 @@ fn gen_fee_operation(
                     public_key: dest_pubkey,
                 },
                 lien: None,
+                memo: None,
             }],
             lien_assignments: Vec::new(),
             transfer: Box::new(XfrBody {
@@ -308,35 +309,35 @@ fn test_check_fee() {
     assert!(!tx.check_fee());
 
     let invalid_confidential_type =
-        gen_fee_operation(Some(TX_FEE_MIN), None, *BLACK_HOLE_PUBKEY);
+        gen_fee_operation(Some(TX_FEE_MIN_V0), None, *BLACK_HOLE_PUBKEY);
     let invalid_confidential_amount = gen_fee_operation(
         None,
         Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_nonconfidential_not_fra_code = gen_fee_operation(
-        Some(TX_FEE_MIN),
+        Some(TX_FEE_MIN_V0),
         Some(ZeiAssetType([9; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_nonconfidential_fee_too_little = gen_fee_operation(
-        Some(TX_FEE_MIN - 1),
+        Some(TX_FEE_MIN_V0 - 1),
         Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let invalid_destination_not_black_hole = gen_fee_operation(
-        Some(TX_FEE_MIN),
+        Some(TX_FEE_MIN_V0),
         Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
         XfrPublicKey::zei_from_bytes(&[9; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
             .unwrap(),
     );
     let valid = gen_fee_operation(
-        Some(TX_FEE_MIN),
+        Some(TX_FEE_MIN_V0),
         Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );
     let valid2 = gen_fee_operation(
-        Some(TX_FEE_MIN + 999),
+        Some(TX_FEE_MIN_V0 + 999),
         Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
         *BLACK_HOLE_PUBKEY,
     );

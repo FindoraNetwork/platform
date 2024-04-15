@@ -6,14 +6,14 @@ use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
         common::get_serv_addr,
-        transaction::{BuildOperation, BuildTransaction},
         txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, DefineAsset, StateCommitmentData, TransferType,
-            TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
+            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN_V1,
         },
         staking::{
             init::get_inital_validators, StakerMemo, TendermintAddrRef, FRA_TOTAL_AMOUNT,
@@ -56,7 +56,7 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn send_tx(tx: &BuildTransaction) -> Result<()> {
+pub fn send_tx(tx: &Transaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
     let tx_bytes = serde_json::to_vec(tx).c(d!())?;
 
@@ -150,7 +150,7 @@ pub fn gen_transfer_op(
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<BuildOperation> {
+) -> Result<Operation> {
     gen_transfer_op_x(
         owner_kp,
         target_list,
@@ -172,7 +172,7 @@ pub fn gen_transfer_op_x(
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<BuildOperation> {
+) -> Result<Operation> {
     gen_transfer_op_xx(
         None,
         owner_kp,
@@ -197,11 +197,11 @@ pub fn gen_transfer_op_xx(
     confidential_am: bool,
     confidential_ty: bool,
     balance_type: Option<AssetRecordType>,
-) -> Result<BuildOperation> {
+) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
-        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN, None));
-        op_fee += TX_FEE_MIN;
+        target_list.push((&*BLACK_HOLE_PUBKEY, TX_FEE_MIN_V1, None));
+        op_fee += TX_FEE_MIN_V1;
     }
     let asset_type = token_code.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
 
@@ -257,7 +257,7 @@ pub fn gen_transfer_op_xx(
         trans_builder
             .add_output(
                 &AssetRecordTemplate::with_no_asset_tracing(
-                    TX_FEE_MIN,
+                    TX_FEE_MIN_V1,
                     ASSET_TYPE_FRA,
                     AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                     *BLACK_HOLE_PUBKEY,
@@ -309,7 +309,7 @@ pub fn gen_transfer_op_xx(
 /// for scenes that need to pay a standalone fee without other transfers
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<BuildOperation> {
+pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
     gen_transfer_op(owner_kp, vec![], None, false, false, None).c(d!())
 }
 
@@ -810,7 +810,7 @@ pub fn get_evm_delegation_info(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let bound_amount = if let Some(Token::Uint(bound_amount)) = ret.get(0) {
+    let bound_amount = if let Some(Token::Uint(bound_amount)) = ret.first() {
         bound_amount
     } else {
         return Err(eg!("bound_amount not found"));
@@ -876,7 +876,7 @@ pub fn get_reward_info(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let reward = if let Some(Token::Uint(reward)) = ret.get(0) {
+    let reward = if let Some(Token::Uint(reward)) = ret.first() {
         reward.div(U256::from(10_u64.pow(12)))
     } else {
         return Err(eg!("reward not found"));
@@ -920,7 +920,7 @@ pub fn get_trigger_on_contract_address(
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let address = if let Some(Token::Address(address)) = ret.get(0) {
+    let address = if let Some(Token::Address(address)) = ret.first() {
         address
     } else {
         return Err(eg!("staking address not found"));
@@ -961,7 +961,7 @@ pub fn get_claim_on_contract_address(url: &str, staking_address: H160) -> Result
         .c(d!())?;
 
     let ret = function.decode_output(&ret_data.0).c(d!())?;
-    let address = if let Some(Token::Address(address)) = ret.get(0) {
+    let address = if let Some(Token::Address(address)) = ret.first() {
         address
     } else {
         return Err(eg!("reward address not found"));

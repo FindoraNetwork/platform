@@ -219,9 +219,8 @@ impl SubscriptionResult {
         receipts: Vec<Receipt>,
         params: &FilteredParams,
     ) -> Vec<Log> {
-        let block_hash = Some(H256::from_slice(
-            Keccak256::digest(&rlp::encode(&block.header)).as_slice(),
-        ));
+        let block_hash =
+            H256::from_slice(Keccak256::digest(&rlp::encode(&block.header)).as_slice());
         let mut logs: Vec<Log> = vec![];
         let mut log_index: u32 = 0;
         for (receipt_index, receipt) in receipts.into_iter().enumerate() {
@@ -234,12 +233,12 @@ impl SubscriptionResult {
                 None
             };
             for (transaction_log_index, log) in receipt.logs.into_iter().enumerate() {
-                if self.add_log(block_hash.unwrap(), &log, &block, params) {
+                if self.add_log(block_hash, &log, &block, params) {
                     logs.push(Log {
                         address: log.address,
                         topics: log.topics,
                         data: Bytes(log.data),
-                        block_hash,
+                        block_hash: Some(block_hash),
                         block_number: Some(block.header.number),
                         transaction_hash,
                         transaction_index: Some(U256::from(receipt_index)),
