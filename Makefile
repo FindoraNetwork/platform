@@ -333,7 +333,7 @@ clean_image:
 
 
 ci_push_image_dockerhub:
-	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
+	docker push $(DOCKERHUB_URL)/fractal:$(IMAGE_TAG)
 
 
 ci_build_wasm_js_bindings:
