@@ -4,14 +4,13 @@
 
 use {
     crate::{abci::POOL, api::submission_server::TxnForward},
-    config::abci::global_cfg::CFG,
     ledger::data_model::Transaction,
     ruc::*,
     std::sync::atomic::{AtomicU16, Ordering},
 };
 
 static TX_PENDING_CNT: AtomicU16 = AtomicU16::new(0);
-
+pub static TX_SIZE: usize = 8192;
 pub struct TendermintForward {
     pub tendermint_reply: String,
 }
@@ -38,7 +37,7 @@ pub fn forward_txn_with_mode(
 
     let txn_json = serde_json::to_string(&txn).c(d!())?;
     let txn_b64 = base64::encode_config(txn_json, base64::URL_SAFE);
-    if txn_b64.len() > CFG.checkpoint.tx_size as usize {
+    if txn_b64.len() > TX_SIZE {
         return Err(eg!("Transaction too large"));
     }
 
