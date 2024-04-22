@@ -2,14 +2,14 @@
 //! # Impl function of tendermint ABCI
 //!
 
-use chrono::Local;
-use fp_storage::BorrowMut;
-
 mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
+        abci::{
+            server::{tx_sender::TX_SIZE, ABCISubmissionServer},
+            staking, IN_SAFE_ITV, IS_EXITING, POOL,
+        },
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -21,12 +21,14 @@ use {
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
+    chrono::Local,
     config::abci::global_cfg::CFG,
     enterprise_web3::{
         Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
         REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
     fp_storage::hash::{Sha256, StorageHasher},
+    fp_storage::BorrowMut,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -133,15 +135,21 @@ pub fn init_chain(
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
-
-    let tx_catalog = try_tx_catalog(req.get_tx(), false);
-
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+
+    let tx = req.get_tx();
+    if td_height > CFG.checkpoint.check_tx_size_height && tx.len() > TX_SIZE {
+        resp.log = format!("Transaction too large:{}", tx.len());
+        resp.code = 1;
+        return resp;
+    }
+
+    let tx_catalog = try_tx_catalog(tx, false);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
-                if let Ok(tx) = convert_tx(req.get_tx()) {
+                if let Ok(tx) = convert_tx(tx) {
                     if td_height > CFG.checkpoint.check_signatures_num {
                         for op in tx.body.operations.iter() {
                             if let Operation::TransferAsset(op) = op {
@@ -271,13 +279,21 @@ pub fn deliver_tx(
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
-
-    let tx_catalog = try_tx_catalog(req.get_tx(), true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+
+    let tx = req.get_tx();
+
+    if td_height > CFG.checkpoint.check_tx_size_height && tx.len() > TX_SIZE {
+        resp.log = format!("Transaction too large:{}", tx.len());
+        resp.code = 1;
+        return resp;
+    }
+
+    let tx_catalog = try_tx_catalog(tx, true);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if let Ok(tx) = convert_tx(req.get_tx()) {
+            if let Ok(tx) = convert_tx(tx) {
                 if td_height > CFG.checkpoint.check_signatures_num {
                     for op in tx.body.operations.iter() {
                         if let Operation::TransferAsset(op) = op {

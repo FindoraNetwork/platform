@@ -151,10 +151,11 @@ pub struct CheckPointConfig {
     #[serde(default = "def_evm_staking_address")]
     pub evm_staking_address: String,
 
-    #[serde(default = "def_evm_staking_inital_height")]
+    #[serde(default = "def_utxo_fee_height")]
     pub utxo_fee_height: i64,
 
-    pub tx_size: u32,
+    #[serde(default = "def_check_tx_size_height")]
+    pub check_tx_size_height: i64,
 }
 
 fn def_fix_check_replay() -> u64 {
@@ -232,6 +233,14 @@ fn def_evm_staking_address() -> String {
     DEFAULT_CHECKPOINT_CONFIG.evm_staking_address.clone()
 }
 
+fn def_utxo_fee_height() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.utxo_fee_height
+}
+
+fn def_check_tx_size_height() -> i64 {
+    DEFAULT_CHECKPOINT_CONFIG.check_tx_size_height
+}
+
 #[cfg(feature = "debug_env")]
 lazy_static! {
     static ref DEFAULT_CHECKPOINT_CONFIG: CheckPointConfig = CheckPointConfig {
@@ -276,8 +285,8 @@ lazy_static! {
         max_gas_price_limit: 0,
         evm_staking_inital_height: 128,
         evm_staking_address: "0x321DF28026D01858906D322533900aD3435eE964".to_owned(),
-        utxo_fee_height: 128,
-        tx_size: 8192
+        utxo_fee_height: 0,
+        check_tx_size_height: 0
     };
 }
 
@@ -612,8 +621,8 @@ lazy_static! {
         max_gas_price_limit: 4636000,
         evm_staking_inital_height: 4636000,
         evm_staking_address: "0x38d49e3bd5144059c9f3bA10CF7306E84155B603".to_owned(),
-        utxo_fee_height: 50000000,
-        tx_size: 8192
+        utxo_fee_height: 6000000,
+        check_tx_size_height: 6000000
     };
 }
 
