@@ -621,8 +621,8 @@ lazy_static! {
         max_gas_price_limit: 4636000,
         evm_staking_inital_height: 4636000,
         evm_staking_address: "0x38d49e3bd5144059c9f3bA10CF7306E84155B603".to_owned(),
-        utxo_fee_height: 6000000,
-        check_tx_size_height: 6000000
+        utxo_fee_height: 5671678,
+        check_tx_size_height: 5671678
     };
 }
 
