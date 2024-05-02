@@ -10,7 +10,7 @@ use {
 };
 
 static TX_PENDING_CNT: AtomicU16 = AtomicU16::new(0);
-pub static TX_SIZE: usize = 8192;
+pub static TX_SIZE: usize = 314572800; //300 * 1024 * 1024;
 pub struct TendermintForward {
     pub tendermint_reply: String,
 }
