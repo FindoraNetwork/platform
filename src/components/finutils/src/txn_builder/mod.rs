@@ -1218,26 +1218,6 @@ mod tests {
         zei::xfr::sig::XfrKeyPair,
     };
 
-    // Defines an asset type
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct AssetType(pub u8);
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct KeyPair(pub u8);
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct TxoReference(pub u64);
-
-    // Defines an input record
-    // (type, amount, conf_type, conf_amount, traceable)
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct InputRecord(pub u64, pub AssetType, pub bool, pub bool, pub bool);
-
-    // Defines an output record
-    // (amount, asset type, keypair)
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct OutputRecord(pub u64, pub AssetType, pub KeyPair);
-
     #[test]
     fn test_transfer_op_builder() {
         pnk!(test_transfer_op_builder_inner());

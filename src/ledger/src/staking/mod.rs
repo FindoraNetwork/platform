@@ -110,7 +110,8 @@ pub const FF_ADDR_LIST: [&str; 8] = [
     "fra1mjdr0mgn2e0670hxptpzu9tmf0ary8yj8nv90znjspwdupv9aacqwrg3dx",
     "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
 ];
-///
+
+#[allow(missing_docs)]
 pub const FF_ADDR_EXTRA_120_0000: &str =
     "fra1dkn9w5c674grdl6gmvj0s8zs0z2nf39zrmp3dpq5rqnnf9axwjrqexqnd6";
 

@@ -21,7 +21,7 @@ pub struct ClaimOps {
     pub(crate) body: Data,
     pub(crate) pubkey: XfrPublicKey,
     signature: XfrSignature,
-    ///
+    #[allow(missing_docs)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub td_addr: Option<Vec<u8>>,
 }

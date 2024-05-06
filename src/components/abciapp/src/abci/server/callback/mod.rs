@@ -156,7 +156,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                                 let mut body_signatures = op.body_signatures.clone();
                                 body_signatures.dedup();
                                 if body_signatures.len() > 1 {
-                                    resp.log = "too many body_signatures".to_owned();
+                                    "too many body_signatures".clone_into(&mut resp.log);
                                     resp.code = 1;
                                     return resp;
                                 }
@@ -165,25 +165,25 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                         let mut signatures = tx.signatures.clone();
                         signatures.dedup();
                         if signatures.len() > 1 {
-                            resp.log = "Too many signatures".to_owned();
+                            "Too many signatures".clone_into(&mut resp.log);
                             resp.code = 1;
                             return resp;
                         }
 
                         if tx.pubkey_sign_map.len() > 1 {
-                            resp.log = "too many pubkey_sign_map".to_owned();
+                            "too many pubkey_sign_map".clone_into(&mut resp.log);
                             resp.code = 1;
                             return resp;
                         }
                     } else if !tx.valid_in_abci() {
-                        resp.log = "Should not appear in ABCI".to_owned();
+                        "Should not appear in ABCI".clone_into(&mut resp.log);
                         resp.code = 1;
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
-                        resp.log = "Historical transaction".to_owned();
+                        "Historical transaction".clone_into(&mut resp.log);
                         resp.code = 1;
                     }
                 } else {
-                    resp.log = "Invalid format".to_owned();
+                    "Invalid format".clone_into(&mut resp.log);
                     resp.code = 1;
                 }
             }
@@ -194,7 +194,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                 && td_height < CFG.checkpoint.enable_frc20_height
             {
                 resp.code = 2;
-                resp.log = "EVM is disabled".to_owned();
+                "EVM is disabled".clone_into(&mut resp.log);
                 resp
             } else {
                 s.account_base_app.read().check_tx(req)
@@ -202,7 +202,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
         }
         TxCatalog::Unknown => {
             resp.code = 1;
-            resp.log = "Unknown transaction".to_owned();
+            "Unknown transaction".clone_into(&mut resp.log);
             resp
         }
     }
@@ -300,7 +300,7 @@ pub fn deliver_tx(
                             let mut body_signatures = op.body_signatures.clone();
                             body_signatures.dedup();
                             if body_signatures.len() > 1 {
-                                resp.log = "too many body_signatures".to_owned();
+                                "too many body_signatures".clone_into(&mut resp.log);
                                 resp.code = 1;
                                 return resp;
                             }
@@ -309,13 +309,13 @@ pub fn deliver_tx(
                     let mut signatures = tx.signatures.clone();
                     signatures.dedup();
                     if signatures.len() > 1 {
-                        resp.log = "Too many signatures".to_owned();
+                        "Too many signatures".clone_into(&mut resp.log);
                         resp.code = 1;
                         return resp;
                     }
 
                     if tx.pubkey_sign_map.len() > 1 {
-                        resp.log = "too many pubkey_sign_map".to_owned();
+                        "too many pubkey_sign_map".clone_into(&mut resp.log);
                         resp.code = 1;
                         return resp;
                     }
@@ -347,7 +347,7 @@ pub fn deliver_tx(
                     {
                         if is_convert_account(&tx) {
                             resp.code = 2;
-                            resp.log = "EVM is disabled".to_owned();
+                            "EVM is disabled".clone_into(&mut resp.log);
                             return resp;
                         } else if let Err(e) = s.la.write().cache_transaction(tx) {
                             resp.code = 1;
@@ -398,7 +398,7 @@ pub fn deliver_tx(
                             return resp;
                         } else if td_height > CFG.checkpoint.fix_exec_code {
                             resp.code = 1;
-                            resp.log = "cache_transaction failed".to_owned();
+                            "cache_transaction failed".clone_into(&mut resp.log);
                         }
 
                         s.account_base_app
@@ -432,11 +432,11 @@ pub fn deliver_tx(
                     }
                 } else {
                     resp.code = 1;
-                    resp.log = "Should not appear in ABCI".to_owned();
+                    "Should not appear in ABCI".clone_into(&mut resp.log);
                 }
             } else {
                 resp.code = 1;
-                resp.log = "Invalid format".to_owned();
+                "Invalid format".clone_into(&mut resp.log);
             }
 
             resp
@@ -446,7 +446,7 @@ pub fn deliver_tx(
                 && td_height < CFG.checkpoint.enable_frc20_height
             {
                 resp.code = 2;
-                resp.log = "EVM is disabled".to_owned();
+                "EVM is disabled".clone_into(&mut resp.log);
                 resp
             } else {
                 // Log print for monitor purpose
@@ -495,7 +495,7 @@ pub fn deliver_tx(
         }
         TxCatalog::Unknown => {
             resp.code = 1;
-            resp.log = "Unknown transaction".to_owned();
+            "Unknown transaction".clone_into(&mut resp.log);
             resp
         }
     }
