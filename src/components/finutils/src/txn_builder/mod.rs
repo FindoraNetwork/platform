@@ -866,6 +866,9 @@ impl TransferOperationBuilder {
         identity_commitment: Option<ACCommitment>,
         amount: u64,
     ) -> Result<&mut Self> {
+        if amount == 0 {
+            return Ok(self);
+        }
         if self.transfer.is_some() {
             return Err(eg!(
                 ("Cannot mutate a transfer that has been signed".to_string())
