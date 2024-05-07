@@ -213,16 +213,16 @@ fn run() -> Result<()> {
                 (name, desc, website, logo) => {
                     let mut memo = StakerMemo::default();
                     if let Some(n) = name {
-                        memo.name = n.to_owned();
+                        n.clone_into(&mut memo.name);
                     }
                     if let Some(d) = desc {
-                        memo.desc = d.to_owned();
+                        d.clone_into(&mut memo.desc);
                     }
                     if let Some(w) = website {
-                        memo.website = w.to_owned();
+                        w.clone_into(&mut memo.website);
                     }
                     if let Some(l) = logo {
-                        memo.logo = l.to_owned();
+                        l.clone_into(&mut memo.logo);
                     }
                     Some(memo)
                 }

@@ -22,8 +22,8 @@ impl crate::BaseApp {
     /// - Tendermint uses info to decide from which height/hash to continue
     pub fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
         let mut info: ResponseInfo = Default::default();
-        info.data = self.name.clone();
-        info.version = self.version.clone();
+        info.data.clone_from(&self.name);
+        info.version.clone_from(&self.version);
         info.app_version = self.app_version;
 
         let height = self.chain_state.read().height().unwrap();
@@ -166,7 +166,7 @@ impl crate::BaseApp {
     /// init_chain implements the ABCI interface.
     pub fn init_chain(&mut self, req: &RequestInitChain) -> ResponseInitChain {
         let mut init_header: Header = Default::default();
-        init_header.chain_id = req.chain_id.clone();
+        init_header.chain_id.clone_from(&req.chain_id);
         init_header.time = req.time.clone();
 
         // initialize the deliver state and check state with a correct header

@@ -866,6 +866,9 @@ impl TransferOperationBuilder {
         identity_commitment: Option<ACCommitment>,
         amount: u64,
     ) -> Result<&mut Self> {
+        if amount == 0 {
+            return Ok(self);
+        }
         if self.transfer.is_some() {
             return Err(eg!(
                 ("Cannot mutate a transfer that has been signed".to_string())
@@ -1214,26 +1217,6 @@ mod tests {
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
     };
-
-    // Defines an asset type
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct AssetType(pub u8);
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct KeyPair(pub u8);
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct TxoReference(pub u64);
-
-    // Defines an input record
-    // (type, amount, conf_type, conf_amount, traceable)
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct InputRecord(pub u64, pub AssetType, pub bool, pub bool, pub bool);
-
-    // Defines an output record
-    // (amount, asset type, keypair)
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct OutputRecord(pub u64, pub AssetType, pub KeyPair);
 
     #[test]
     fn test_transfer_op_builder() {

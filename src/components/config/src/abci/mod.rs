@@ -1019,10 +1019,14 @@ pub mod global_cfg {
             if let Some(sm) = m.value_of("snapshot-mode") {
                 res.mode = SnapMode::from_string(sm).c(d!())?;
                 if !matches!(res.mode, SnapMode::External) {
-                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                    m.value_of("snapshot-target")
+                        .c(d!())?
+                        .clone_into(&mut res.target);
                 }
             } else {
-                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                m.value_of("snapshot-target")
+                    .c(d!())?
+                    .clone_into(&mut res.target);
                 res.mode = res.guess_mode().c(d!())?;
             }
 
@@ -1038,7 +1042,9 @@ pub mod global_cfg {
             || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
-            res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+            m.value_of("snapshot-target")
+                .c(d!())?
+                .clone_into(&mut res.target);
 
             // the guess should always success in this scene
             res.mode = res.guess_mode().c(d!())?;

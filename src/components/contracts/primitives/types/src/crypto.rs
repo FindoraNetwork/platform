@@ -9,6 +9,7 @@ use primitive_types::{H160, H256};
 use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
@@ -127,10 +128,9 @@ impl DerefMut for HA160 {
         &mut self.0
     }
 }
-
-impl ToString for HA160 {
-    fn to_string(&self) -> String {
-        hex::encode_upper(self.0)
+impl Display for HA160 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode_upper(self.0))
     }
 }
 
@@ -164,9 +164,9 @@ impl HA256 {
     }
 }
 
-impl ToString for HA256 {
-    fn to_string(&self) -> String {
-        hex::encode_upper(self.0)
+impl Display for HA256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode_upper(self.0))
     }
 }
 
