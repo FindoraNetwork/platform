@@ -327,7 +327,6 @@ subcommands:
               - amount
               - hidden
               - addr
-              - maximum
         - issue-flags:
             args:
               - issue
