@@ -11,18 +11,6 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
       - POSTGRES_DB=mydatabase
 
-  web3_service:
-    container_name: web3_service
-    image: "localhost/enterprise-web3-platform:latest"
-    network_mode: "host"
-    environment:
-      - WEB3_CONFIG_FILE_PATH=/config/config.toml
-    ports:
-      - "8545:8545"
-      - "8546:8546"
-    volumes:
-      - ./config/web3-service-config.toml:/config/config.toml
-
   rocksdb_exporter:
     container_name: rocksdb_exporter
     image: "localhost/rocksdb_exporter:latest"
@@ -59,6 +47,18 @@ services:
     volumes:
       - findorad_ledger:/var/ledger
       - findorad_tendermint:/root/.tendermint
+
+  web3_service:
+    container_name: web3_service
+    image: "localhost/enterprise-web3-platform:latest"
+    network_mode: "host"
+    environment:
+      - WEB3_CONFIG_FILE_PATH=/config/config.toml
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+    volumes:
+      - ./config/web3-service-config.toml:/config/config.toml
 
 volumes:
   db_data:
