@@ -1,0 +1,6 @@
+http_port = 8545
+ws_port = 8546
+tendermint_url = "https://prod-testnet.prod.findora.org:26657"
+chain_id = 2152
+gas_price = 10000000000
+postgres_uri = "postgresql://postgres:mysecretpassword@127.0.0.1:5432/mydatabase?sslmode=disable"
