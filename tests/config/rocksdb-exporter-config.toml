@@ -1,4 +1,0 @@
-state_db_path = "/rocksdb-exporter/data/ledger/state.db"
-history_db_path = "/rocksdb-exporter/data/ledger/history.db"
-postgres_uri = "postgresql://postgres:mysecretpassword@127.0.0.1:5432/mydatabase?sslmode=disable"
-clear = true
