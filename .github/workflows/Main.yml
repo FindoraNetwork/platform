@@ -14,8 +14,8 @@ jobs:
       matrix:
         platform: [scalable]
     runs-on: ${{ matrix.platform }}
-    environment: action environment
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       ENV: dev
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
