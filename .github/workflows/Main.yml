@@ -14,6 +14,7 @@ jobs:
       matrix:
         platform: [scalable]
     runs-on: ${{ matrix.platform }}
+    environment: action environment
     env:
       ENV: dev
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
