@@ -2019,40 +2019,49 @@ impl Validator {
     }
 }
 
-/// FRA delegation, include:
-/// - user delegation
-/// - validator's self-delegation
+/// FRA delegation, includes:
+/// - User delegation
+/// - Validator's self-delegation
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Delegation {
-    /// validator pubkey => amount
+    /// Validator pubkey => amount
     ///   - `NonConfidential` FRAs amount
-    ///   - valid for all delegators
-    /// delegations contains an entry for each validator this `delegator` has delegated to
-    /// XfrPublicKey here has to be the public key of a validator
+    ///   - Valid for all delegators
+    ///
+    /// Delegations contains an entry for each validator this `delegator` has delegated to.
+    /// `XfrPublicKey` here has to be the public key of a validator.
     #[serde(rename = "entries")]
     pub delegations: BTreeMap<XfrPublicKey, Amount>,
 
-    /// delegation rewards will be paid to this pk by default
+    /// Delegation rewards will be paid to this public key by default.
     pub id: XfrPublicKey,
-    /// optional receiver address,
-    /// if this one exists, tokens will be paid to it instead of id
+
+    /// Optional receiver address.
+    /// If this one exists, tokens will be paid to it instead of `id`.
     pub receiver_pk: Option<XfrPublicKey>,
-    /// Temporary partial undelegations of current id
+
+    /// Temporary partial undelegations of the current `id`.
     pub tmp_delegators: BTreeMap<XfrPublicKey, Amount>,
-    /// the joint height of the delegtator
+
+    /// The joint height of the delegator.
     pub start_height: BlockHeight,
-    /// the height at which the delegation ends
+
+    /// The height at which the delegation ends.
     ///
-    /// **NOTE:** before users can actually get the rewards,
-    /// they need to wait for an extra `UNBOND_BLOCK_CNT` period
+    /// **NOTE:** Before users can actually get the rewards,
+    /// they need to wait for an extra `UNBOND_BLOCK_CNT` period.
     pub end_height: BlockHeight,
+
     #[allow(missing_docs)]
     pub state: DelegationState,
-    /// set this field when `Bond` state finished
+
+    /// Set this field when the `Bond` state is finished.
     pub rwd_amount: Amount,
-    /// how many times you get proposer rewards
+
+    /// How many times you get proposer rewards.
     pub proposer_rwd_cnt: u64,
-    /// how many times you get delegation rewards
+
+    /// How many times you get delegation rewards.
     pub delegation_rwd_cnt: u64,
 }
 

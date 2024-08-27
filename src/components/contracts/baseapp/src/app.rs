@@ -2,8 +2,8 @@ use crate::extensions::SignedExtra;
 use abci::*;
 use config::abci::global_cfg::CFG;
 use enterprise_web3::{
-    Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST, REDIS_CLIENT,
-    REMOVE_PENDING_CODE_MAP, REMOVE_PENDING_STATE_UPDATE_LIST,
+    PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST, PG_CLIENT, REMOVE_PENDING_CODE_MAP,
+    REMOVE_PENDING_STATE_UPDATE_LIST,
 };
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
@@ -110,13 +110,8 @@ impl crate::BaseApp {
                                     fp_types::actions::ethereum::Action::Transact(tx),
                                 ) = tx.function
                                 {
-                                    let redis_pool =
-                                        REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
-                                    let mut conn =
-                                        redis_pool.get().expect("get redis connect");
-                                    let mut setter =
-                                        Setter::new(&mut *conn, "evm".to_string());
-
+                                    let setter =
+                                        PG_CLIENT.lock().expect("PG_CLIENT error");
                                     setter
                                         .set_pending_tx(tx)
                                         .map_err(|e| error!("{e:?}"))
@@ -239,13 +234,7 @@ impl crate::BaseApp {
                                 fp_types::actions::ethereum::Action::Transact(tx),
                             ) = tx.function
                             {
-                                let redis_pool =
-                                    REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
-                                let mut conn =
-                                    redis_pool.get().expect("get redis connect");
-                                let mut setter =
-                                    Setter::new(&mut *conn, "evm".to_string());
-
+                                let setter = PG_CLIENT.lock().expect("PG_CLIENT error");
                                 setter
                                     .remove_pending_tx(tx)
                                     .map_err(|e| error!("{:?}", e))

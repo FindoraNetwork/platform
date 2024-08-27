@@ -24,8 +24,8 @@ use {
     chrono::Local,
     config::abci::global_cfg::CFG,
     enterprise_web3::{
-        Setter, ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
-        REDIS_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
+        ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
+        PG_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
     fp_storage::hash::{Sha256, StorageHasher},
     fp_storage::BorrowMut,
@@ -660,9 +660,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     if CFG.enable_enterprise_web3 && td_height as u64 > *WEB3_SERVICE_START_HEIGHT {
         let height = td_height as u32;
-        let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
-        let mut conn = redis_pool.get().expect("get redis connect");
-        let mut setter = Setter::new(&mut *conn, "evm".to_string());
+        let setter = PG_CLIENT.lock().expect("PG_CLIENT error");
 
         let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
             take(&mut *nonce_map)

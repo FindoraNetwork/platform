@@ -111,7 +111,7 @@ impl BlockGasLimit {
     pub fn get() -> U256 {
         let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         if td_height < CFG.checkpoint.max_gas_price_limit {
-            U256::from(u32::max_value())
+            U256::from(u32::MAX)
         } else {
             U256::from(100000000)
         }
@@ -121,7 +121,7 @@ impl<I: From<U256>> ::fp_core::macros::Get<I> for BlockGasLimit {
     fn get() -> I {
         let td_height = LEDGER_TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         if td_height < CFG.checkpoint.max_gas_price_limit {
-            I::from(U256::from(u32::max_value()))
+            I::from(U256::from(u32::MAX))
         } else {
             I::from(U256::from(100000000))
         }
