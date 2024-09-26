@@ -22,10 +22,11 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     chrono::Local,
+    chrono::Utc,
     config::abci::global_cfg::CFG,
     enterprise_web3::{
-        ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
-        PG_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
+        ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, PG_CLIENT, RECEIPTS,
+        STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
     fp_storage::hash::{Sha256, StorageHasher},
     fp_storage::BorrowMut,
@@ -659,6 +660,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     info!(target: "abcitime", "catch_up height:{}, catch_up:{}-commit:{}={}", td_height, catch_up, commit, catch_up - commit);
 
     if CFG.enable_enterprise_web3 && td_height as u64 > *WEB3_SERVICE_START_HEIGHT {
+        let begin_save_db = Utc::now().timestamp();
+        info!(target: "save_db_time", "begin_save_db:{}", begin_save_db);
         let height = td_height as u32;
         let setter = PG_CLIENT.lock().expect("PG_CLIENT error");
 
@@ -767,6 +770,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 .set_height(height)
                 .map_err(|e| eg!("set redis error: {:?}", e)));
         }
+        let end_save_db = Utc::now().timestamp();
+        info!(target: "save_db_time", "end_save_db:{} - begin_save_db:{} = {}", begin_save_db, end_save_db, end_save_db - begin_save_db);
     }
 
     r

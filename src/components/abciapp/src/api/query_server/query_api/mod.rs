@@ -651,7 +651,7 @@ impl QueryApi {
         });
 
         for (host, port) in addrs.iter() {
-            hdr = hdr.bind(&format!("{host}:{port}")).c(d!())?
+            hdr = hdr.bind(format!("{host}:{port}")).c(d!())?
         }
 
         hdr.run();
