@@ -120,10 +120,9 @@ impl LedgerState {
             .check_txn_effects(&txe)
             .c(d!())
             .and_then(|_| block.add_txn_effect(txe).c(d!()))
-            .map(|tmpid| {
+            .inspect(|_| {
                 // NOTE: set at the last position
                 block.staking_simulator.coinbase_check_and_pay(&tx);
-                tmpid
             })
     }
 

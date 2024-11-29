@@ -54,9 +54,8 @@ impl<C: Config> App<C> {
         let mut txn_signers = ctx.eth_cache.current.write();
         match txn_signers.get(&transaction_hash) {
             Some(signer) => *signer,
-            None => Self::recover_signer(transaction).map(|signer| {
-                txn_signers.insert(transaction_hash, Some(signer));
-                signer
+            None => Self::recover_signer(transaction).inspect(|signer| {
+                txn_signers.insert(transaction_hash, Some(*signer));
             }),
         }
     }

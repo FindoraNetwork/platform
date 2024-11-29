@@ -1144,7 +1144,7 @@ impl EthApi for EthApiImpl {
                     cumulative_receipts
                         .truncate((status.transaction_index + 1) as usize);
 
-                    return Ok(Some(Receipt {
+                    Ok(Some(Receipt {
                         transaction_hash: Some(status.transaction_hash),
                         transaction_index: Some(status.transaction_index.into()),
                         block_hash: Some(block_hash),
@@ -1197,7 +1197,7 @@ impl EthApi for EthApiImpl {
                         status_code: Some(U64::from(receipt.state_root.to_low_u64_be())),
                         logs_bloom: receipt.logs_bloom,
                         state_root: None,
-                    }));
+                    }))
                 }
                 _ => Ok(None),
             }

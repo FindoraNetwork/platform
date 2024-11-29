@@ -178,10 +178,10 @@ lazy_static! {
     };
 }
 
-/// The lock time after the delegation expires, about 21 days.
-//pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+// The lock time after the delegation expires, about 21 days.
+// pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
-// minimal number of validators
+/// Minimal number of validators
 pub const VALIDATORS_MIN: usize = 5;
 
 /// The minimum weight threshold required

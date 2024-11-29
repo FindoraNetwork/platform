@@ -42,7 +42,7 @@ impl<'a> Deserialize<'a> for Index {
 
 struct IndexVisitor;
 
-impl<'a> Visitor<'a> for IndexVisitor {
+impl Visitor<'_> for IndexVisitor {
     type Value = Index;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
