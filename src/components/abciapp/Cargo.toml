@@ -59,9 +59,11 @@ fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = {path = "../contracts/primitives/types"}
+fp-traits = {path = "../contracts/primitives/traits"}
 
 enterprise-web3 = { path = "../contracts/primitives/enterprise-web3" }
 module-evm = { path = "../contracts/modules/evm"}
+module-account = { path = "../contracts/modules/account" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
