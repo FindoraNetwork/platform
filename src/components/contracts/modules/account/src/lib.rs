@@ -28,7 +28,7 @@ impl Config for () {
     type FeeCalculator = ();
 }
 
-mod storage {
+pub mod storage {
     use fp_core::account::SmartAccount;
     use fp_types::crypto::Address;
     use primitive_types::U256;

@@ -119,13 +119,13 @@ mod inner {
         addr: &str,
         io: RpcHandler<M>,
     ) -> io::Result<ipc::Server> {
-        let builder = ipc::ServerBuilder::new(io);
-        #[cfg(target_os = "unix")]
-        builder.set_security_attributes({
+        let mut builder = ipc::ServerBuilder::new(io);
+        #[cfg(target_family = "unix")]
+        {
             let security_attributes = ipc::SecurityAttributes::empty();
-            security_attributes.set_mode(0o600)?;
-            security_attributes
-        });
+            builder =
+                builder.set_security_attributes(security_attributes.set_mode(0o600)?);
+        }
         builder.start(addr)
     }
 

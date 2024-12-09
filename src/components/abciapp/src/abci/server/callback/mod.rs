@@ -24,11 +24,15 @@ use {
     chrono::Local,
     config::abci::global_cfg::CFG,
     enterprise_web3::{
-        ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
-        PG_CLIENT, STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
+        ALLOWANCES, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, PG_CLIENT, RECEIPTS,
+        STATE_UPDATE_LIST, TOTAL_ISSUANCE, TXS, WEB3_SERVICE_START_HEIGHT,
     },
-    fp_storage::hash::{Sha256, StorageHasher},
-    fp_storage::BorrowMut,
+    fp_storage::{
+        hash::{Sha256, StorageHasher},
+        BorrowMut,
+    },
+    fp_traits::base::BaseProvider,
+    fp_types::crypto::Address,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -44,6 +48,7 @@ use {
         },
         LEDGER_TENDERMINT_BLOCK_HEIGHT,
     },
+    module_account::storage::{Allowances, TotalIssuance},
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
@@ -662,29 +667,55 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         let height = td_height as u32;
         let setter = PG_CLIENT.lock().expect("PG_CLIENT error");
 
-        let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
+        let mut nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
             take(&mut *nonce_map)
         } else {
             Default::default()
         };
+        nonce_map.iter_mut().for_each(|(k, v)| {
+            let account_id = Address::from(*k);
+            if let Ok(sa) = s.account_base_app.read().account_of(&account_id, None) {
+                *v = sa.nonce;
+            }
+        });
 
-        let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
+        let mut code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
             take(&mut *code_map)
         } else {
             Default::default()
         };
+        code_map.iter_mut().for_each(|(k, v)| {
+            if let Some(code) = s.account_base_app.read().account_code_at(*k, None) {
+                *v = code;
+            }
+        });
 
-        let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
+        let mut balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
             take(&mut *balance_map)
         } else {
             Default::default()
         };
+        balance_map.iter_mut().for_each(|(k, v)| {
+            let account_id = Address::from(*k);
+            if let Ok(sa) = s.account_base_app.read().account_of(&account_id, None) {
+                *v = sa.balance;
+            }
+        });
 
-        let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
+        let mut state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
             take(&mut *state_list)
         } else {
             Default::default()
         };
+        state_list.iter_mut().for_each(|v| {
+            if let Some(value) = s.account_base_app.read().account_storage_at(
+                v.address,
+                v.index,
+                Some(v.height as u64),
+            ) {
+                v.value = value;
+            }
+        });
 
         let block = if let Ok(mut block) = BLOCK.lock() {
             block.take()
@@ -704,16 +735,43 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             Default::default()
         };
 
-        let total_issuance = if let Ok(mut total_issuance) = TOTAL_ISSUANCE.lock() {
+        let mut total_issuance = if let Ok(mut total_issuance) = TOTAL_ISSUANCE.lock() {
             take(&mut *total_issuance)
         } else {
             Default::default()
         };
-        let allowances = if let Ok(mut allowances) = ALLOWANCES.lock() {
+
+        {
+            let base_app = s.account_base_app.write();
+            let state = base_app.deliver_state.state.read();
+
+            if total_issuance.is_some() {
+                if let Some(issuance) = TotalIssuance::get(&state) {
+                    total_issuance = Some(issuance);
+                }
+            }
+        }
+
+        let mut allowances = if let Ok(mut allowances) = ALLOWANCES.lock() {
             take(&mut *allowances)
         } else {
             Default::default()
         };
+        {
+            let base_app = s.account_base_app.write();
+            let state = base_app.deliver_state.state.read();
+
+            allowances.iter_mut().for_each(|(k, v)| {
+                let owner = Address::from(k.owner_address);
+
+                let spender = Address::from(k.spender_address);
+
+                if let Some(issuance) = Allowances::get(&state, &owner, &spender) {
+                    *v = issuance
+                }
+            });
+        }
+
         if let Some(v) = total_issuance {
             pnk!(setter
                 .set_total_issuance(height, v)

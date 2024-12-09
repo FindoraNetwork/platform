@@ -749,20 +749,20 @@ impl TracingPolicy {
 /// When an asset is defined, several options governing the assets must be
 /// specified:
 /// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracing key. By defaults, assets do not have
-/// any tracing policies.
+///    any tracing policies.
 /// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
 /// 3. **Updatable**: Whether the asset memo can be updated. By default, assets are not updatable.
 /// 4. **Transfer signature rules**: Signature weights and threshold for a valid transfer. By
 ///    default, there are no special signature requirements.
 /// 5. **Max units**: Optional limit on the total number of units of this asset that can be issued.
 ///    By default, assets do not have issuance caps.
-/// @see {@link module:Findora-Wasm~TracingPolicies|TracingPolicies} for more information about tracing policies.
-/// @see {@link module:Findora-Wasm~TransactionBuilder#add_operation_update_memo|add_operation_update_memo} for more information about how to add
-/// a memo update operation to a transaction.
-/// @see {@link module:Findora-Wasm~SignatureRules|SignatureRules} for more information about co-signatures.
-/// @see {@link
-/// module:Findora-Wasm~TransactionBuilder#add_operation_create_asset|add_operation_create_asset}
-/// for information about how to add asset rules to an asset definition.
+///    @see {@link module:Findora-Wasm~TracingPolicies|TracingPolicies} for more information about tracing policies.
+///    @see {@link module:Findora-Wasm~TransactionBuilder#add_operation_update_memo|add_operation_update_memo} for more information about how to add
+///    a memo update operation to a transaction.
+///    @see {@link module:Findora-Wasm~SignatureRules|SignatureRules} for more information about co-signatures.
+///    @see {@link
+///    module:Findora-Wasm~TransactionBuilder#add_operation_create_asset|add_operation_create_asset}
+///    for information about how to add asset rules to an asset definition.
 pub struct AssetRules {
     pub(crate) rules: PlatformAssetRules,
 }

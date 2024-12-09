@@ -73,7 +73,7 @@ pub enum EVMTransactionKind {
 }
 
 impl EVMTransactionBuilder {
-    /// transfer to uxto assets from account(ed25519 or ecdsa address) balance.
+    // transfer to uxto assets from account(ed25519 or ecdsa address) balance.
 
     pub fn new_transfer_to_utxo_from_account(
         recipient: XfrPublicKey,

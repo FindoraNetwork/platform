@@ -33,7 +33,7 @@ pub struct FindoraStackSubstate<'context, 'config> {
     pub substate: Option<State<FinDB>>,
 }
 
-impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
+impl<'config> FindoraStackSubstate<'_, 'config> {
     pub fn metadata(&self) -> &StackSubstateMetadata<'config> {
         &self.metadata
     }
@@ -207,9 +207,7 @@ impl<'context, 'vicinity, 'config, C: Config>
     }
 }
 
-impl<'context, 'vicinity, 'config, C: Config> Backend
-    for FindoraStackState<'context, 'vicinity, 'config, C>
-{
+impl<C: Config> Backend for FindoraStackState<'_, '_, '_, C> {
     fn gas_price(&self) -> U256 {
         self.vicinity.gas_price
     }
@@ -278,9 +276,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 }
 
-impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
-    for FindoraStackState<'context, 'vicinity, 'config, C>
-{
+impl<'config, C: Config> StackState<'config> for FindoraStackState<'_, '_, 'config, C> {
     fn metadata(&self) -> &StackSubstateMetadata<'config> {
         self.substate.metadata()
     }
